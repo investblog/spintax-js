@@ -1,0 +1,18 @@
+{
+  "name": "spintax-js",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spintax engine for JavaScript/TypeScript — monorepo root (pre-code scaffolding)",
+  "license": "MIT",
+  "author": "301st (https://301.st)",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "//": "build/test scripts land at milestone M1 (see CLAUDE.md)"
+  }
+}

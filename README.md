@@ -1,0 +1,50 @@
+# Spintax for JavaScript / TypeScript
+
+Framework-agnostic [spintax](https://spintax.net) engine for JS/TS — parse, render,
+validate, and extract variables from GTW-compatible spintax templates, with **zero
+WordPress dependency**. Runs on Cloudflare Workers, Node 18+, and in the browser.
+
+> **Status: pre-code (DRAFT).** This repo currently holds the design + scaffolding only.
+> First engine code lands at milestone **M1** (see `CLAUDE.md`). Nothing is published to
+> npm yet.
+
+## What this is
+
+The open-source core engine behind the Spintax ecosystem. It is a **companion** to the
+[Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) — an *independent*
+TypeScript implementation that shares the same syntax and a machine-checked **parity
+contract** (via a shared golden test corpus), not a line-by-line port.
+
+One engine, many surfaces: the planned Cloudflare Workers API, a Telegram authoring bot, and
+a client-side playground on `spintax.net` are all consumers of this package.
+
+## Spintax syntax (at a glance)
+
+- `{a|b|c}` — enumeration (pick one), nestable `{a|{b|c}}`
+- `[a|b|c]` — permutation (pick N, shuffle, join), configurable separators
+- `%var%` — variable reference · `#set %v% = value` — local variable
+- `{?VAR?then|else}` — conditional · `{plural <count>: one|few|many}` — plural agreement
+- `#include "slug-or-id"` — embed another template · `/# … #/` — comments
+
+Full authoring reference lives in the parent project's `docs/gtw-syntax-reference.md`.
+
+## Repository layout
+
+```
+packages/
+  core/         # @spintax/core — the engine (M1+)
+CLAUDE.md       # implementer instructions (Claude Code)
+AGENTS.md       # reviewer charter (Codex — review-only, code-freeze)
+LICENSE         # MIT
+```
+
+## Design & specs
+
+The governing spec is `spec-npm-engine.md` in the parent repo
+(`W:\projects\spintax\docs\`). Local `CLAUDE.md` summarises the locked decisions, the
+parity contract, and the milestone plan.
+
+## License
+
+[MIT](./LICENSE). The Spintax WordPress plugin remains GPL; MIT/Expat is GPL-compatible, so
+the two coexist cleanly.

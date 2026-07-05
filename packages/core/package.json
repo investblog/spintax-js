@@ -1,0 +1,27 @@
+{
+  "name": "@spintax/core",
+  "version": "0.0.0",
+  "description": "GTW-compatible spintax parser, renderer, validator and variable extractor — framework-agnostic",
+  "keywords": [
+    "spintax",
+    "gtw",
+    "template",
+    "text generation",
+    "seo",
+    "content"
+  ],
+  "license": "MIT",
+  "author": "301st (https://301.st)",
+  "homepage": "https://spintax.net",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "//": "engine + build/test land at milestone M1 (see ../../CLAUDE.md)"
+  }
+}
