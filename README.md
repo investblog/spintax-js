@@ -32,11 +32,18 @@ Full authoring reference lives in the parent project's `docs/gtw-syntax-referenc
 
 ```
 packages/
-  core/         # @spintax/core — the engine (M1+)
-CLAUDE.md       # implementer instructions (Claude Code)
-AGENTS.md       # reviewer charter (Codex — review-only, code-freeze)
-LICENSE         # MIT
+  core/           # @spintax/core — the engine (M1+)
+examples/
+  worker/         # Cloudflare Worker — API dogfood gate (M4)
+  telegram-bot/   # Telegram authoring bot — flagship example (M5)
+CLAUDE.md         # implementer instructions (Claude Code)
+AGENTS.md         # reviewer charter (Codex — review-only, code-freeze)
+docs/spec-npm-engine.md  # governing spec (design source of truth)
+LICENSE           # MIT
 ```
+
+`examples/*` import `@spintax/core` only — consumers dogfood the engine's public API without
+polluting it.
 
 ## Design & specs
 

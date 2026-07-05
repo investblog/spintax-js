@@ -71,15 +71,26 @@ Workers, Node 18+, and in-browser unchanged):
 ```
 packages/
   core/           # @spintax/core — parse / render / validate / extract / neutralize
-  conformance/    # (maybe) shared golden corpus — see spec §7 / Q3
-  cli/            # (deferred — Q4) npx spintax validate|render|extract
+  conformance/    # shared golden corpus — see spec §7 / Q3
+  cli/            # (pending Q4) npx spintax validate|render|extract
+examples/
+  worker/         # thin Cloudflare Worker — FIRST dogfood gate (spec §8), roadmap Phase 4
+  telegram-bot/   # Telegram authoring bot — flagship example (spec §8), roadmap Phase 5
 ```
 
-Public API surface (straw-man, spec §9):
+`examples/*` import `@spintax/core` ONLY — they are consumers, never imported by the engine.
+This purity boundary is non-negotiable (spec §8): a consumer *proves* the API, it must not
+*pollute* it.
 
-- `parse(src): Ast`
-- `render(ast|src, { context, seed, includeResolver, postProcess }): string`
-- `validate(src): Diagnostic[]` — parity gate
+**Public API contract is committed in spec §9.2** — build against it; refine only with a
+consumer-driven reason. Surface:
+
+- `parse(src): Ast` — `Ast` is opaque/versioned in v1, not introspected by consumers
+- `render(input, { context, seed, locale, includeResolver, postProcess, maxDepth }): string`
+  — lenient (never throws on malformed markup; bad block renders verbatim with fullwidth
+  braces U+FF5B/U+FF5D); `postProcess` defaults TRUE
+- `validate(src): Diagnostic[]` — **parity gate**: valid ⇔ no `severity:'error'`; unresolved
+  `%var%` is a `warning`, not an `error`
 - `extractVariables(src): { refs, sets }`
 - `neutralize(value): string` — `SpintaxShield` port; host shields data-derived (T2) input,
   the engine does NOT auto-shield (it can't know which context keys are T1 vs T2)
@@ -95,9 +106,14 @@ live in the engine, the *fetch* does not.
 - **M1 — parser + validator.** Full syntax surface; pass all deterministic validation cases.
 - **M2 — renderer + post-process.** Seeded render; pass deterministic render + post-process
   cases; RNG cases pass structural invariants.
-- **M3 — extract + neutralize + docs.** API complete; publish `0.1.0`.
-- **M4 — first consumer.** Worker exposing `validate-template` + `preview-render`.
-- **M5 — browser playground** on `spintax.net`, client-side.
+- **M3 — extract + neutralize + docs.** API surface (§9.2) complete; publish `0.1.0`.
+- **M4 — `examples/worker` (API acceptance gate).** Worker exposing the Phase 4 endpoints.
+  Green Worker = sign-off that the §9.2 contract is usable; API friction feeds back into
+  §9.2 BEFORE the bot. Reference consumers are built AFTER M2, never before M1 (can't
+  dogfood an engine that doesn't exist).
+- **M5 — `examples/telegram-bot` (flagship example).** Interactive/stateful consumer; second
+  independent dogfood path.
+- **M6 — browser playground** on `spintax.net`, client-side.
 
 ## Commands
 

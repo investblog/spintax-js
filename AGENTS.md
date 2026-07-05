@@ -42,9 +42,16 @@ accordingly:
    corpus, not ad-hoc assertions. Flag behavior changes that ship without corresponding
    deterministic corpus cases. Flag any RNG case that asserts cross-engine sequence parity
    (that is a non-goal).
-3. **Engine purity / boundaries (spec §2.2).** No WordPress / ACF / WooCommerce / HTTP /
+3. **Engine purity / boundaries (spec §2.2, §8).** No WordPress / ACF / WooCommerce / HTTP /
    caching / persistence concepts leaking into `@spintax/core`. No runtime dependencies added
    to the core package. `#include` resolution must stay host-injected, not baked in.
+   **Import direction:** `examples/*` (worker, telegram-bot) may import `@spintax/core`; the
+   engine must NEVER import an example or reach into example code. Flag any consumer that
+   imports engine *internals* instead of the public API surface (§9.2).
+3a. **API contract stability (spec §9.2).** The public surface is committed. Flag signature
+   changes that lack a consumer-driven justification, and flag `render()` paths that throw on
+   malformed *template content* (must be lenient — verbatim fullwidth-brace fallback) or a
+   `validate()` change that flips an unresolved `%var%` from `warning` to `error`.
 4. **Trust model (spec §6).** `neutralize()` is a utility the host applies to data-derived
    (T2) input; the engine must NOT auto-shield. Flag anything that shields T1
    (author-controlled) values or fails to expose shielding to hosts.

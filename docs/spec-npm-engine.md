@@ -265,39 +265,65 @@ are the raw material for the corpus.
 
 ---
 
-## 8. Boundaries with the roadmap (API & bot)
+## 8. Reference consumers (dogfood the API)
 
-- **Phase 4 Cloudflare API** becomes a thin Worker importing `@spintax/core`. Endpoints map
-  to package calls: `validate-template` → `validate()`, `preview-render` → seeded
-  `render()`, `render-batch` → N seeded renders, `extract-variables` → `extractVariables()`,
-  `analyze-template` → validator + extraction + stats. The Worker owns HTTP, auth, rate
-  limiting, and **shielding of caller-supplied context** (§6). The engine owns nothing
-  network.
-- **Phase 5 Telegram bot** imports the same package (or calls the API). No third engine.
-- **Web playground on `spintax.net`** can run the package **client-side** (it's pure TS,
-  no server needed for validate/preview) — a strong SEO/education asset per roadmap §4.1
-  at near-zero hosting cost.
+**Why this is in the spec, not deferred.** A library API designed in a vacuum looks clean
+and fits nothing — the same class of miss as shipping the plugin's 2.0.0 bindings without
+the ACF integration smoke (see the parent's release-checklist gates). The fix is to design
+the public API *against a real consumer* and make a working consumer the **acceptance gate**
+for that API. So the API contract (§9.2) is committed now, and two reference consumers are
+first-class deliverables — **built after M2 (render works), never before M1**, because you
+cannot dogfood an engine that does not exist yet.
 
-This is the payoff of publishing a named package instead of inlining a Worker dependency:
-one engine, three surfaces, and the browser playground falls out for free.
+**Purity boundary (non-negotiable).** Consumers **import `@spintax/core`; the engine never
+imports them.** They live in `examples/` in this monorepo and depend only on the published
+engine surface (§9.2) — no reaching into internals. This is what lets a consumer *prove* the
+API without *polluting* it; §2.2 (no HTTP/bot/host concepts in the engine) still holds.
+
+Two consumers, chosen to stress the API differently:
+
+1. **`examples/worker` — thin Cloudflare Worker (FIRST, the dogfood gate; roadmap Phase 4).**
+   HTTP-shaped, stateless, minimal non-engine scaffolding — the smallest thing that exercises
+   the *whole* public surface. Endpoints map 1:1 to package calls: `validate-template` →
+   `validate()`, `preview-render` → seeded `render()`, `render-batch` → N seeded renders,
+   `extract-variables` → `extractVariables()`, `analyze-template` → validator + extraction +
+   stats. The Worker owns HTTP, auth, rate limiting, and **shielding of caller-supplied
+   context** (§6, T2). The engine owns nothing network. Shipping this Worker green **is** the
+   sign-off that the §9.2 contract is usable.
+2. **`examples/telegram-bot` — Telegram authoring bot (SECOND, the flagship example; roadmap
+   Phase 5).** Interactive/stateful — catches what the stateless Worker cannot: multi-turn
+   drafting, "show me N variants", plain-language explanation of validation failures, export
+   of a WordPress-ready body. Imports `@spintax/core` directly (a second, independent dogfood
+   path) or calls the Worker API. No third engine.
+
+- **Web playground on `spintax.net`** runs the package **client-side** (pure TS, no server
+  for validate/preview) — a strong SEO/education asset (roadmap §4.1) at near-zero hosting
+  cost. Not a dogfood gate, but a fourth surface that falls out for free.
+
+Payoff of a named package over an inlined Worker dependency: one engine, four surfaces, and
+each consumer keeps the API honest from a different angle.
 
 ---
 
-## 9. Package shape (straw-man, for discussion)
+## 9. Package & repo shape
+
+### 9.1 Monorepo layout
 
 ```
-@spintax/core            # pure engine — parse / render / validate / extract / neutralize
-  parse(src): Ast
-  render(ast|src, { context, seed, includeResolver }): string
-  validate(src): Diagnostic[]        // parity gate §3.1
-  extractVariables(src): { refs, sets }
-  neutralize(value): string          // SpintaxShield port §6
-@spintax/conformance     # (maybe) shared golden corpus §7
-@spintax/cli             # (deferred) npx spintax validate|render|extract
+packages/
+  core/           # @spintax/core — pure engine (§9.2). ZERO runtime deps.
+  conformance/    # @spintax/conformance — shared golden corpus §7 (pending Q3)
+  cli/            # @spintax/cli — npx spintax validate|render|extract (pending Q4)
+examples/
+  worker/         # thin Cloudflare Worker — FIRST dogfood gate (§8), roadmap Phase 4
+  telegram-bot/   # Telegram authoring bot — flagship example (§8), roadmap Phase 5
 ```
 
-- **Language:** TypeScript, ESM-first, dual CJS build, zero runtime deps (target: runs on
-  Workers, Node 18+, and in-browser unchanged).
+`examples/*` import `@spintax/core` only; they are consumers, never imported by the engine
+(§8 purity boundary).
+
+- **Language:** TypeScript, ESM-first, dual CJS build, zero runtime deps in `@spintax/core`
+  (target: runs on Workers, Node 18+, and in-browser unchanged).
 - **Naming (Q2 — availability checked 2026-07-05):** bare `spintax` on npm is **taken** by
   a real, active, same-domain MIT package (`spintax@1.1.2`, maintainer `johnhenry`,
   "combinatorial string generator", republished 2025-04-16) — NOT a squatter, so
@@ -312,6 +338,53 @@ one engine, three surfaces, and the browser playground falls out for free.
 - **Repo:** `W:\projects\spintax-js` (created; git `main`), own CI + memory namespace (mirror
   the OpenCart port's spin-off). GitHub remote handle TBD (`spintax-js` free, or under
   `investblog`).
+
+### 9.2 Public API contract (`@spintax/core`)
+
+This is the committed surface the reference consumers (§8) are built against and the API
+acceptance gate checks. Signatures are the contract; names/shapes may be refined only with a
+consumer-driven reason, not casually. TypeScript sketch:
+
+```ts
+parse(src: string): Ast
+render(input: string | Ast, opts?: RenderOptions): string
+validate(src: string): Diagnostic[]
+extractVariables(src: string): { refs: string[]; sets: string[] }
+neutralize(value: string): string          // SpintaxShield port §6 (host applies to T2)
+
+interface RenderOptions {
+  context?: Record<string, string>          // variable map; T1 (author-controlled) by default §6
+  seed?: number | string                    // deterministic RNG; omit ⇒ nondeterministic
+  locale?: string                           // plural buckets §3.1; default EN-style 2-form
+  includeResolver?: (ref: string) => string | null   // host-injected §4.1; omit ⇒ #include disabled
+  postProcess?: boolean                     // default TRUE (§0.1); false = raw, for tooling
+  maxDepth?: number                         // circular/runaway guard for nested #include
+}
+
+interface Diagnostic {
+  severity: 'error' | 'warning'
+  code: string                              // STABLE machine code (parity gate; wording may vary)
+  message: string                           // human-readable (NOT parity-gated)
+  line: number                              // 1-based
+  column: number                            // 1-based
+}
+```
+
+Contract rules (parity-relevant — see §3.1):
+
+- **`validate()` verdict = parity gate.** "Valid" ⇔ no `severity:'error'`. The set of inputs
+  that produce an error must match the plugin (malformed brackets, circular `#include`,
+  plural arity/form errors, nested brackets in plural form slots). An unresolved `%var%` that
+  may legitimately come from the host is a **`warning`, not an `error`** (mirrors the plugin's
+  non-blocking behavior).
+- **`render()` is lenient, never throws on malformed markup.** A single bad construct renders
+  verbatim with fullwidth braces (U+FF5B / U+FF5D), matching the plugin — a bad block must not
+  crash the page/bot/Worker. `render()` may throw only on programmer error (e.g. an
+  `includeResolver` that itself throws), not on template content.
+- **Determinism.** With a fixed `seed` + `context` + `locale`, `render()` is reproducible
+  *within this engine*. Cross-engine RNG-sequence parity with PHP is a NON-goal (§3.2).
+- **`Ast` is opaque/versioned**, not a public data contract in v1 — consumers pass it back to
+  `render()`, they don't introspect it. (Revisit if a real consumer needs to.)
 
 ---
 
@@ -339,8 +412,14 @@ one engine, three surfaces, and the browser playground falls out for free.
    validation-verdict corpus cases. No rendering yet.
 3. **M2 — renderer + post-process.** Seeded render; pass deterministic render + post-process
    corpus. RNG cases pass structural invariants.
-4. **M3 — extract + neutralize + docs.** Public API surface complete; README; publish
+4. **M3 — extract + neutralize + docs.** Public API surface (§9.2) complete; README; publish
    `0.1.0` to npm.
-5. **M4 — first consumer.** Stand up the Phase 4 `validate-template` + `preview-render`
-   endpoints on a Worker importing the package, proving the boundary in §8.
-6. **M5 — browser playground** on `spintax.net` running the package client-side (SEO/edu).
+5. **M4 — `examples/worker` (API acceptance gate).** Thin Cloudflare Worker exposing the
+   Phase 4 endpoints (`validate-template`, `preview-render`, `render-batch`,
+   `extract-variables`, `analyze-template`) importing `@spintax/core`. Green Worker = sign-off
+   that the §9.2 contract is usable from a real consumer (§8). Any API friction found here
+   feeds back into §9.2 *before* the bot.
+6. **M5 — `examples/telegram-bot` (flagship example).** Interactive/stateful consumer:
+   draft-from-brief, validate-pasted, show-N-variants, plain-language error explanation,
+   export WP-ready body. Second independent dogfood path (§8).
+7. **M6 — browser playground** on `spintax.net` running the package client-side (SEO/edu).
