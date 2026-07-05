@@ -298,10 +298,20 @@ one engine, three surfaces, and the browser playground falls out for free.
 
 - **Language:** TypeScript, ESM-first, dual CJS build, zero runtime deps (target: runs on
   Workers, Node 18+, and in-browser unchanged).
-- **Naming:** bare `spintax` on npm is likely taken — **OPEN QUESTION Q2** (scope under
-  `@spintax/*` org, or a distinct unscoped name). Does not block spec.
-- **Repo:** separate `investblog/spintax-js`, own CI, own memory namespace (mirror the
-  OpenCart port's spin-off).
+- **Naming (Q2 — availability checked 2026-07-05):** bare `spintax` on npm is **taken** by
+  a real, active, same-domain MIT package (`spintax@1.1.2`, maintainer `johnhenry`,
+  "combinatorial string generator", republished 2025-04-16) — NOT a squatter, so
+  npm's name-dispute policy will not transfer it. `github.com/spintax` is also taken. **The
+  whole `@spintax/*` scope is free** (`@spintax/core`, `@spintax/cli`, `@spintax/conformance`
+  all 404). **Direction: claim the npm org `spintax` and publish scoped `@spintax/*`** — the
+  scope + org is the brand asset for `spintax.net`; the bare unscoped name is not required.
+  Fallback handles if the org can't be claimed: `spintax-js` / `spintaxjs` (both free on npm
+  AND GitHub). Action needed from the maintainer (needs npm auth — cannot be automated here):
+  create the `spintax` npm org (free for public packages) or publish a `@spintax/core@0.0.0`
+  placeholder to reserve the scope.
+- **Repo:** `W:\projects\spintax-js` (created; git `main`), own CI + memory namespace (mirror
+  the OpenCart port's spin-off). GitHub remote handle TBD (`spintax-js` free, or under
+  `investblog`).
 
 ---
 
