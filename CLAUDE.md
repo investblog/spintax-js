@@ -9,8 +9,9 @@ that will power the roadmap's Cloudflare Workers API, the Telegram bot, and a br
 playground on `spintax.net` — one engine, many surfaces.
 
 - **Parent project (PHP/WordPress plugin):** `W:\projects\spintax` (the engine origin)
-- **Governing spec:** `W:\projects\spintax\docs\spec-npm-engine.md` — read it before any
-  design work; it is the source of truth for scope, the parity contract, and open questions.
+- **Governing spec:** `docs/spec-npm-engine.md` (in THIS repo) — read it before any design
+  work; it is the source of truth for scope, the parity contract, and open questions. It
+  references the parent repo `W:\projects\spintax\` for the PHP engine and roadmap docs.
 - **Algorithm references:** the PHP plugin engine (`plugin/src/Core/Engine` + `Core/Render`
   in the parent repo), `W:\spintax-java` (Java origin), `W:\projects\spintax-opencart`
   (PHP port precedent for spinning a port into its own repo).

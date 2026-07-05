@@ -1,0 +1,336 @@
+# Spintax npm engine — `@spintax/core` (spec draft)
+
+Status: DRAFT (spec-first — repo scaffolded at `W:\projects\spintax-js`, engine code pending M1)
+Owner: 301st
+Canonical location: this file, `W:\projects\spintax-js\docs\spec-npm-engine.md`.
+
+> **Cross-repo path convention.** This spec lives in the **spintax-js** repo but references
+> the parent WordPress-plugin repo at `W:\projects\spintax\`. Unless a path is absolute
+> (`W:\…`) or clearly local (`packages/…`, this repo's `docs/…`), any `docs/…` or `plugin/…`
+> path below refers to the **parent repo** `W:\projects\spintax\`.
+
+Related (parent repo `W:\projects\spintax\`): `docs/product-roadmap-2026.md` (Phase 4
+Cloudflare API is the first consumer), `docs/gtw-syntax-reference.md` (authoring contract),
+`docs/spec-v1.md` (plugin engine behavior), `docs/adr-0001-runtime-var-trust-levels.md`
+(trust model).
+Reference implementations: `W:\spintax-java` (Java algorithm origin), the PHP plugin engine
+in `W:\projects\spintax\plugin\src\Core\Engine` + `…\Core\Render`, `W:\projects\spintax-opencart`
+(PHP port).
+
+> This is a **separate branch of the project**, not a plugin feature. It does not touch the
+> plugin. It has its own repo (`W:\projects\spintax-js`, git `main`, initial commit) and its
+> own memory namespace, exactly like the OpenCart port. Nothing here blocks the WooCommerce
+> Phase 3 roadmap; the two proceed independently.
+
+---
+
+## 0. Decisions locked in this session
+
+Three product decisions frame everything below (asked & answered 2026-07-05):
+
+1. **Role = public core engine.** `@spintax/core` is an **open-source** parser + renderer
+   published to npm. It is itself a discovery/trust channel (like the free WP plugin and
+   GitHub stars), embeddable by anyone with zero WordPress dependency. The Cloudflare
+   Workers API (roadmap Phase 4) and the Telegram bot (Phase 5) become **its consumers**,
+   not private forks of the engine.
+2. **Relationship to PHP = independent implementation.** The TS engine is written fresh
+   against the syntax contract — **not** a line-by-line transcription of the PHP, and
+   **not** byte-for-byte output parity with the plugin. See §3 for exactly what must stay
+   in parity and what is deliberately allowed to diverge.
+3. **Immediate action = write this spec.** Spec-first, discuss, then decide on the repo.
+
+### 0.1 Resolved after review (2026-07-05)
+
+- **Q1 → YES, post-process is a parity-target.** `preview-render` MUST show what the user
+  sees on the live site, RNG selection aside. Grounded in the current PHP render path:
+  `post_process()` is the final stage of `Renderer::render()`
+  (`plugin/src/Core/Render/Renderer.php:331`) and the logic lives in
+  `Parser::post_process()` (`plugin/src/Core/Engine/Parser.php:248`). Practical rule:
+  post-process is parity-target for the deterministic golden cases (shielding, spacing,
+  capitalization), but the engine exposes a low-level `postProcess: false` escape hatch for
+  debugging/tooling. Public `render()` and the API `preview-render` default to `true`.
+- **Q5 → MIT for the npm packages; WP plugin stays GPL (as needed).** MIT fits the
+  "public core engine / discovery channel" intent — trivially embeddable in commercial
+  SaaS, CMSes, agent tooling, browser playgrounds, and Workers. WordPress.org requires
+  GPL-*compatibility*, and MIT/Expat is GPL-compatible per the FSF license list, so the
+  GPL plugin can depend on / share behavior with an MIT engine with no conflict.
+  Refs: [WP plugin guidelines](https://developer.wordpress.org/plugins/wordpress-org/detailed-plugin-guidelines/),
+  [OSI MIT](https://opensource.org/license/MIT),
+  [FSF license list (Expat)](https://www.gnu.org/licenses/license-list.html#Expat).
+  **Caveat:** MIT is correct *because* this is an independent TS implementation sharing only
+  behavior tests. If we ever literally transcribe GPL-licensed PHP fragments line-for-line
+  into the TS engine, that code inherits GPL — so either keep the reimplementation clean
+  (recommended) or explicitly dual-license / assign copyright for any ported verbatim block.
+
+---
+
+## 1. Purpose & positioning
+
+Content teams and agents increasingly want the spintax engine **outside** WordPress:
+in Cloudflare Workers, in Node/serverless, in a browser playground on `spintax.net`, in
+CI that validates author templates, in a Telegram bot. Today the only real engine is PHP,
+locked inside the plugin runtime. `@spintax/core` is the portable engine that unlocks all
+of those surfaces from one codebase.
+
+Positioning against the roadmap product ladder (`product-roadmap-2026.md` §7):
+
+- It is **not** a commercial layer. It is a second free/OSS wedge alongside the WP plugin —
+  same "strong free entry point" strategy, different runtime.
+- It is the **shared runtime** the roadmap's Phase 4 API and Phase 5 bot were going to need
+  anyway. Building it as a named public package (rather than an inlined Worker dependency)
+  means the API, the bot, and a web playground all import the same tested engine.
+
+The roadmap currently describes only a *hosted* JS surface (Phase 4 endpoints). This spec
+proposes promoting the engine underneath those endpoints to a **first-class published
+package** and adding a product-line row for it.
+
+---
+
+## 2. Scope
+
+### 2.1 In scope (the package)
+
+The pure, side-effect-free authoring engine:
+
+- **Parser** — GTW-compatible recursive-descent parse of the full syntax surface (§4).
+- **Renderer** — resolve a parsed template to one output string given a variable context
+  and an RNG.
+- **Validator** — static analysis returning structured diagnostics with line/column,
+  matching the plugin's save-time validation semantics (§3, parity item).
+- **Variable extraction** — enumerate `%var%` references and `#set` definitions in a
+  template (powers the roadmap's `extract-variables` endpoint and author tooling).
+- **Post-process pipeline** — the domain/email/decimal shielding + spacing + capitalization
+  passes (§5), because validation-quality output is a product promise, not cosmetic.
+- **Deterministic mode** — seedable RNG so tests, previews, and "show me N variants" are
+  reproducible.
+
+### 2.2 Out of scope (the package)
+
+Everything that is a *runtime host* concern, not an *engine* concern — kept out so the
+package stays lean and universally embeddable:
+
+- No WordPress, ACF, WooCommerce, or bindings concepts. `%product_*%` / `%post_*%` /
+  `%acf_*%` context sources are **host-supplied variable maps**, not engine features. The
+  engine takes a `Record<string, string>` context; where those keys come from is the host's
+  job.
+- No caching, no cron, no persistence, no CPT — those are plugin/host responsibilities.
+- No LLM/provider integration, no API-key handling, no billing (roadmap §5.4 boundary).
+- No HTTP surface — the Cloudflare API (Phase 4) wraps this package; it is not in it.
+- No CLI in the core package (a thin `@spintax/cli` on top is a possible sibling, deferred).
+
+---
+
+## 3. Relationship to the PHP engine — parity contract
+
+"Independent implementation" (decision #2) means we write idiomatic TS and do **not**
+promise identical bytes. But three things MUST match, or the cross-runtime promise
+("author with the npm/API validator, render in the WP plugin") breaks for the user. Draw
+the line explicitly:
+
+### 3.1 MUST stay in parity (author-visible contract)
+
+- **Accepted syntax surface.** Every construct the plugin parses, the package parses, and
+  vice versa. A template that is valid in one is valid in the other. No dialect drift.
+- **Validation verdicts.** What the plugin rejects at save time (malformed brackets,
+  circular `#include`, plural arity/form errors, nested brackets in plural forms), the
+  package's validator also rejects — and what it accepts, the package accepts. Diagnostic
+  *wording* may differ; **pass/fail classification may not**.
+- **Plural grammar buckets.** Given the same locale + count, both engines pick the same
+  form slot (RU/UK/BE 3-form one|few|many; EN-style 2-form). This is deterministic math,
+  not RNG — it must match exactly. (Reference: `plugin/src/Core/Engine/Plurals.php`.)
+- **Conditional truthiness.** `{?VAR?…}` "set + non-whitespace" truthiness, inverted
+  `{?!VAR?…}`, resolution before AND after `%var%` expansion — identical rules.
+- **`#set` collapse-once semantics.** An enumeration in a `#set` value collapses once at
+  set-time to a single stable value (plugin Renderer Stage 4b, 2.2.1) so `{plural %n%: …}`
+  sees a numeric count. This is a *semantic* rule, not RNG, and must match.
+
+### 3.2 Deliberately allowed to diverge
+
+- **Random selection results.** Which option `{a|b|c}` picks, which N elements `[…]`
+  shuffles — inherently RNG, no value in matching PHP's `mt_rand` sequence. Seedable mode
+  gives reproducibility *within* the package; cross-engine sequence parity is a non-goal.
+- **Internal architecture.** No obligation to mirror the PHP class layout (`Parser`,
+  `RenderContext`, `Renderer` stages). TS can use whatever AST/visitor shape is cleanest.
+- **Performance characteristics, error message strings, i18n of diagnostics.**
+
+### 3.3 Post-process pipeline — a judgment call to settle
+
+The plugin's `Parser::post_process` (domain/email/decimal shielding, space collapsing,
+capitalization — see §5) shapes *output*, not accepted syntax. Under "output may diverge"
+it is technically free to differ. **But** it's a big part of why plugin output looks
+polished, and the roadmap sells `preview-render` as a real preview of what the site will
+produce. Recommendation: **treat the post-process pipeline as parity-target too** (port its
+behavior, share its golden corpus) even though it's output-shaping — because a preview that
+capitalizes/spaces differently from the live site is a misleading preview.
+**RESOLVED (§0.1): YES, parity-target.** `render()` / `preview-render` default
+`postProcess: true`; a `postProcess: false` escape hatch stays for tooling/debug.
+
+---
+
+## 4. Syntax coverage matrix
+
+Source of truth: `docs/gtw-syntax-reference.md` + the plugin engine. The package must cover
+the full surface. Enumerated here so the port has a checklist, not prose.
+
+| Construct | Example | Parity class |
+|---|---|---|
+| Enumeration | `{a\|b\|c}`, nested `{a\|{b\|c}}`, empty `{\|a\|b}` | syntax + validation |
+| Permutation | `[a\|b\|c]` | syntax; output RNG |
+| Permutation single sep | `[< and > a\|b]` | syntax |
+| Permutation configured | `[<minsize=2;maxsize=3;sep=", ";lastsep=" and "> …]` | syntax + minsize/maxsize default rules |
+| Per-element separator | `[<, > a\|b < and >\|c]` | syntax; sep travels with element on shuffle |
+| Variable ref | `%var%` (case-insensitive) | syntax |
+| Local set | `#set %v% = value` | syntax + collapse-once (§3.1) |
+| Conditional | `{?VAR?then\|else}`, `{?!VAR?…}` | syntax + truthiness (§3.1) |
+| Plural | `{plural <count>: one\|few\|many}` | syntax + bucket math (§3.1); rejects nested brackets in form slots |
+| Block comment | `/#...#/` | syntax (stripped) |
+| Include | `#include "slug-or-id"` | syntax + circular guard; **resolver is host-injected** (§4.1) |
+
+### 4.1 `#include` resolution is host-injected
+
+The package cannot know how to fetch template `"slug-or-id"` — in WP it's a CPT lookup, in
+the API it's a store/DB call, in the bot it may be disallowed entirely. The engine accepts
+an **include resolver callback** `(ref: string) => string | null`; the circular-reference
+guard and scope-isolation rules (child inherits global+runtime vars, NOT parent `#set`
+locals — plugin key design decision) live in the engine, but the *fetch* is the host's.
+
+### 4.2 minsize/maxsize defaults (parity)
+
+Port exactly (plugin key design decision): only `maxsize` set → `minsize = 1` (not total);
+only `minsize` set → `maxsize = total`. Auto-spacing: purely-alphabetic separators get
+padded with spaces; punctuation separators do not.
+
+---
+
+## 5. Post-process pipeline (parity-target — resolved §0.1)
+
+Order matters — mis-sequencing corrupts domains/emails. Port the plugin's order verbatim:
+
+1. Shield URLs, emails, bare domains (ASCII + punycode + IDN), decimals, multi-dotted
+   abbreviations (`т.д.`), single-token whitelist abbreviations (`соц.`, `Mr.`, `Inc.`) → placeholders
+2. Collapse duplicate spaces/tabs
+3. Remove whitespace before punctuation
+4. Add space after `,;:` and `.!?` where missing
+5. Capitalize first letter (skip leading HTML tags)
+6. Capitalize after `.!?…` (through HTML tags)
+7. Capitalize after block-level HTML tags (`<p>`, `<h1>`–`<h6>`, `<li>`, `<div>`, …)
+8. Capitalize after line breaks
+9. Restore placeholders
+
+The abbreviation whitelist and IDN/punycode handling are the fiddly parts — these get the
+heaviest golden-corpus coverage (§7).
+
+---
+
+## 6. Trust model & the shielding question
+
+The plugin's ADR-0001 splits variable sources into **T1 markup-authoring** (template /
+`#set` / globals / shortcode args — values MAY be spintax, no shielding) and **T2
+data-derived** (context/siblings reading records — values MUST be shielded `{ } [ ] % #` +
+access-gated). `SpintaxShield::neutralize_map()` implements the neutralization.
+
+For the package this maps cleanly:
+
+- The engine treats its input **context map** as T1 by default (author-controlled), exactly
+  like the plugin treats `#set`/globals/shortcode args.
+- **Shielding is a host concern, exposed as a utility.** The package ships a
+  `neutralize()` helper (port of `SpintaxShield`) so a host that feeds *data-derived*
+  values (a CMS field, a product description, user input) into the context can shield them
+  before handing them to the engine — same discipline as the plugin's T2 sources. The
+  engine does not auto-shield, because it cannot know which context keys are T1 vs T2. The
+  **API/bot host** is responsible for shielding untrusted input (matters a lot once the
+  Phase 4 API accepts arbitrary caller-supplied variable maps — see §8).
+
+---
+
+## 7. Testing — shared golden corpus
+
+The single highest-leverage artifact for "independent impl, but parity where it counts":
+a **language-neutral golden corpus** of `(template, context, locale, seed) → expected`
+cases, consumed by BOTH the PHP suite and the TS suite.
+
+- Format: JSON fixtures (there's already a stray `tests/fixtures/rendered-output.txt` in the
+  plugin working tree — formalize this into a versioned corpus).
+- **Deterministic cases** (validation verdicts, plural buckets, conditional truthiness,
+  `#set` collapse, post-process pipeline) assert exact output in both engines → these are
+  the §3.1 parity gates, machine-checked.
+- **RNG cases** run in seeded mode and assert *within-engine* reproducibility only, plus
+  structural invariants (e.g. permutation output is a valid shuffle of a valid subset).
+- Corpus lives where both repos can pull it (shared submodule, or published as
+  `@spintax/conformance`). This is what keeps the two engines honest over time without
+  forcing byte-parity everywhere.
+
+The plugin currently sits at 577 PHPUnit tests — many encode exactly these semantics and
+are the raw material for the corpus.
+
+---
+
+## 8. Boundaries with the roadmap (API & bot)
+
+- **Phase 4 Cloudflare API** becomes a thin Worker importing `@spintax/core`. Endpoints map
+  to package calls: `validate-template` → `validate()`, `preview-render` → seeded
+  `render()`, `render-batch` → N seeded renders, `extract-variables` → `extractVariables()`,
+  `analyze-template` → validator + extraction + stats. The Worker owns HTTP, auth, rate
+  limiting, and **shielding of caller-supplied context** (§6). The engine owns nothing
+  network.
+- **Phase 5 Telegram bot** imports the same package (or calls the API). No third engine.
+- **Web playground on `spintax.net`** can run the package **client-side** (it's pure TS,
+  no server needed for validate/preview) — a strong SEO/education asset per roadmap §4.1
+  at near-zero hosting cost.
+
+This is the payoff of publishing a named package instead of inlining a Worker dependency:
+one engine, three surfaces, and the browser playground falls out for free.
+
+---
+
+## 9. Package shape (straw-man, for discussion)
+
+```
+@spintax/core            # pure engine — parse / render / validate / extract / neutralize
+  parse(src): Ast
+  render(ast|src, { context, seed, includeResolver }): string
+  validate(src): Diagnostic[]        // parity gate §3.1
+  extractVariables(src): { refs, sets }
+  neutralize(value): string          // SpintaxShield port §6
+@spintax/conformance     # (maybe) shared golden corpus §7
+@spintax/cli             # (deferred) npx spintax validate|render|extract
+```
+
+- **Language:** TypeScript, ESM-first, dual CJS build, zero runtime deps (target: runs on
+  Workers, Node 18+, and in-browser unchanged).
+- **Naming:** bare `spintax` on npm is likely taken — **OPEN QUESTION Q2** (scope under
+  `@spintax/*` org, or a distinct unscoped name). Does not block spec.
+- **Repo:** separate `investblog/spintax-js`, own CI, own memory namespace (mirror the
+  OpenCart port's spin-off).
+
+---
+
+## 10. Open questions (need sign-off before coding)
+
+- ~~**Q1 — post-process parity.**~~ **RESOLVED (§0.1): YES, parity-target** with a
+  `postProcess: false` escape hatch.
+- ~~**Q5 — license.**~~ **RESOLVED (§0.1): MIT** for the npm packages; WP plugin stays GPL
+  (MIT/Expat is GPL-compatible). Caveat on verbatim GPL transcription noted in §0.1.
+- **Q2 — npm naming.** `@spintax/core` scope vs unscoped name; who owns the npm org.
+- **Q3 — corpus home.** Shared git submodule vs published `@spintax/conformance` package vs
+  duplicated fixtures kept in sync by CI.
+- **Q4 — CLI now or later.** Is `npx spintax validate` an early adoption driver (author/CI
+  ergonomics) worth building alongside core, or strictly deferred?
+- **Q6 — versioning independence.** The npm engine's semver is decoupled from the plugin's
+  version — confirm, and define what "syntax v1" compatibility means across both.
+
+---
+
+## 11. Suggested milestones (once questions close)
+
+1. **M0 — corpus extraction.** Turn the parity-critical PHPUnit cases (§3.1) + post-process
+   cases into the shared golden corpus. Do this *before* any TS, so the port has a target.
+2. **M1 — parser + validator.** Parse the full §4 surface; pass all deterministic
+   validation-verdict corpus cases. No rendering yet.
+3. **M2 — renderer + post-process.** Seeded render; pass deterministic render + post-process
+   corpus. RNG cases pass structural invariants.
+4. **M3 — extract + neutralize + docs.** Public API surface complete; README; publish
+   `0.1.0` to npm.
+5. **M4 — first consumer.** Stand up the Phase 4 `validate-template` + `preview-render`
+   endpoints on a Worker importing the package, proving the boundary in §8.
+6. **M5 — browser playground** on `spintax.net` running the package client-side (SEO/edu).

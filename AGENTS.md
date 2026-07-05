@@ -28,7 +28,7 @@ that work belongs to Claude (`CLAUDE.md`).
 
 ## What to review for (this project's priorities)
 
-Ground every review in the governing spec: `W:\projects\spintax\docs\spec-npm-engine.md`.
+Ground every review in the governing spec: `docs/spec-npm-engine.md` (in this repo).
 The core value of this repo is a **parity contract** with the PHP engine, so weight review
 accordingly:
 
@@ -67,7 +67,7 @@ where useful — a suggested fix as a comment snippet (not an applied edit). Sep
 
 ## Context pointers
 
-- Governing spec: `W:\projects\spintax\docs\spec-npm-engine.md`
+- Governing spec: `docs/spec-npm-engine.md` (this repo)
 - Implementer instructions: `CLAUDE.md` (this repo)
 - Parent PHP engine (parity reference): `W:\projects\spintax\plugin\src\Core\Engine`,
   `…\Core\Render` — notably `Parser::post_process()` (`Parser.php:248`) and

@@ -40,9 +40,10 @@ LICENSE         # MIT
 
 ## Design & specs
 
-The governing spec is `spec-npm-engine.md` in the parent repo
-(`W:\projects\spintax\docs\`). Local `CLAUDE.md` summarises the locked decisions, the
-parity contract, and the milestone plan.
+The governing spec is [`docs/spec-npm-engine.md`](./docs/spec-npm-engine.md) in this repo.
+`CLAUDE.md` summarises the locked decisions, the parity contract, and the milestone plan.
+The spec references the parent WordPress-plugin repo (`W:\projects\spintax\`) for the PHP
+engine and roadmap docs.
 
 ## License
 
