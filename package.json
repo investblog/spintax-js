@@ -13,6 +13,6 @@
     "node": ">=18"
   },
   "scripts": {
-    "//": "build/test scripts land at milestone M1 (see CLAUDE.md)"
+    "//": "build/test scripts land at milestone M1 (see docs/spec-npm-engine.md)"
   }
 }

@@ -22,6 +22,6 @@
     "access": "public"
   },
   "scripts": {
-    "//": "engine + build/test land at milestone M1 (see ../../CLAUDE.md)"
+    "//": "engine + build/test land at milestone M1 (see ../../docs/spec-npm-engine.md)"
   }
 }

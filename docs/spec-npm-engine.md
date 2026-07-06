@@ -596,11 +596,11 @@ rule), after the Worker proves the need — never speculatively.
    selection-strategy discriminator). Then turn the ~276 parity-relevant PHPUnit cases (§3.1)
    + post-process cases into the shared golden corpus. Do this *before* any TS, so the port
    has a target. Cross-repo: the PHP-side corpus runner is a parent-repo `W:\projects\spintax\`
-   change — its owner/wiring is assigned there, outside this repo's CLAUDE.md scope.
+   change — its owner/wiring is assigned there, outside this repo's implementer scope.
 1.5. **M0.5 — repo tooling / test harness.** Strict `tsconfig`, build (tsup/unbuild), test
    runner (vitest) wired to read the corpus, dual ESM/CJS + `exports` map + `types` entry, CI
    green on an empty suite. M1's "pass corpus cases" presumes this exists — make it an
-   explicit gate (this is what resolves CLAUDE.md's "Commands TBD").
+   explicit gate (this is what resolves the repo's outstanding "Commands TBD").
 2. **M1 — parser + validator.** Parse the full §4 surface; pass all deterministic
    validation-verdict corpus cases. No rendering yet.
 3. **M2 — renderer + post-process.** Seeded render; pass deterministic render + post-process

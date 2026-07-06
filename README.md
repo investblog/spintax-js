@@ -5,8 +5,8 @@ validate, and extract variables from GTW-compatible spintax templates, with **ze
 WordPress dependency**. Runs on Cloudflare Workers, Node 18+, and in the browser.
 
 > **Status: pre-code (DRAFT).** This repo currently holds the design + scaffolding only.
-> First engine code lands at milestone **M1** (see `CLAUDE.md`). Nothing is published to
-> npm yet.
+> First engine code lands at milestone **M1** (see the [spec](./docs/spec-npm-engine.md)).
+> Nothing is published to npm yet.
 
 ## What this is
 
@@ -36,8 +36,6 @@ packages/
 examples/
   worker/         # Cloudflare Worker — API dogfood gate (M4)
   telegram-bot/   # Telegram authoring bot — flagship example (M5)
-CLAUDE.md         # implementer instructions (Claude Code)
-AGENTS.md         # reviewer charter (Codex — review-only, code-freeze)
 docs/spec-npm-engine.md  # governing spec (design source of truth)
 LICENSE           # MIT
 ```
@@ -47,10 +45,10 @@ polluting it.
 
 ## Design & specs
 
-The governing spec is [`docs/spec-npm-engine.md`](./docs/spec-npm-engine.md) in this repo.
-`CLAUDE.md` summarises the locked decisions, the parity contract, and the milestone plan.
-The spec references the parent WordPress-plugin repo (`W:\projects\spintax\`) for the PHP
-engine and roadmap docs.
+The governing spec is [`docs/spec-npm-engine.md`](./docs/spec-npm-engine.md) in this repo —
+it holds the locked decisions, the parity contract, and the milestone plan. The spec
+references the parent WordPress-plugin repo (`W:\projects\spintax\`) for the PHP engine and
+roadmap docs.
 
 ## License
 
