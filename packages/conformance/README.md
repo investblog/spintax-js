@@ -31,8 +31,16 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 | `knownIncludes` | optional; `validate`/`analyze` only — enables "unknown #include target" verdicts |
 | `seed` | PRNG seed for `kind:rng` cases (engine-private; never a cross-engine equality basis) |
 | `postProcess` | optional bool, **default `true`** (mirrors `render()`); set `false` to assert raw pre-cosmetic output. render/analyze only |
+| `neutralizeContext` | optional string[]; render only — harness `neutralize()`s these context keys before rendering (tests the neutralize→render round-trip; asserts the final literal output, mechanism-independent) |
 | `rng` | injected selection strategy, **orthogonal to `seed`** (see below) |
+| `engines` | optional `("ts"\|"php")[]`; absent = **both**. `["ts"]` marks a deliberate TS-only divergence the PHP plugin doesn't provide. A PHP runner skips cases whose `engines` omit `"php"` |
 | `expect` | shape **discriminated by `op`** (see below) |
+
+> **`neutralize()` is TS-only for glyph-restore.** The plugin's `SpintaxShield` entity-encodes
+> (`{`→`&#123;`) and never decodes — its literal glyph only appears in an HTML browser. This
+> engine restores literal glyphs in any sink (§6), a deliberate divergence — so the
+> `neutralize/roundtrip-*` cases are tagged `"engines": ["ts"]`. Only `neutralize/identity-plain`
+> (no structural chars) is a cross-engine gate.
 
 > **Post-process gotcha.** `render()` defaults `postProcess: true`, and the pipeline
 > capitalizes the first letter — so a raw pick `a` renders as `A`, `товара` as `Товара`.

@@ -38,6 +38,18 @@
           "items": { "type": "string" },
           "description": "validate/analyze only → ValidateOptions.knownIncludes. Enables 'unknown #include target' verdicts."
         },
+        "neutralizeContext": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "render only: the harness applies neutralize() to these context keys BEFORE rendering. Tests the neutralize→render round-trip mechanism-INDEPENDENTLY — the assertion is on the final literal output, not the encoded intermediate (§6)."
+        },
+        "engines": {
+          "type": "array",
+          "items": { "enum": ["ts", "php"] },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Which engines assert this case. Absent = BOTH (the default cross-engine gate). Use [\"ts\"] for a deliberate TS-only divergence the PHP plugin does not provide — e.g. neutralize()'s glyph-restore (the plugin entity-encodes and never decodes; §6). A PHP runner skips cases whose engines omit \"php\"."
+        },
         "seed": {
           "oneOf": [{ "type": "integer" }, { "type": "string" }],
           "description": "PRNG seed for kind:rng cases. Engine-private; never a cross-engine equality basis."
@@ -80,6 +92,11 @@
         {
           "if": { "properties": { "op": { "const": "validate" } }, "required": ["op"] },
           "then": { "properties": { "expect": { "$ref": "#/$defs/expectValidate" } } }
+        },
+        {
+          "$comment": "neutralizeContext is a render-only harness directive.",
+          "if": { "required": ["neutralizeContext"] },
+          "then": { "properties": { "op": { "const": "render" } } }
         }
       ]
     },
