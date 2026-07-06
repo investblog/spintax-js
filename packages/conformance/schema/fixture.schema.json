@@ -42,6 +42,10 @@
           "oneOf": [{ "type": "integer" }, { "type": "string" }],
           "description": "PRNG seed for kind:rng cases. Engine-private; never a cross-engine equality basis."
         },
+        "postProcess": {
+          "type": "boolean",
+          "description": "Mirrors RenderOptions.postProcess (§9.2), default TRUE. Set false to assert a RAW pre-cosmetic output (the mandatory safety-restore still runs, §6). render/analyze only. NOTE: with the default, post-process capitalizes the first letter — a raw pick 'a' becomes 'A'."
+        },
         "rng": { "$ref": "#/$defs/rng" },
         "expect": { "type": "object" }
       },
@@ -53,9 +57,9 @@
           "then": { "properties": { "kind": { "const": "deterministic" } } }
         },
         {
-          "$comment": "kind:rng only makes sense for render.",
+          "$comment": "kind:rng only makes sense for render, requires a seed, and must NOT carry a fixing rng strategy (that would make it deterministic).",
           "if": { "properties": { "kind": { "const": "rng" } }, "required": ["kind"] },
-          "then": { "properties": { "op": { "const": "render" } }, "required": ["seed"] }
+          "then": { "properties": { "op": { "const": "render" } }, "required": ["seed"], "not": { "required": ["rng"] } }
         },
         {
           "if": { "properties": { "op": { "const": "render" }, "kind": { "const": "deterministic" } }, "required": ["op", "kind"] },
@@ -105,12 +109,13 @@
     "expectExtract": {
       "type": "object",
       "additionalProperties": false,
+      "minProperties": 1,
       "properties": {
         "refs": { "type": "array", "items": { "type": "string" } },
         "sets": { "type": "array", "items": { "type": "string" } },
         "includes": { "type": "array", "items": { "type": "string" } }
       },
-      "description": "Arrays are order-normalized before comparison."
+      "description": "Arrays are order-normalized before comparison. At least one key required (no vacuous expect)."
     },
 
     "expectValidate": {
@@ -138,9 +143,10 @@
     "expectRng": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["reproducible"],
       "description": "Structural invariants for kind:rng render cases (§7.2). The runner asserts these + within-engine reproducibility; never an exact cross-engine gate.",
       "properties": {
-        "reproducible": { "const": true, "description": "Same seed ⇒ same output within one engine." },
+        "reproducible": { "const": true, "description": "Same seed ⇒ same output within one engine. Always asserted, hence required." },
         "oneOf": { "type": "array", "items": { "type": "string" }, "description": "Enumeration: output ∈ this set." },
         "subsetOf": { "type": "array", "items": { "type": "string" }, "description": "Permutation: output elements drawn from this set." },
         "sizeRange": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2, "description": "Permutation: [minsize, maxsize] after clamp." },

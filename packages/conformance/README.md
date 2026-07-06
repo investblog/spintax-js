@@ -28,10 +28,15 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 | `template` | the spintax source |
 | `context` | optional variable map (string→string, T1) |
 | `locale` | optional plural-bucket locale (§3.1) |
-| `knownIncludes` | optional; `validate` only — enables "unknown #include target" verdicts |
+| `knownIncludes` | optional; `validate`/`analyze` only — enables "unknown #include target" verdicts |
 | `seed` | PRNG seed for `kind:rng` cases (engine-private; never a cross-engine equality basis) |
+| `postProcess` | optional bool, **default `true`** (mirrors `render()`); set `false` to assert raw pre-cosmetic output. render/analyze only |
 | `rng` | injected selection strategy, **orthogonal to `seed`** (see below) |
 | `expect` | shape **discriminated by `op`** (see below) |
+
+> **Post-process gotcha.** `render()` defaults `postProcess: true`, and the pipeline
+> capitalizes the first letter — so a raw pick `a` renders as `A`, `товара` as `Товара`.
+> A case that means to assert the raw selection/resolution stage must set `postProcess: false`.
 
 ### `expect` by `op`
 

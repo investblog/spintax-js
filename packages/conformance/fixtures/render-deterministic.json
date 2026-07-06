@@ -1,7 +1,7 @@
 [
   {
     "id": "render/variable-substitution",
-    "note": "No randomness — exact output regardless of rng.",
+    "note": "No randomness; first letter already uppercase, so post-process (default) is a no-op → exact output either way.",
     "kind": "deterministic",
     "op": "render",
     "template": "Hello %name%!",
@@ -9,12 +9,21 @@
     "expect": { "output": "Hello World!" }
   },
   {
+    "id": "render/post-process-capitalizes-first",
+    "note": "postProcess defaults TRUE (mirrors render()); step-8 capitalizes the first letter. Demonstrates the flag's default.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "hello world",
+    "expect": { "output": "Hello world" }
+  },
+  {
     "id": "render/enumeration-first",
-    "note": "rng strategy fixes the pick, so the output is exact and cross-engine-comparable.",
+    "note": "postProcess:false asserts the RAW pick. With the default TRUE it would post-process to 'A'.",
     "kind": "deterministic",
     "op": "render",
     "template": "{a|b|c}",
     "rng": "first",
+    "postProcess": false,
     "expect": { "output": "a" }
   },
   {
@@ -23,23 +32,27 @@
     "op": "render",
     "template": "{a|b|c}",
     "rng": "last",
+    "postProcess": false,
     "expect": { "output": "c" }
   },
   {
     "id": "render/enumeration-sequence",
-    "note": "sequence value 1 is a raw RNG return; picks the middle option.",
+    "note": "sequence value 1 is a raw RNG return; picks the middle option. Raw output (postProcess:false).",
     "kind": "deterministic",
     "op": "render",
     "template": "{a|b|c}",
     "rng": { "sequence": [1] },
+    "postProcess": false,
     "expect": { "output": "b" }
   },
   {
     "id": "render/plural-ru-few",
+    "note": "Raw plural resolution; with the default post-process this would capitalize to 'Товара'.",
     "kind": "deterministic",
     "op": "render",
     "template": "{plural 2: товар|товара|товаров}",
     "locale": "ru",
+    "postProcess": false,
     "expect": { "output": "товара" }
   }
 ]
