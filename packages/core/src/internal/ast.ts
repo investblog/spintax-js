@@ -4,8 +4,9 @@
  * render/validate/extract/analyze walk. Not a serialization format — never
  * persisted across engine versions.
  *
- * M1 scope (PR-10): literal / variable / enumeration / permutation. The full
- * syntax surface (conditional / plural / #set / #include) lands in PR-11.
+ * M1 scope: literal / variable / enumeration / permutation (PR-10) +
+ * conditional / plural / #set / #include (PR-11). Permutation's `<config>` and
+ * per-element separators are parsed from `rawInner` in PR-11b.
  */
 
 /** Bumped only on a breaking change to the node shape (independent of syntax v1). */
@@ -21,7 +22,15 @@ export interface ParsedAst extends Ast {
   readonly nodes: readonly Node[];
 }
 
-export type Node = LiteralNode | VariableNode | EnumerationNode | PermutationNode;
+export type Node =
+  | LiteralNode
+  | VariableNode
+  | EnumerationNode
+  | PermutationNode
+  | ConditionalNode
+  | PluralNode
+  | SetNode
+  | IncludeNode;
 
 /** Verbatim text. */
 export interface LiteralNode {
@@ -51,6 +60,52 @@ export interface EnumerationNode {
 export interface PermutationNode {
   readonly type: 'permutation';
   readonly rawInner: string;
+}
+
+/**
+ * `{?VAR?then|else}` / `{?!VAR?then}` — show `then` when VAR is truthy (or falsy
+ * if `inverted`), else `else`. A malformed `{?…}` is NOT a conditional: the
+ * parser falls back to treating the braces as an enumeration (matching the
+ * plugin, where a bad conditional survives the conditional pass unchanged and
+ * is then consumed by the enumeration pass).
+ */
+export interface ConditionalNode {
+  readonly type: 'conditional';
+  readonly name: string;
+  readonly inverted: boolean;
+  readonly then: readonly Node[];
+  readonly else: readonly Node[];
+}
+
+/**
+ * `{plural <count>: one|few|many}`. `countRaw` is the raw count slot (may be a
+ * `%var%` resolved at render, then integer-parsed); `forms` are the pipe-split
+ * form sequences. Discriminated by the literal `{plural ` prefix + a `:`.
+ */
+export interface PluralNode {
+  readonly type: 'plural';
+  readonly countRaw: string;
+  /**
+   * Raw forms text after the colon, kept verbatim. The valid path renders
+   * `forms`; the lenient path (a form containing nested `{}`/`[]`, or an arity
+   * mismatch) needs the raw text to re-emit the whole construct with fullwidth
+   * braces (U+FF5B/FF5D), so M2 reconstructs `{plural <countRaw>:<formsRaw>}`.
+   */
+  readonly formsRaw: string;
+  readonly forms: readonly (readonly Node[])[];
+}
+
+/** `#set %name% = value` (line-anchored). Global-scope / collapse-once are render (M2) concerns. */
+export interface SetNode {
+  readonly type: 'set';
+  readonly name: string;
+  readonly value: readonly Node[];
+}
+
+/** `#include "ref"` (line-anchored). Host-injected resolution is a render (M2) concern. */
+export interface IncludeNode {
+  readonly type: 'include';
+  readonly ref: string;
 }
 
 /** Type guard: is this an internal ParsedAst produced by this engine version? */
