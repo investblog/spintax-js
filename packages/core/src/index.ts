@@ -7,6 +7,9 @@
  * and M2 (renderer+post-process). They throw {@link NotImplementedError} until then.
  */
 
+import { parseTemplate } from './internal/parser';
+import type { Ast } from './internal/ast';
+
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
 /**
@@ -15,9 +18,7 @@
  * An in-memory perf handle, not a serialization format (do not persist across
  * engine versions).
  */
-export interface Ast {
-  readonly astVersion: 1;
-}
+export type { Ast };
 
 export interface RenderOptions {
   /** Variable map (T1, author-controlled by default — §6). */
@@ -118,8 +119,8 @@ export class NotImplementedError extends SpintaxError {
 
 // ─── Public API surface (§9.2) — stubs ───────────────────────────────────────
 
-export function parse(_src: string): Ast {
-  throw new NotImplementedError('parse()');
+export function parse(src: string): Ast {
+  return parseTemplate(src);
 }
 
 export function render(_input: string | Ast, _opts?: RenderOptions): string {
