@@ -1,0 +1,173 @@
+[
+  {
+    "id": "postprocess/capitalize-first-letter",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "hello world",
+    "postProcess": true,
+    "expect": { "output": "Hello world" }
+  },
+  {
+    "id": "postprocess/capitalize-after-period",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "hello. world",
+    "postProcess": true,
+    "expect": { "output": "Hello. World" }
+  },
+  {
+    "id": "postprocess/capitalize-after-ellipsis",
+    "note": "The ellipsis char … (U+2026) is a sentence terminator for capitalization.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "wait… really",
+    "postProcess": true,
+    "expect": { "output": "Wait… Really" }
+  },
+  {
+    "id": "postprocess/capitalize-after-linebreak",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "line one\nline two",
+    "postProcess": true,
+    "expect": { "output": "Line one\nLine two" }
+  },
+  {
+    "id": "postprocess/collapse-multiple-spaces",
+    "note": "Leading uppercase avoids first-letter-cap noise; isolates the space-collapse rule.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Word  with   spaces",
+    "postProcess": true,
+    "expect": { "output": "Word with spaces" }
+  },
+  {
+    "id": "postprocess/remove-space-before-comma",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Word , next",
+    "postProcess": true,
+    "expect": { "output": "Word, next" }
+  },
+  {
+    "id": "postprocess/remove-space-before-exclamation",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hello ! World",
+    "postProcess": true,
+    "expect": { "output": "Hello! World" }
+  },
+  {
+    "id": "postprocess/add-space-after-comma",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "one,two",
+    "postProcess": true,
+    "expect": { "output": "One, two" }
+  },
+  {
+    "id": "postprocess/digit-after-comma-not-spaced",
+    "note": "The (?!\\d) lookahead protects number groups like 3,14 from getting a space.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Price 3,14 eur",
+    "postProcess": true,
+    "expect": { "output": "Price 3,14 eur" }
+  },
+  {
+    "id": "postprocess/period-then-letter-spaced-and-capped",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a.b",
+    "postProcess": true,
+    "expect": { "output": "A. B" }
+  },
+  {
+    "id": "postprocess/decimal-shielded",
+    "note": "Decimal 2.5 is shielded so its dot is not a sentence boundary.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Version 2.5 released",
+    "postProcess": true,
+    "expect": { "output": "Version 2.5 released" }
+  },
+  {
+    "id": "postprocess/url-shielded",
+    "note": "A full URL survives post-process intact (no punctuation/cap mangling inside).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "visit https://example.com now",
+    "postProcess": true,
+    "expect": { "output": "Visit https://example.com now" }
+  },
+  {
+    "id": "postprocess/url-trailing-punctuation",
+    "note": "A trailing '.' is split off the URL so it still ends the sentence, URL stays intact.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see https://example.com.",
+    "postProcess": true,
+    "expect": { "output": "See https://example.com." }
+  },
+  {
+    "id": "postprocess/email-shielded",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "mail me@example.com please",
+    "postProcess": true,
+    "expect": { "output": "Mail me@example.com please" }
+  },
+  {
+    "id": "postprocess/bare-domain-shielded-then-sentence",
+    "note": "Domain is shielded; the '.' after it still ends the sentence and caps the next word.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "visit example.com. next",
+    "postProcess": true,
+    "expect": { "output": "Visit example.com. Next" }
+  },
+  {
+    "id": "postprocess/punycode-domain-shielded",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "open xn--e1afmapc.xn--p1ai today",
+    "postProcess": true,
+    "expect": { "output": "Open xn--e1afmapc.xn--p1ai today" }
+  },
+  {
+    "id": "postprocess/abbrev-whitelist-ru",
+    "note": "Single-token abbreviation 'соц.' is whitelisted, so 'сети' is NOT falsely capitalized.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Текст соц. сети тут",
+    "postProcess": true,
+    "expect": { "output": "Текст соц. сети тут" }
+  },
+  {
+    "id": "postprocess/abbrev-whitelist-en",
+    "note": "'Mr.' is whitelisted, so 'smith' is not treated as a new sentence.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "call Mr. smith now",
+    "postProcess": true,
+    "expect": { "output": "Call Mr. smith now" }
+  },
+  {
+    "id": "postprocess/abbrev-multidot",
+    "note": "Multi-dot abbreviation 'т.д.' (2+ dotted groups) is shielded by step 5a.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Текст и т.д. далее",
+    "postProcess": true,
+    "expect": { "output": "Текст и т.д. далее" }
+  },
+  {
+    "id": "postprocess/trim-and-collapse",
+    "note": "Leading/trailing whitespace collapses then trims; first letter capitalizes.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "  hello  ",
+    "postProcess": true,
+    "expect": { "output": "Hello" }
+  }
+]
