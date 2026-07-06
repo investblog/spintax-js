@@ -6,8 +6,15 @@
  * validate+extract and has no dedicated corpus op.
  */
 import { describe, test, expect } from 'vitest';
-import { validate, type ValidateOptions } from '../src/index';
-import { loadCorpus, runsInTs, type Case, type ExpectValidate, type Op } from './corpus-harness';
+import { extract, validate, type ValidateOptions } from '../src/index';
+import {
+  loadCorpus,
+  runsInTs,
+  type Case,
+  type ExpectExtract,
+  type ExpectValidate,
+  type Op,
+} from './corpus-harness';
 
 /**
  * Per-op runners. Ops without an entry are pending `test.todo`. Wiring one op
@@ -15,10 +22,22 @@ import { loadCorpus, runsInTs, type Case, type ExpectValidate, type Op } from '.
  */
 const RUNNERS: Partial<Record<Op, (c: Case) => void>> = {
   validate: runValidate,
-  // M1: extract
+  extract: runExtract,
   // M2: render (branch on kind: deterministic⇒exact output via rngFromStrategy;
   //     rng⇒seeded PRNG + §7.2 invariants), neutralize
 };
+
+/** Each present array in `expect` is compared exactly, order-normalized. */
+function runExtract(c: Case): void {
+  const result = extract(c.template);
+  const expected = c.expect as ExpectExtract;
+  const sorted = (a: readonly string[] | undefined): string[] => [...(a ?? [])].sort();
+  if (expected.refs !== undefined) expect(sorted(result.refs), `${c.id} refs`).toEqual(sorted(expected.refs));
+  if (expected.sets !== undefined) expect(sorted(result.sets), `${c.id} sets`).toEqual(sorted(expected.sets));
+  if (expected.includes !== undefined) {
+    expect(sorted(result.includes), `${c.id} includes`).toEqual(sorted(expected.includes));
+  }
+}
 
 /** verdict is asserted exactly; diagnostics is a SUBSET assertion by {code[,severity]}. */
 function runValidate(c: Case): void {

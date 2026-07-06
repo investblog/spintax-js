@@ -9,6 +9,7 @@
 
 import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
+import { extractFromSource } from './internal/extract';
 import { isParsedAst, type Ast } from './internal/ast';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
@@ -139,8 +140,8 @@ function resolveSource(input: string | Ast): string {
   throw new AstVersionError('Ast was not produced by this engine version.');
 }
 
-export function extract(_input: string | Ast): ExtractResult {
-  throw new NotImplementedError('extract()');
+export function extract(input: string | Ast): ExtractResult {
+  return extractFromSource(resolveSource(input));
 }
 
 export function analyze(_input: string | Ast, _opts?: ValidateOptions): Analysis {
