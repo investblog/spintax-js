@@ -1,0 +1,45 @@
+[
+  {
+    "id": "validate/enumeration-valid",
+    "note": "Balanced enumeration is valid.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{a|b|c}",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/unbalanced-brace-invalid",
+    "note": "Illustrative seed; the canonical diagnostic code is pinned in PR-03.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{a|b",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "brace.unbalanced", "severity": "error", "line": 1, "column": 1 }]
+    }
+  },
+  {
+    "id": "validate/plural-arity-ru-invalid",
+    "note": "2-form plural is an arity error for ru (3-form). Locale-sensitive verdict.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "locale": "ru",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/unknown-include-invalid",
+    "note": "Unknown #include target is a verdict ONLY when knownIncludes is supplied.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#include \"missing-slug\"",
+    "knownIncludes": ["hero", "footer"],
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "include.unknown-target", "severity": "error" }]
+    }
+  }
+]

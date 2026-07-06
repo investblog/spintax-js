@@ -344,10 +344,16 @@ case:
   "context": { "n": "5" },             // optional; string map (T1)
   "locale": "ru-RU",                   // optional; SAME vocabulary the engine accepts (§3.1)
   "knownIncludes": ["hero"],           // optional; validate/analyze only → ValidateOptions §9.2
+  "postProcess": false,                // optional bool, default TRUE (mirrors render()); false ⇒ raw pre-cosmetic output
   "rng": "first" | "last" | { "sequence": [0, 2, 1] },  // injected RNG (semantics below), NOT choice indices
   "expect": { … }                      // shape is discriminated by `op` (below)
 }
 ```
+
+> **Post-process default matters for expected output.** `render()` defaults `postProcess:
+> true`, and the pipeline **capitalizes the first letter** — so a raw pick `a` emerges as
+> `A`, `товара` as `Товара`. A case asserting the raw selection/resolution stage must set
+> `postProcess: false`; a case exercising the post-process pipeline leaves it at the default.
 
 `expect` is **discriminated by `op`** — each op has its own shape, they do not share `output`:
 

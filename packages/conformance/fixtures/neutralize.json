@@ -1,0 +1,10 @@
+[
+  {
+    "id": "neutralize/plain-identity",
+    "note": "A value with no structural chars is unchanged. Mechanism-independent seed; the encoded representation of shielded chars is pinned in PR-07 once the M2 mechanism is settled.",
+    "kind": "deterministic",
+    "op": "neutralize",
+    "template": "plain text, no markup",
+    "expect": { "output": "plain text, no markup" }
+  }
+]
