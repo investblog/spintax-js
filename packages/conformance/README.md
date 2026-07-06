@@ -43,7 +43,36 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 - `render` / `neutralize` (deterministic) → `{ "output": "…" }` — exact in both engines.
 - `render` (`kind:rng`) → structural invariants: `{ reproducible, oneOf?, subsetOf?, sizeRange?, separator?, lastSeparator? }`.
 - `extract` → `{ refs?, sets?, includes? }` — arrays order-normalized before comparison.
-- `validate` → `{ verdict: "valid"|"invalid", diagnostics?: [{ code, severity?, line?, column? }] }` — `code` is parity-gated, wording is not.
+- `validate` → `{ verdict: "valid"|"invalid", diagnostics?: [{ code, severity?, line?, column? }] }`.
+  **`verdict` is asserted exactly; `diagnostics` is a SUBSET assertion** — every listed
+  `{code[, severity]}` must be present in the engine's output, but extras are allowed (a
+  template can legitimately raise more than the salient diagnostic — e.g. a malformed `#set`
+  also yields an `variable.undefined` warning). `code` is parity-gated; wording/position are not.
+
+### Diagnostic codes (canonical, parity-gated)
+
+`validate` cases assert the `code` (+ `severity`), **not** `line`/`column` — positions are not
+parity-gated (§3.1); the plugin hardcodes many, the TS engine may be more precise. The corpus
+is the source of truth for these stable codes; both engines map their diagnostics onto them.
+
+| code | severity | condition |
+|---|---|---|
+| `bracket.unclosed` | error | an opening `{`/`[` never closed |
+| `bracket.unexpected-closing` | error | a `}`/`]` with no matching opener |
+| `bracket.mismatched` | error | `{` closed by `]` (or `[` by `}`) |
+| `set.malformed` | error | `#set` not matching `#set %name% = value` |
+| `permutation.unknown-key` | error | config key not in {minsize,maxsize,sep,lastsep} |
+| `permutation.minsize-not-integer` | error | `minsize=` value is not a run of ASCII digits (note: `0` passes `ctype_digit`, so it does NOT flag) |
+| `permutation.maxsize-not-integer` | error | `maxsize=` value is not a run of ASCII digits |
+| `plural.nested-brackets` | error | `{plural …}` forms slot contains `{}`/`[]` |
+| `plural.arity` | error | form count ≠ locale arity (only when `locale` given) |
+| `variable.self-reference` | error | a `#set` value references its own name |
+| `variable.circular-reference` | error | a cycle among `#set` definitions (A→B→A) |
+| `variable.undefined` | **warning** | a `%var%`/conditional ref not defined locally or globally — may be runtime; does NOT invalidate |
+| `include.unknown-target` | error | `#include` slug not in `knownIncludes` (only when supplied) |
+
+**Not a verdict:** circular `#include` is a render-time `maxDepth` guard, never a `validate()`
+error (the plugin's validator does not resolve includes).
 
 ### `rng` — pin exactly
 
