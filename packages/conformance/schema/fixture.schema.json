@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spintax.net/schema/corpus-fixture.json",
+  "title": "Spintax golden corpus — fixture file",
+  "description": "A corpus file is an array of cases consumed identically by the TS suite (vitest) and the PHP suite. See spec §7.1. `kind` is THE discriminator: deterministic cases assert exact output cross-engine; rng cases assert within-engine reproducibility + structural invariants only.",
+  "type": "array",
+  "items": { "$ref": "#/$defs/case" },
+
+  "$defs": {
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "op", "template", "expect"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[-/][a-z0-9]+)*$",
+          "description": "Stable slug, e.g. 'plural/ru-few'. Unique within the corpus."
+        },
+        "note": { "type": "string", "description": "Human note; never asserted." },
+        "kind": {
+          "enum": ["deterministic", "rng"],
+          "description": "deterministic ⇒ exact output asserted in BOTH engines. rng ⇒ within-engine reproducibility + §7.2 invariants only, never a cross-engine exact gate."
+        },
+        "op": { "enum": ["render", "validate", "extract", "neutralize"] },
+        "template": { "type": "string" },
+        "context": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Variable map (T1, author-controlled). String→string."
+        },
+        "locale": {
+          "type": "string",
+          "description": "Plural-bucket locale (§3.1). SAME vocabulary the engine accepts. Omit ⇒ default 2-form."
+        },
+        "knownIncludes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "validate/analyze only → ValidateOptions.knownIncludes. Enables 'unknown #include target' verdicts."
+        },
+        "seed": {
+          "oneOf": [{ "type": "integer" }, { "type": "string" }],
+          "description": "PRNG seed for kind:rng cases. Engine-private; never a cross-engine equality basis."
+        },
+        "rng": { "$ref": "#/$defs/rng" },
+        "expect": { "type": "object" }
+      },
+
+      "allOf": [
+        {
+          "$comment": "Non-render ops are always deterministic.",
+          "if": { "properties": { "op": { "enum": ["validate", "extract", "neutralize"] } }, "required": ["op"] },
+          "then": { "properties": { "kind": { "const": "deterministic" } } }
+        },
+        {
+          "$comment": "kind:rng only makes sense for render.",
+          "if": { "properties": { "kind": { "const": "rng" } }, "required": ["kind"] },
+          "then": { "properties": { "op": { "const": "render" } }, "required": ["seed"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "render" }, "kind": { "const": "deterministic" } }, "required": ["op", "kind"] },
+          "then": { "properties": { "expect": { "$ref": "#/$defs/expectOutput" } } }
+        },
+        {
+          "if": { "properties": { "op": { "const": "render" }, "kind": { "const": "rng" } }, "required": ["op", "kind"] },
+          "then": { "properties": { "expect": { "$ref": "#/$defs/expectRng" } } }
+        },
+        {
+          "if": { "properties": { "op": { "const": "neutralize" } }, "required": ["op"] },
+          "then": { "properties": { "expect": { "$ref": "#/$defs/expectOutput" } } }
+        },
+        {
+          "if": { "properties": { "op": { "const": "extract" } }, "required": ["op"] },
+          "then": { "properties": { "expect": { "$ref": "#/$defs/expectExtract" } } }
+        },
+        {
+          "if": { "properties": { "op": { "const": "validate" } }, "required": ["op"] },
+          "then": { "properties": { "expect": { "$ref": "#/$defs/expectValidate" } } }
+        }
+      ]
+    },
+
+    "rng": {
+      "description": "Injected RNG of signature (min,max)=>int (NOT choice indices). 'first'=>min, 'last'=>max, sequence => raw returns clamped to [min,max], last value reused after exhaustion. Verified vs ParserTest.php:17-47.",
+      "oneOf": [
+        { "enum": ["first", "last"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sequence"],
+          "properties": {
+            "sequence": { "type": "array", "items": { "type": "integer" }, "minItems": 1 }
+          }
+        }
+      ]
+    },
+
+    "expectOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["output"],
+      "properties": { "output": { "type": "string" } }
+    },
+
+    "expectExtract": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "refs": { "type": "array", "items": { "type": "string" } },
+        "sets": { "type": "array", "items": { "type": "string" } },
+        "includes": { "type": "array", "items": { "type": "string" } }
+      },
+      "description": "Arrays are order-normalized before comparison."
+    },
+
+    "expectValidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict"],
+      "properties": {
+        "verdict": { "enum": ["valid", "invalid"] },
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/expectedDiagnostic" } }
+      }
+    },
+
+    "expectedDiagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string", "description": "STABLE machine code — parity-gated. Wording (message) is not asserted." },
+        "severity": { "enum": ["error", "warning"] },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "expectRng": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Structural invariants for kind:rng render cases (§7.2). The runner asserts these + within-engine reproducibility; never an exact cross-engine gate.",
+      "properties": {
+        "reproducible": { "const": true, "description": "Same seed ⇒ same output within one engine." },
+        "oneOf": { "type": "array", "items": { "type": "string" }, "description": "Enumeration: output ∈ this set." },
+        "subsetOf": { "type": "array", "items": { "type": "string" }, "description": "Permutation: output elements drawn from this set." },
+        "sizeRange": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2, "description": "Permutation: [minsize, maxsize] after clamp." },
+        "separator": { "type": "string" },
+        "lastSeparator": { "type": "string" }
+      }
+    }
+  }
+}

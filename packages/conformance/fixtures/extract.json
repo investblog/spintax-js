@@ -1,0 +1,14 @@
+[
+  {
+    "id": "extract/refs-sets-includes",
+    "note": "Arrays are order-normalized before comparison.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#set %greeting% = Hello\n%greeting% %name%!\n#include \"hero\"",
+    "expect": {
+      "refs": ["greeting", "name"],
+      "sets": ["greeting"],
+      "includes": ["hero"]
+    }
+  }
+]

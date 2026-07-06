@@ -1,0 +1,19 @@
+{
+  "name": "@spintax/conformance",
+  "version": "0.0.0",
+  "description": "Shared golden corpus (language-neutral JSON fixtures) for @spintax/core parity — consumed identically by the TS engine and the PHP plugin. See spec §7.",
+  "license": "MIT",
+  "author": "301st (https://301.st)",
+  "homepage": "https://spintax.net",
+  "type": "module",
+  "files": [
+    "schema",
+    "fixtures"
+  ],
+  "scripts": {
+    "validate": "ajv validate --spec=draft2020 --all-errors -s schema/fixture.schema.json -d \"fixtures/*.json\""
+  },
+  "devDependencies": {
+    "ajv-cli": "^5.0.0"
+  }
+}

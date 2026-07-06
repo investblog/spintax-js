@@ -1,0 +1,27 @@
+[
+  {
+    "id": "render/permutation-invariants",
+    "note": "kind:rng — no exact cross-engine output. Assert structural invariants (§7.2) + within-engine reproducibility.",
+    "kind": "rng",
+    "op": "render",
+    "template": "[a|b|c]",
+    "seed": 1234,
+    "expect": {
+      "reproducible": true,
+      "subsetOf": ["a", "b", "c"],
+      "sizeRange": [1, 3]
+    }
+  },
+  {
+    "id": "render/enumeration-oneof",
+    "note": "kind:rng enumeration — output must be one of the alternatives.",
+    "kind": "rng",
+    "op": "render",
+    "template": "{a|b|c}",
+    "seed": "abc",
+    "expect": {
+      "reproducible": true,
+      "oneOf": ["a", "b", "c"]
+    }
+  }
+]

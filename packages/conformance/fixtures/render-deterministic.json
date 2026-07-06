@@ -1,0 +1,45 @@
+[
+  {
+    "id": "render/variable-substitution",
+    "note": "No randomness — exact output regardless of rng.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hello %name%!",
+    "context": { "name": "World" },
+    "expect": { "output": "Hello World!" }
+  },
+  {
+    "id": "render/enumeration-first",
+    "note": "rng strategy fixes the pick, so the output is exact and cross-engine-comparable.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|b|c}",
+    "rng": "first",
+    "expect": { "output": "a" }
+  },
+  {
+    "id": "render/enumeration-last",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|b|c}",
+    "rng": "last",
+    "expect": { "output": "c" }
+  },
+  {
+    "id": "render/enumeration-sequence",
+    "note": "sequence value 1 is a raw RNG return; picks the middle option.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|b|c}",
+    "rng": { "sequence": [1] },
+    "expect": { "output": "b" }
+  },
+  {
+    "id": "render/plural-ru-few",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: товар|товара|товаров}",
+    "locale": "ru",
+    "expect": { "output": "товара" }
+  }
+]
