@@ -65,6 +65,108 @@ describe('parseTemplate — core constructs', () => {
   });
 });
 
+describe('parseTemplate — conditionals', () => {
+  test('then|else', () => {
+    expect(nodes('{?flag?yes|no}')).toEqual([
+      { type: 'conditional', name: 'flag', inverted: false, then: [lit('yes')], else: [lit('no')] },
+    ]);
+  });
+
+  test('inverted, then-only (empty else)', () => {
+    expect(nodes('{?!flag?yes}')).toEqual([
+      { type: 'conditional', name: 'flag', inverted: true, then: [lit('yes')], else: [] },
+    ]);
+  });
+
+  test('branch split ignores pipes nested in the then-branch', () => {
+    expect(nodes('{?a?{x|y}|z}')).toEqual([
+      {
+        type: 'conditional',
+        name: 'a',
+        inverted: false,
+        then: [{ type: 'enumeration', options: [[lit('x')], [lit('y')]] }],
+        else: [lit('z')],
+      },
+    ]);
+  });
+
+  test('malformed conditional (name starts with digit) falls back to enumeration', () => {
+    expect(nodes('{?1bad?x}')).toEqual([
+      { type: 'enumeration', options: [[lit('?1bad?x')]] },
+    ]);
+  });
+});
+
+describe('parseTemplate — plurals', () => {
+  test('count + forms (formsRaw kept verbatim for the lenient path)', () => {
+    expect(nodes('{plural 2: one|two}')).toEqual([
+      { type: 'plural', countRaw: '2', formsRaw: ' one|two', forms: [[lit('one')], [lit('two')]] },
+    ]);
+  });
+
+  test('count may be a %var%', () => {
+    expect(nodes('{plural %n%: a|b}')).toEqual([
+      { type: 'plural', countRaw: '%n%', formsRaw: ' a|b', forms: [[lit('a')], [lit('b')]] },
+    ]);
+  });
+
+  test('forms are trimmed', () => {
+    expect(nodes('{plural 1: товар | товара | товаров}')).toEqual([
+      {
+        type: 'plural',
+        countRaw: '1',
+        formsRaw: ' товар | товара | товаров',
+        forms: [[lit('товар')], [lit('товара')], [lit('товаров')]],
+      },
+    ]);
+  });
+
+  test('no colon ⇒ not a plural, treated as enumeration', () => {
+    expect(nodes('{plural noun}')).toEqual([
+      { type: 'enumeration', options: [[lit('plural noun')]] },
+    ]);
+  });
+});
+
+describe('parseTemplate — #set / #include (line-anchored)', () => {
+  test('#set directive', () => {
+    expect(nodes('#set %greeting% = Hello')).toEqual([
+      { type: 'set', name: 'greeting', value: [lit('Hello')] },
+    ]);
+  });
+
+  test('#set leaves the trailing newline as literal, then the reference', () => {
+    expect(nodes('#set %g% = hi\n%g%')).toEqual([
+      { type: 'set', name: 'g', value: [lit('hi')] },
+      lit('\n'),
+      v('g'),
+    ]);
+  });
+
+  test('#include directive', () => {
+    expect(nodes('#include "hero"')).toEqual([{ type: 'include', ref: 'hero' }]);
+  });
+
+  test('malformed #set (no =) is not a directive — stays literal + var', () => {
+    expect(nodes('#set %v% hello')).toEqual([lit('#set '), v('v'), lit(' hello')]);
+  });
+
+  test('CRLF: directive line with a trailing \\r is still recognized', () => {
+    expect(nodes('#set %g% = hi\r\n%g%')).toEqual([
+      { type: 'set', name: 'g', value: [lit('hi')] },
+      lit('\n'),
+      v('g'),
+    ]);
+    expect(nodes('#include "hero"\r\nx')).toEqual([{ type: 'include', ref: 'hero' }, lit('\nx')]);
+  });
+
+  test('#set is NOT detected inside an enumeration option', () => {
+    expect(nodes('{a|#set %x% = b}')).toEqual([
+      { type: 'enumeration', options: [[lit('a')], [lit('#set '), v('x'), lit(' = b')]] },
+    ]);
+  });
+});
+
 describe('parseTemplate — lenient on malformed markup', () => {
   test('unmatched opener is literal', () => {
     expect(nodes('{a|b')).toEqual([lit('{a|b')]);
