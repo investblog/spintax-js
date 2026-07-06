@@ -13,6 +13,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "//": "build/test scripts land at milestone M1 (see docs/spec-npm-engine.md)"
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }
