@@ -1,0 +1,301 @@
+[
+  {
+    "id": "plural/ru-one-1",
+    "note": "ru: mod10=1, mod100≠11 ⇒ one. Forms are one|few|many.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товар"
+    }
+  },
+  {
+    "id": "plural/ru-one-21",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 21: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товар"
+    }
+  },
+  {
+    "id": "plural/ru-many-11",
+    "note": "mod100=11 is the exception to 'one' ⇒ many.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 11: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товаров"
+    }
+  },
+  {
+    "id": "plural/ru-few-2",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товара"
+    }
+  },
+  {
+    "id": "plural/ru-few-22",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 22: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товара"
+    }
+  },
+  {
+    "id": "plural/ru-many-12",
+    "note": "mod100=12 is the exception to 'few' ⇒ many.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 12: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товаров"
+    }
+  },
+  {
+    "id": "plural/ru-many-5",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 5: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товаров"
+    }
+  },
+  {
+    "id": "plural/ru-many-0",
+    "note": "0 ⇒ many (East Slavic).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 0: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товаров"
+    }
+  },
+  {
+    "id": "plural/ru-negative-one",
+    "note": "Negative counts are abs()-normalized: -1 ⇒ one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural -1: товар|товара|товаров}",
+    "locale": "ru",
+    "postProcess": false,
+    "expect": {
+      "output": "товар"
+    }
+  },
+  {
+    "id": "plural/en-one-1",
+    "note": "Explicit EN locale (2-form). n=1 ⇒ one. (Omitted-locale defaulting to EN is a TS-only contract, unit-tested, not cross-engine corpus.)",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: item|items}",
+    "postProcess": false,
+    "expect": {
+      "output": "item"
+    },
+    "locale": "en"
+  },
+  {
+    "id": "plural/en-many-2",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: item|items}",
+    "postProcess": false,
+    "expect": {
+      "output": "items"
+    },
+    "locale": "en"
+  },
+  {
+    "id": "plural/en-many-0",
+    "note": "EN-style: only n=1 is 'one'; 0 ⇒ many.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 0: item|items}",
+    "postProcess": false,
+    "expect": {
+      "output": "items"
+    },
+    "locale": "en"
+  },
+  {
+    "id": "plural/empty-count-erases",
+    "note": "Empty count slot ⇒ entire construct erased to ''.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural : item|items}",
+    "postProcess": false,
+    "expect": {
+      "output": ""
+    }
+  },
+  {
+    "id": "plural/nonnumeric-count-erases",
+    "note": "Unsubstituted %n% is non-numeric ⇒ erased to ''.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural %n%: item|items}",
+    "postProcess": false,
+    "expect": {
+      "output": ""
+    }
+  },
+  {
+    "id": "conditional/set-truthy",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes|no}",
+    "context": {
+      "flag": "1"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "yes"
+    }
+  },
+  {
+    "id": "conditional/unset-falsy",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes|no}",
+    "postProcess": false,
+    "expect": {
+      "output": "no"
+    }
+  },
+  {
+    "id": "conditional/whitespace-only-falsy",
+    "note": "Truthy = set AND has a non-whitespace char; '   ' is falsy.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes|no}",
+    "context": {
+      "flag": "   "
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "no"
+    }
+  },
+  {
+    "id": "conditional/zero-is-truthy",
+    "note": "'0' is a non-whitespace char ⇒ TRUTHY (a classic gotcha).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes|no}",
+    "context": {
+      "flag": "0"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "yes"
+    }
+  },
+  {
+    "id": "conditional/inverted-unset",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?!flag?yes|no}",
+    "postProcess": false,
+    "expect": {
+      "output": "yes"
+    }
+  },
+  {
+    "id": "conditional/inverted-set",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?!flag?yes|no}",
+    "context": {
+      "flag": "1"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "no"
+    }
+  },
+  {
+    "id": "conditional/then-only-unset-empty",
+    "note": "No else branch; falsy ⇒ empty string.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes}",
+    "postProcess": false,
+    "expect": {
+      "output": ""
+    }
+  },
+  {
+    "id": "conditional/then-only-set",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes}",
+    "context": {
+      "flag": "x"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "yes"
+    }
+  },
+  {
+    "id": "conditional/case-insensitive-name",
+    "note": "Conditional name lookup is case-insensitive (like %var%).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?FLAG?yes|no}",
+    "context": {
+      "flag": "1"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "yes"
+    }
+  },
+  {
+    "id": "variable/recursive-expansion",
+    "note": "A context value containing %b% expands recursively (up to MAX_VARIABLE_DEPTH).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hello %a%",
+    "context": {
+      "a": "%b%",
+      "b": "World"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "Hello World"
+    }
+  },
+  {
+    "id": "variable/undefined-stays-literal",
+    "note": "An unresolved %var% is left verbatim at render time (a warning at validate time, not an error).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hi %missing%",
+    "postProcess": false,
+    "expect": {
+      "output": "Hi %missing%"
+    }
+  }
+]
