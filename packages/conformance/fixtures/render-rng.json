@@ -1,24 +1,52 @@
 [
   {
-    "id": "render/permutation-invariants",
-    "note": "kind:rng — no exact cross-engine output. Assert structural invariants (§7.2) + within-engine reproducibility.",
+    "id": "render/permutation-all-elements-invariant",
+    "note": "No config ⇒ minsize=maxsize=total ⇒ ALWAYS all 3 elements (sizeRange [3,3], not looser). Order is RNG. postProcess:false so the first token isn't capitalized.",
     "kind": "rng",
     "op": "render",
     "template": "[a|b|c]",
     "seed": 1234,
+    "postProcess": false,
     "expect": {
       "reproducible": true,
       "subsetOf": ["a", "b", "c"],
-      "sizeRange": [1, 3]
+      "sizeRange": [3, 3]
     }
   },
   {
-    "id": "render/enumeration-oneof",
-    "note": "kind:rng enumeration — output must be one of the alternatives.",
+    "id": "render/permutation-range-invariant",
+    "note": "minsize=1,maxsize=2 ⇒ output has 1 or 2 of the elements.",
+    "kind": "rng",
+    "op": "render",
+    "template": "[<minsize=1;maxsize=2> a|b|c]",
+    "seed": 99,
+    "postProcess": false,
+    "expect": {
+      "reproducible": true,
+      "subsetOf": ["a", "b", "c"],
+      "sizeRange": [1, 2]
+    }
+  },
+  {
+    "id": "render/enumeration-oneof-invariant",
     "kind": "rng",
     "op": "render",
     "template": "{a|b|c}",
     "seed": "abc",
+    "postProcess": false,
+    "expect": {
+      "reproducible": true,
+      "oneOf": ["a", "b", "c"]
+    }
+  },
+  {
+    "id": "render/nested-enumeration-oneof-invariant",
+    "note": "{a|{b|c}} ⇒ one of a, b, c regardless of RNG.",
+    "kind": "rng",
+    "op": "render",
+    "template": "{a|{b|c}}",
+    "seed": 7,
+    "postProcess": false,
     "expect": {
       "reproducible": true,
       "oneOf": ["a", "b", "c"]
