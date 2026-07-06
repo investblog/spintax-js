@@ -1,0 +1,99 @@
+[
+  {
+    "id": "enum/nested-sequence",
+    "note": "Innermost-out: pass 1 resolves {b|c} (seq[0]=1⇒c), pass 2 resolves {a|c} (seq[1]=1⇒c).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|{b|c}}",
+    "rng": { "sequence": [1, 1] },
+    "postProcess": false,
+    "expect": { "output": "c" }
+  },
+  {
+    "id": "enum/empty-first-option",
+    "note": "{|a|b} splits to ['','a','b']; first ⇒ index 0 ⇒ empty string.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{|a|b}",
+    "rng": "first",
+    "postProcess": false,
+    "expect": { "output": "" }
+  },
+  {
+    "id": "enum/last-empty-option",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|}",
+    "rng": "last",
+    "postProcess": false,
+    "expect": { "output": "" }
+  },
+  {
+    "id": "enum/single-option-no-rng",
+    "note": "Single alternative ⇒ random_int(0,0) short-circuits, no RNG call.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a}",
+    "postProcess": false,
+    "expect": { "output": "a" }
+  },
+  {
+    "id": "perm/two-first",
+    "note": "pick=random_int(2,2) short-circuits (no RNG). Fisher-Yates i=1: j=rng(0,1)=0 ⇒ swap ⇒ [b,a]. Default sep is a space.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a|b]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": { "output": "b a" }
+  },
+  {
+    "id": "perm/two-last",
+    "note": "i=1: j=rng(0,1)=1 ⇒ swap arr[1],arr[1] ⇒ no change ⇒ [a,b].",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a|b]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": { "output": "a b" }
+  },
+  {
+    "id": "perm/three-first",
+    "note": "shuffle [a,b,c]: i=2 j=0⇒[c,b,a]; i=1 j=0⇒[b,c,a]. Pick all 3.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a|b|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": { "output": "b c a" }
+  },
+  {
+    "id": "perm/three-last",
+    "note": "shuffle [a,b,c]: i=2 j=2 no-op; i=1 j=1 no-op ⇒ [a,b,c].",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a|b|c]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": { "output": "a b c" }
+  },
+  {
+    "id": "perm/single-element-no-rng",
+    "note": "One element ⇒ pick=1 short-circuits, shuffle loop body never runs.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a]",
+    "postProcess": false,
+    "expect": { "output": "a" }
+  },
+  {
+    "id": "perm/minsize-maxsize-pick-2-first",
+    "note": "minsize=maxsize=2 ⇒ pick short-circuits to 2 (no RNG). Shuffle [a,b,c] first ⇒ [b,c,a]; slice(0,2) ⇒ [b,c].",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=2;maxsize=2> a|b|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": { "output": "b c" }
+  }
+]
