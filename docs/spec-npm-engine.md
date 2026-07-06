@@ -517,6 +517,14 @@ interface Diagnostic {
                                             //   (e.g. { expected: 3, got: 2 }) so a bot/API
                                             //   builds copy WITHOUT parsing `message`
 }
+
+// Additional committed value exports (kept minimal per §9.3):
+export const DEFAULT_MAX_DEPTH = 20         // RenderOptions.maxDepth default
+
+class SpintaxError extends Error {}         // base for render() programmer-error throws
+class IncludeResolverError extends SpintaxError {}   // a host includeResolver threw
+class MaxDepthExceededError extends SpintaxError {}  // nested #include / parse depth breach
+class AstVersionError extends SpintaxError {}        // an incompatible Ast was passed back
 ```
 
 Contract rules (parity-relevant — see §3.1):
