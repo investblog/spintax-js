@@ -1,21 +1,151 @@
 [
   {
     "id": "validate/enumeration-valid",
-    "note": "Balanced enumeration is valid.",
+    "note": "Balanced enumeration.",
     "kind": "deterministic",
     "op": "validate",
     "template": "{a|b|c}",
     "expect": { "verdict": "valid" }
   },
   {
-    "id": "validate/unbalanced-brace-invalid",
-    "note": "Illustrative seed; the canonical diagnostic code is pinned in PR-03.",
+    "id": "validate/nested-enumeration-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{a|{b|c}}",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/permutation-config-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<minsize=2;maxsize=3;sep=\", \";lastsep=\" and \"> a|b|c]",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/set-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %greeting% = hello\n%greeting% world",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/plural-no-locale-structural-only-valid",
+    "note": "Arity is skipped without a locale, so a 2-form plural is valid on structural grounds alone.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/undefined-variable-is-warning-not-error",
+    "note": "Parity gate: an unresolved %var% is a WARNING, so the template stays VALID (valid ⇔ no severity:error).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "Hello %runtime_name%!",
+    "expect": {
+      "verdict": "valid",
+      "diagnostics": [{ "code": "variable.undefined", "severity": "warning" }]
+    }
+  },
+  {
+    "id": "validate/include-target-not-checked-without-sluglist",
+    "note": "With no knownIncludes supplied, include targets are NOT verdict-checked (parity with the plugin).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#include \"anything\"",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/circular-include-is-not-a-static-verdict",
+    "note": "A self-referencing #include is a render-time maxDepth guard, NOT a validate() error. Target exists ⇒ valid.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#include \"loop\"",
+    "knownIncludes": ["loop"],
+    "expect": { "verdict": "valid" }
+  },
+
+  {
+    "id": "validate/bracket-unclosed",
     "kind": "deterministic",
     "op": "validate",
     "template": "{a|b",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "brace.unbalanced", "severity": "error", "line": 1, "column": 1 }]
+      "diagnostics": [{ "code": "bracket.unclosed", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/bracket-unexpected-closing",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "a}",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "bracket.unexpected-closing", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/bracket-mismatched",
+    "note": "'{' closed by ']'.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{a|b]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "bracket.mismatched", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/set-malformed",
+    "note": "Missing '=' in #set.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %v% hello",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "set.malformed", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/permutation-unknown-key",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<foo=1> a|b]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "permutation.unknown-key", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/permutation-minsize-not-integer",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<minsize=x> a|b]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "permutation.minsize-not-integer", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/permutation-maxsize-not-integer",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<maxsize=y> a|b]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "permutation.maxsize-not-integer", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/plural-nested-brackets",
+    "note": "Forms slot must not contain nested spintax brackets.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: {a|b}|many}",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "plural.nested-brackets", "severity": "error" }]
     }
   },
   {
@@ -31,7 +161,28 @@
     }
   },
   {
-    "id": "validate/unknown-include-invalid",
+    "id": "validate/variable-self-reference",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %a% = x %a% y",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "variable.self-reference", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/variable-circular-reference",
+    "note": "A→B→A cycle among #set definitions.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %a% = %b%\n#set %b% = %a%",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "variable.circular-reference", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/unknown-include-target-invalid",
     "note": "Unknown #include target is a verdict ONLY when knownIncludes is supplied.",
     "kind": "deterministic",
     "op": "validate",
