@@ -85,40 +85,63 @@ This purity boundary is non-negotiable (spec §8): a consumer *proves* the API, 
 **Public API contract is committed in spec §9.2** — build against it; refine only with a
 consumer-driven reason. Surface:
 
-- `parse(src): Ast` — `Ast` is opaque/versioned in v1, not introspected by consumers
+Design principle: **small core, rich Worker/bot** — core ships primitives; convenience
+surfaces (`render-batch`, "N variants", stats) live in the consumers (§9.3). `validate`,
+`extract`, and `analyze` all accept `string | Ast` so a consumer parses once and reuses.
+
+- `parse(src): Ast` — `Ast` is opaque/versioned in v1, not introspected by consumers; an
+  in-memory perf handle, NOT a serialization format (don't persist across engine versions)
 - `render(input, { context, seed, locale, includeResolver, postProcess, maxDepth }): string`
   — lenient (never throws on malformed markup; bad block renders verbatim with fullwidth
-  braces U+FF5B/U+FF5D); `postProcess` defaults TRUE
-- `validate(src): Diagnostic[]` — **parity gate**: valid ⇔ no `severity:'error'`; unresolved
-  `%var%` is a `warning`, not an `error`
-- `extractVariables(src): { refs, sets }`
-- `neutralize(value): string` — `SpintaxShield` port; host shields data-derived (T2) input,
-  the engine does NOT auto-shield (it can't know which context keys are T1 vs T2)
+  braces U+FF5B/U+FF5D); `postProcess` defaults TRUE. Bare string — batching is a host job
+- `validate(input, opts?): Diagnostic[]` — **parity gate**: valid ⇔ no `severity:'error'`;
+  unresolved `%var%` is a `warning`, not an `error`. `ValidateOptions { locale?, knownIncludes? }`
+  — plural verdicts are locale-sensitive; unknown-`#include` is checked only with `knownIncludes`.
+  **Circular `#include` is NOT a static verdict** — it's a render-time `maxDepth` guard
+- `extract(input): { refs, sets, includes }` — includes enable the §4.1 two-phase prefetch
+- `analyze(input, opts?): { diagnostics, refs, sets, includes, constructs }` — cautious stats
+  layer (takes the same `ValidateOptions`); `constructs` is best-effort counts, NOT cardinality
+- `neutralize(value): string` — text-safe/context-agnostic shielding (NOT the plugin's
+  HTML-entity encoding — that only round-trips in an HTML sink; we target Telegram/plaintext
+  too). Host shields data-derived (T2) input; the engine does NOT auto-shield. Its safety
+  restore is **mandatory** — it survives `postProcess:false` (that flag skips cosmetics only)
+- `Diagnostic` carries optional `endLine`/`endColumn`/`data` so a bot/API builds copy without
+  parsing the (non-parity-gated) `message`
 
-`#include` resolution is **host-injected** (`(ref) => string | null`); the circular-reference
-guard and scope isolation (child inherits global+runtime vars, NOT parent `#set` locals)
-live in the engine, the *fetch* does not.
+NOT in core v0.1 (spec §9.3): `renderBatch()`, `randomSeed()`, exact variant cardinality, a
+large typed-error hierarchy — these are host/product concerns, promoted only on a
+consumer-driven reason.
+
+`#include` resolution is **host-injected** and **synchronous** (`(ref) => string | null`);
+async sources use the two-phase pattern (`extract().includes` → host prefetch → sync map
+resolver). The circular-reference guard and scope isolation (child inherits global+runtime
+vars, NOT parent `#set` locals) live in the engine, the *fetch* does not.
 
 ## Milestones (spec §11)
 
-- **M0 — corpus extraction.** Turn parity-critical parent PHPUnit cases + post-process cases
-  into the shared golden corpus. Do this BEFORE any TS.
+- **M0 — corpus extraction.** FIRST lock the §7.1 fixture schema (incl. the `rng`
+  selection-strategy discriminator, orthogonal to `seed`); then turn ~276 parity-relevant
+  parent PHPUnit cases + post-process cases into the shared golden corpus. BEFORE any TS.
+- **M0.5 — repo tooling / harness.** Strict tsconfig, build (tsup/unbuild), vitest wired to
+  the corpus, dual ESM/CJS + `exports` map + `types`, CI green on empty suite. Resolves the
+  "Commands TBD" below; M1 presumes it exists.
 - **M1 — parser + validator.** Full syntax surface; pass all deterministic validation cases.
 - **M2 — renderer + post-process.** Seeded render; pass deterministic render + post-process
   cases; RNG cases pass structural invariants.
-- **M3 — extract + neutralize + docs.** API surface (§9.2) complete; publish `0.1.0`.
+- **M3 — extract + neutralize + docs.** API surface (§9.2) complete. Do NOT publish `0.1.0`
+  yet (internal `-rc` only) — publish is gated on M4 green, per §8.
 - **M4 — `examples/worker` (API acceptance gate).** Worker exposing the Phase 4 endpoints.
-  Green Worker = sign-off that the §9.2 contract is usable; API friction feeds back into
-  §9.2 BEFORE the bot. Reference consumers are built AFTER M2, never before M1 (can't
-  dogfood an engine that doesn't exist).
+  Green Worker = sign-off that the §9.2 contract is usable → **publish `0.1.0` now**. API
+  friction feeds back into §9.2 BEFORE the bot. Reference consumers are built AFTER M2, never
+  before M1 (can't dogfood an engine that doesn't exist).
 - **M5 — `examples/telegram-bot` (flagship example).** Interactive/stateful consumer; second
   independent dogfood path.
 - **M6 — browser playground** on `spintax.net`, client-side.
 
 ## Commands
 
-TBD — filled in at M1 (build via tsup/unbuild, test via vitest are the likely picks; not
-locked). Until then this repo is docs + scaffolding only.
+TBD — filled in at **M0.5** (build via tsup/unbuild, test via vitest are the likely picks;
+not locked). Until then this repo is docs + scaffolding only.
 
 ## Conventions
 
@@ -130,6 +153,7 @@ locked). Until then this repo is docs + scaffolding only.
 
 ## Open questions still to close (spec §10)
 
-Q2 npm naming (`@spintax/*` scope — bare `spintax` likely taken), Q3 corpus home
-(submodule vs published `@spintax/conformance`), Q4 CLI now-or-later, Q6 versioning
-independence from the plugin. Q1 (post-process parity) and Q5 (MIT) are RESOLVED.
+Q3 corpus home (submodule vs published `@spintax/conformance`), Q4 CLI now-or-later,
+Q6 versioning independence from the plugin. Q1 (post-process parity), Q2 (naming —
+**scoped `@spintax/*`**, spec §9) and Q5 (MIT) are RESOLVED; treat naming as decided.
+The only Q2 remainder is a manual npm-org claim, not a design choice.
