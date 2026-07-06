@@ -1,10 +1,92 @@
 [
   {
-    "id": "neutralize/plain-identity",
-    "note": "A value with no structural chars is unchanged. Mechanism-independent seed; the encoded representation of shielded chars is pinned in PR-07 once the M2 mechanism is settled.",
+    "id": "neutralize/identity-plain",
+    "note": "A value with no structural chars is unchanged under any text-safe mechanism (sentinel/escape) AND under the plugin's entity-encoding — so this one IS a cross-engine gate. The encoded form of shielded chars is settled at M2, so op:neutralize exact-encoding cases are NOT pinned here.",
     "kind": "deterministic",
     "op": "neutralize",
     "template": "plain text, no markup",
     "expect": { "output": "plain text, no markup" }
+  },
+  {
+    "id": "neutralize/roundtrip-enumeration",
+    "note": "Canonical §6 case: neutralize('a {x|y}') into %v% then render ⇒ literal braces, NOT a resolved pick. TS-only: the PHP plugin entity-encodes and never decodes, so this glyph-restore is a deliberate @spintax/core divergence (§6).",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "a {x|y}" },
+    "neutralizeContext": ["v"],
+    "postProcess": false,
+    "expect": { "output": "a {x|y}" }
+  },
+  {
+    "id": "neutralize/roundtrip-permutation",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "[a|b]" },
+    "neutralizeContext": ["v"],
+    "postProcess": false,
+    "expect": { "output": "[a|b]" }
+  },
+  {
+    "id": "neutralize/roundtrip-variable",
+    "note": "Shielded % stops %other% from being expanded ⇒ stays literal. Sound because shielding happens before the first expansion pass. (Assumes the M2 sentinel is not itself %…%/{…}-shaped.)",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "%other%" },
+    "neutralizeContext": ["v"],
+    "postProcess": false,
+    "expect": { "output": "%other%" }
+  },
+  {
+    "id": "neutralize/roundtrip-percent",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "50% off" },
+    "neutralizeContext": ["v"],
+    "postProcess": false,
+    "expect": { "output": "50% off" }
+  },
+  {
+    "id": "neutralize/roundtrip-include-directive",
+    "note": "Shielded # keeps the injected value from being read as an #include directive.",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "#include \"hero\"" },
+    "neutralizeContext": ["v"],
+    "postProcess": false,
+    "expect": { "output": "#include \"hero\"" }
+  },
+  {
+    "id": "neutralize/roundtrip-survives-postprocess",
+    "note": "The mandatory safety-restore survives postProcess:true; cosmetic post-process still capitalizes the (non-shielded) first letter 'a'→'A'.",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "a {x|y}" },
+    "neutralizeContext": ["v"],
+    "postProcess": true,
+    "expect": { "output": "A {x|y}" }
+  },
+  {
+    "id": "neutralize/roundtrip-leading-brace-restore-before-cosmetic",
+    "note": "Regression guard for the §6 restore-before-cosmetic ordering: a leading shielded '{' with postProcess:true must restore to a literal '{' and NOT let step-8 capitalization touch a sentinel-internal letter. Expected literal '{x|y}' (first real char is '{', no letter to capitalize).",
+    "kind": "deterministic",
+    "engines": ["ts"],
+    "op": "render",
+    "template": "%v%",
+    "context": { "v": "{x|y}" },
+    "neutralizeContext": ["v"],
+    "postProcess": true,
+    "expect": { "output": "{x|y}" }
   }
 ]
