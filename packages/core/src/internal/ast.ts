@@ -17,8 +17,10 @@ export interface Ast {
   readonly astVersion: typeof AST_VERSION;
 }
 
-/** Internal parsed tree. */
+/** Internal parsed tree. Carries the original source so validate(Ast) can do
+ *  the raw-text checks (bracket balance etc.) and future offset diagnostics. */
 export interface ParsedAst extends Ast {
+  readonly source: string;
   readonly nodes: readonly Node[];
 }
 
@@ -108,12 +110,37 @@ export interface IncludeNode {
   readonly ref: string;
 }
 
+/** Depth-first walk over every node, descending into all child sequences. */
+export function walk(nodes: readonly Node[], visit: (n: Node) => void): void {
+  for (const n of nodes) {
+    visit(n);
+    switch (n.type) {
+      case 'enumeration':
+        for (const opt of n.options) walk(opt, visit);
+        break;
+      case 'conditional':
+        walk(n.then, visit);
+        walk(n.else, visit);
+        break;
+      case 'plural':
+        for (const form of n.forms) walk(form, visit);
+        break;
+      case 'set':
+        walk(n.value, visit);
+        break;
+      default:
+        break; // literal / variable / permutation (rawInner) / include: no child nodes
+    }
+  }
+}
+
 /** Type guard: is this an internal ParsedAst produced by this engine version? */
 export function isParsedAst(value: unknown): value is ParsedAst {
   return (
     typeof value === 'object' &&
     value !== null &&
     (value as { astVersion?: unknown }).astVersion === AST_VERSION &&
+    typeof (value as { source?: unknown }).source === 'string' &&
     Array.isArray((value as { nodes?: unknown }).nodes)
   );
 }

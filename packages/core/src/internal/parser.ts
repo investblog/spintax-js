@@ -28,7 +28,7 @@ const PLURAL_PREFIX = 'plural ';
 
 /** Parse a full template into an AST (comments stripped first). */
 export function parseTemplate(src: string): ParsedAst {
-  return { astVersion: AST_VERSION, nodes: parseSequence(stripComments(src), true) };
+  return { astVersion: AST_VERSION, source: src, nodes: parseSequence(stripComments(src), true) };
 }
 
 /** Remove `/# … #/` block comments (non-greedy, spans newlines). */
