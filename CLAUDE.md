@@ -71,8 +71,8 @@ Workers, Node 18+, and in-browser unchanged):
 ```
 packages/
   core/           # @spintax/core — parse / render / validate / extract / neutralize
-  conformance/    # shared golden corpus — see spec §7 / Q3
-  cli/            # (pending Q4) npx spintax validate|render|extract
+  conformance/    # shared golden corpus, fixtures/*.json — spec §7 (published later as @spintax/conformance)
+  cli/            # deferred until after M4/publish gate (spec §10 Q4)
 examples/
   worker/         # thin Cloudflare Worker — FIRST dogfood gate (spec §8), roadmap Phase 4
   telegram-bot/   # Telegram authoring bot — flagship example (spec §8), roadmap Phase 5
@@ -151,9 +151,19 @@ not locked). Until then this repo is docs + scaffolding only.
 - Push to `main` once green (single-dev repo; mirror the parent's no-PR-unless-asked norm).
 - Every behavior change is justified against the golden corpus, not vibes.
 
-## Open questions still to close (spec §10)
+## Open questions (spec §10 — all closed)
 
-Q3 corpus home (submodule vs published `@spintax/conformance`), Q4 CLI now-or-later,
-Q6 versioning independence from the plugin. Q1 (post-process parity), Q2 (naming —
-**scoped `@spintax/*`**, spec §9) and Q5 (MIT) are RESOLVED; treat naming as decided.
-The only Q2 remainder is a manual npm-org claim, not a design choice.
+**All six spec open questions are RESOLVED** — treat them as decided, don't re-open:
+
+- **Q1** post-process parity → YES (parity-target, `postProcess:false` escape hatch).
+- **Q2** naming → scoped `@spintax/*` (spec §9). Only remainder: a manual npm-org claim.
+- **Q3** corpus home → `packages/conformance/fixtures/*.json` in THIS repo; PHP reads by
+  local path/env var during M0; published as `@spintax/conformance` later (NOT a submodule).
+- **Q4** CLI → deferred until after the M4/publish gate; no public `@spintax/cli` promise now
+  (a tiny internal corpus runner is allowed, that's not the public CLI).
+- **Q5** license → MIT for the npm packages; WP plugin stays GPL.
+- **Q6** versioning → `@spintax/core` semver is independent of the plugin. "Syntax v1" = the
+  §3.1 parity contract + §7.1 fixture-schema major; a syntax-surface or verdict-set change is
+  breaking, a new host integration is not.
+
+Spec is question-closed → ready to freeze for M0/M0.5.

@@ -315,9 +315,10 @@ cases, consumed by BOTH the PHP suite and the TS suite.
   the §3.1 parity gates, machine-checked.
 - **RNG cases** run in seeded mode and assert *within-engine* reproducibility only, plus
   structural invariants (e.g. permutation output is a valid shuffle of a valid subset).
-- Corpus lives where both repos can pull it (shared submodule, or published as
-  `@spintax/conformance`). This is what keeps the two engines honest over time without
-  forcing byte-parity everywhere.
+- Corpus **lives in this repo at `packages/conformance/fixtures/*.json`** (Q3 resolved,
+  §10); the parent PHP suite reads it by local path/env var during M0, and it is published as
+  `@spintax/conformance` later, once the §7.1 schema and cases have stabilized. This is what
+  keeps the two engines honest over time without forcing byte-parity everywhere.
 
 The plugin has ~562 PHPUnit test methods, of which **~276 are parity-relevant**
 (`ParserTest` 87, `PluralsTest` 74, `RendererTest` 39, `ConditionalsTest` 36,
@@ -438,8 +439,8 @@ each consumer keeps the API honest from a different angle.
 ```
 packages/
   core/           # @spintax/core — pure engine (§9.2). ZERO runtime deps.
-  conformance/    # @spintax/conformance — shared golden corpus §7 (pending Q3)
-  cli/            # @spintax/cli — npx spintax validate|render|extract (pending Q4)
+  conformance/    # @spintax/conformance — shared golden corpus, fixtures/*.json §7 (Q3 resolved; published later)
+  cli/            # @spintax/cli — deferred until after the M4/publish gate (Q4 resolved)
 examples/
   worker/         # thin Cloudflare Worker — FIRST dogfood gate (§8), roadmap Phase 4
   telegram-bot/   # Telegram authoring bot — flagship example (§8), roadmap Phase 5
@@ -570,12 +571,22 @@ rule), after the Worker proves the need — never speculatively.
   set — publish scoped `@spintax/core|cli|conformance`, fallback `spintax-js`. The only
   remainder is a one-time maintainer action (claim the `spintax` npm org / reserve the scope,
   needs npm auth); that is an operational step, not a spec decision, so it does not block code.
-- **Q3 — corpus home.** Shared git submodule vs published `@spintax/conformance` package vs
-  duplicated fixtures kept in sync by CI.
-- **Q4 — CLI now or later.** Is `npx spintax validate` an early adoption driver (author/CI
-  ergonomics) worth building alongside core, or strictly deferred?
-- **Q6 — versioning independence.** The npm engine's semver is decoupled from the plugin's
-  version — confirm, and define what "syntax v1" compatibility means across both.
+- ~~**Q3 — corpus home.**~~ **RESOLVED: live in THIS repo at
+  `packages/conformance/fixtures/*.json`**, published later as `@spintax/conformance`. During
+  M0 the parent PHP suite reads the fixtures by a local path / env var (or a worktree/submodule
+  path); a git submodule is explicitly NOT the first step — too much ceremony before the
+  corpus stabilizes. Promote to a published package only once the schema (§7.1) and cases have
+  settled. (§7, §9.1.)
+- ~~**Q4 — CLI now or later.**~~ **RESOLVED: deferred.** No public `@spintax/cli` promises
+  now; the CLI is deferred until **after the M4/publish gate**. The only exception is a tiny
+  *internal, non-published* corpus runner if M0/M0.5 tooling needs one — that is not the
+  public CLI. (§9.1, §9.3 principle.)
+- ~~**Q6 — versioning independence.**~~ **RESOLVED: `@spintax/core` semver is independent of
+  the WP plugin's version.** "**Syntax v1**" = the compatibility surface of the §3.1 parity
+  contract **plus** the §7.1 fixture-schema major. A change to the accepted syntax surface or
+  the validation verdict set is a **breaking** change for `@spintax/core`; a new host
+  integration (WP/Worker/bot) does NOT bump the syntax version. `Ast` version (§9.2) tracks
+  the in-memory handle and may move independently of syntax v1.
 
 ---
 
