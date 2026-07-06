@@ -8,7 +8,8 @@
  */
 
 import { parseTemplate } from './internal/parser';
-import type { Ast } from './internal/ast';
+import { validateTemplate } from './internal/validator';
+import { isParsedAst, type Ast } from './internal/ast';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
@@ -127,8 +128,15 @@ export function render(_input: string | Ast, _opts?: RenderOptions): string {
   throw new NotImplementedError('render()');
 }
 
-export function validate(_input: string | Ast, _opts?: ValidateOptions): Diagnostic[] {
-  throw new NotImplementedError('validate()');
+export function validate(input: string | Ast, opts: ValidateOptions = {}): Diagnostic[] {
+  return validateTemplate(resolveSource(input), opts);
+}
+
+/** Resolve a `string | Ast` input to its source text (for the raw-text checks). */
+function resolveSource(input: string | Ast): string {
+  if (typeof input === 'string') return input;
+  if (isParsedAst(input)) return input.source;
+  throw new AstVersionError('Ast was not produced by this engine version.');
 }
 
 export function extract(_input: string | Ast): ExtractResult {

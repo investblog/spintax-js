@@ -5,18 +5,40 @@
  * adding entries to RUNNERS (and the per-op assertion logic). analyze() is
  * validate+extract and has no dedicated corpus op.
  */
-import { describe, test } from 'vitest';
-import { loadCorpus, runsInTs, type Case, type Op } from './corpus-harness';
+import { describe, test, expect } from 'vitest';
+import { validate, type ValidateOptions } from '../src/index';
+import { loadCorpus, runsInTs, type Case, type ExpectValidate, type Op } from './corpus-harness';
 
 /**
- * Per-op runners. Empty at M0.5 (engine is stubs), so every corpus case is a
- * pending `test.todo`. Wiring one op here turns its whole category live.
+ * Per-op runners. Ops without an entry are pending `test.todo`. Wiring one op
+ * here turns its whole corpus category live.
  */
 const RUNNERS: Partial<Record<Op, (c: Case) => void>> = {
-  // M1: validate, extract
+  validate: runValidate,
+  // M1: extract
   // M2: render (branch on kind: deterministic⇒exact output via rngFromStrategy;
   //     rng⇒seeded PRNG + §7.2 invariants), neutralize
 };
+
+/** verdict is asserted exactly; diagnostics is a SUBSET assertion by {code[,severity]}. */
+function runValidate(c: Case): void {
+  const opts: ValidateOptions = {};
+  if (c.locale !== undefined) opts.locale = c.locale;
+  if (c.knownIncludes !== undefined) opts.knownIncludes = c.knownIncludes;
+
+  const diags = validate(c.template, opts);
+  const expected = c.expect as ExpectValidate;
+
+  const verdict = diags.some((d) => d.severity === 'error') ? 'invalid' : 'valid';
+  expect(verdict, `verdict for ${c.id}`).toBe(expected.verdict);
+
+  for (const ed of expected.diagnostics ?? []) {
+    const found = diags.some(
+      (d) => d.code === ed.code && (ed.severity === undefined || d.severity === ed.severity),
+    );
+    expect(found, `${c.id}: expected diagnostic '${ed.code}' not produced`).toBe(true);
+  }
+}
 
 for (const [file, cases] of loadCorpus()) {
   describe(file, () => {

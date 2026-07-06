@@ -11,10 +11,14 @@ describe('package smoke', () => {
     expect(DEFAULT_MAX_DEPTH).toBe(20);
   });
 
-  test('stubs throw NotImplementedError until M1/M2', () => {
+  test('not-yet-implemented ops throw NotImplementedError (M2)', () => {
     expect(() => api.render('x')).toThrow(NotImplementedError);
-    expect(() => api.validate('x')).toThrow(NotImplementedError);
     expect(() => api.neutralize('x')).toThrow(NotImplementedError);
+  });
+
+  test('implemented ops do not throw', () => {
+    expect(() => api.parse('{a|b}')).not.toThrow();
+    expect(() => api.validate('{a|b}')).not.toThrow();
   });
 });
 
