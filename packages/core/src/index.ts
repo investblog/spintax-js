@@ -85,13 +85,7 @@ export { DEFAULT_MAX_DEPTH } from './internal/pipeline';
 
 // ─── Errors (§9.3 — minimal, not a taxonomy) ─────────────────────────────────
 
-export {
-  SpintaxError,
-  IncludeResolverError,
-  MaxDepthExceededError,
-  AstVersionError,
-  NotImplementedError,
-} from './internal/errors';
+export { SpintaxError, IncludeResolverError, AstVersionError, NotImplementedError } from './internal/errors';
 
 // ─── Public API surface (§9.2) ───────────────────────────────────────────────
 

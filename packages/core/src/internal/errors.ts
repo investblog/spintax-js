@@ -22,13 +22,11 @@ export class IncludeResolverError extends SpintaxError {
   }
 }
 
-/** Nested #include / parse depth exceeded maxDepth. */
-export class MaxDepthExceededError extends SpintaxError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'MaxDepthExceededError';
-  }
-}
+// NOTE: there is deliberately NO MaxDepthExceededError. Exceeding maxDepth
+// (circular / too-deep #include, runaway variable recursion) is LENIENT — the
+// guard resolves to '' rather than throwing, matching the plugin (which logs +
+// returns ''). render() throwing on a depth breach would break the lenient
+// contract, so no such error type is part of the public surface (§9.2/§9.3).
 
 /** An Ast produced by an incompatible engine version was passed back in. */
 export class AstVersionError extends SpintaxError {

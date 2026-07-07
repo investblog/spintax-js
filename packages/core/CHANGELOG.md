@@ -25,6 +25,10 @@ post-process output, enum/perm selection) against the Spintax WordPress plugin's
 
 ### Notes
 
+- `render()` is lenient on depth: a circular / too-deep `#include` resolves to `''` (there is
+  **no** `MaxDepthExceededError`), matching the plugin. It throws only on a resolver that itself
+  throws (`IncludeResolverError`) or a foreign `Ast` (`AstVersionError`) — revised after the
+  reference-Worker dogfood surfaced the phantom error export.
 - Zero runtime dependencies; ESM-first with dual CJS. Node 18+, Cloudflare Workers, browser.
 - Cross-engine RNG-sequence parity with the PHP plugin is a non-goal; only deterministic behavior
   is parity-gated. The PHP-side corpus runner is the remaining cross-engine verification gate.

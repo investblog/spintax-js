@@ -525,9 +525,16 @@ export const DEFAULT_MAX_DEPTH = 20         // RenderOptions.maxDepth default
 
 class SpintaxError extends Error {}         // base for render() programmer-error throws
 class IncludeResolverError extends SpintaxError {}   // a host includeResolver threw
-class MaxDepthExceededError extends SpintaxError {}  // nested #include / parse depth breach
 class AstVersionError extends SpintaxError {}        // an incompatible Ast was passed back
+class NotImplementedError extends SpintaxError {}    // reserved guard for unimplemented paths
 ```
+
+> **No `MaxDepthExceededError`** (revised after the `examples/worker` dogfood, §8). Exceeding
+> `maxDepth` — a circular / too-deep `#include` or runaway variable recursion — is **lenient**:
+> the guard resolves to `''`, matching the plugin (which logs and returns `''`). Throwing would
+> break the "never throws on content" contract, so no depth-breach error is exported. `render()`
+> throws only on a resolver that itself throws (`IncludeResolverError`) or a foreign `Ast`
+> (`AstVersionError`).
 
 Contract rules (parity-relevant — see §3.1):
 

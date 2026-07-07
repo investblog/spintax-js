@@ -1,0 +1,6 @@
+# Thin reference Worker for @spintax/core (dogfood gate, spec §8).
+# Run locally with `npx wrangler dev` (wrangler is not a repo dependency — the
+# handler is unit-tested with vitest; wrangler is only for live/deploy).
+name = "spintax-worker"
+main = "src/index.ts"
+compatibility_date = "2024-11-27"
