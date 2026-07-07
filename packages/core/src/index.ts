@@ -2,9 +2,9 @@
  * @spintax/core — framework-agnostic Spintax engine (parse / render / validate /
  * extract / analyze / neutralize). Public API contract per spec §9.2 / §9.3.
  *
- * STATUS: M0.5 scaffolding. The types below are the committed surface; the
- * function bodies are stubs replaced by the real engine at M1 (parser+validator)
- * and M2 (renderer+post-process). They throw {@link NotImplementedError} until then.
+ * STATUS: M1. `parse` / `validate` / `extract` are implemented; `render`,
+ * `neutralize`, and `analyze` are stubs that throw {@link NotImplementedError}
+ * until M2 (renderer + post-process + shielding).
  */
 
 import { parseTemplate } from './internal/parser';

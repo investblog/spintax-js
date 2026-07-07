@@ -4,9 +4,17 @@
  * render/validate/extract/analyze walk. Not a serialization format — never
  * persisted across engine versions.
  *
- * M1 scope: literal / variable / enumeration / permutation (PR-10) +
- * conditional / plural / #set / #include (PR-11). Permutation's `<config>` and
- * per-element separators are parsed from `rawInner` in PR-11b.
+ * Tree nodes: literal / variable / enumeration / permutation / conditional /
+ * plural. Directives are NOT tree nodes (plugin parity):
+ *   - `#set` is extracted GLOBALLY before the tree is built (line-anchored, like
+ *     `extract_set_directives`) → {@link ParsedAst.setDefs}; its lines are
+ *     stripped from the body, so a `#set` on its own line even INSIDE a group is
+ *     a global definition, not literal text.
+ *   - `#include` is resolved by the renderer as a post-tree string pass (the
+ *     plugin's `resolve_includes` runs after enum/perm), so it stays literal in
+ *     the AST here.
+ * Permutation's `<config>` + per-element separators are parsed from `rawInner`
+ * in PR-11b.
  */
 
 /** Bumped only on a breaking change to the node shape (independent of syntax v1). */
@@ -18,9 +26,11 @@ export interface Ast {
 }
 
 /** Internal parsed tree. Carries the original source so validate(Ast) can do
- *  the raw-text checks (bracket balance etc.) and future offset diagnostics. */
+ *  the raw-text checks (bracket balance etc.) and future offset diagnostics, and
+ *  the globally-extracted `#set` definitions (name → raw value, name lowercased). */
 export interface ParsedAst extends Ast {
   readonly source: string;
+  readonly setDefs: Readonly<Record<string, string>>;
   readonly nodes: readonly Node[];
 }
 
@@ -30,9 +40,7 @@ export type Node =
   | EnumerationNode
   | PermutationNode
   | ConditionalNode
-  | PluralNode
-  | SetNode
-  | IncludeNode;
+  | PluralNode;
 
 /** Verbatim text. */
 export interface LiteralNode {
@@ -97,19 +105,6 @@ export interface PluralNode {
   readonly forms: readonly (readonly Node[])[];
 }
 
-/** `#set %name% = value` (line-anchored). Global-scope / collapse-once are render (M2) concerns. */
-export interface SetNode {
-  readonly type: 'set';
-  readonly name: string;
-  readonly value: readonly Node[];
-}
-
-/** `#include "ref"` (line-anchored). Host-injected resolution is a render (M2) concern. */
-export interface IncludeNode {
-  readonly type: 'include';
-  readonly ref: string;
-}
-
 /** Depth-first walk over every node, descending into all child sequences. */
 export function walk(nodes: readonly Node[], visit: (n: Node) => void): void {
   for (const n of nodes) {
@@ -125,11 +120,8 @@ export function walk(nodes: readonly Node[], visit: (n: Node) => void): void {
       case 'plural':
         for (const form of n.forms) walk(form, visit);
         break;
-      case 'set':
-        walk(n.value, visit);
-        break;
       default:
-        break; // literal / variable / permutation (rawInner) / include: no child nodes
+        break; // literal / variable / permutation (rawInner): no child nodes
     }
   }
 }

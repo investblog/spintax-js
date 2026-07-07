@@ -128,42 +128,53 @@ describe('parseTemplate — plurals', () => {
   });
 });
 
-describe('parseTemplate — #set / #include (line-anchored)', () => {
-  test('#set directive', () => {
-    expect(nodes('#set %greeting% = Hello')).toEqual([
-      { type: 'set', name: 'greeting', value: [lit('Hello')] },
+describe('parseTemplate — #set global extraction / #include literal', () => {
+  test('#set is extracted globally (not a node), stripping its line', () => {
+    const ast = parseTemplate('#set %greeting% = Hello');
+    expect(ast.setDefs).toEqual({ greeting: 'Hello' });
+    expect(ast.nodes).toEqual([]);
+  });
+
+  test('#set name is lower-cased; value is raw', () => {
+    expect(parseTemplate('#set %Brand% = Acme').setDefs).toEqual({ brand: 'Acme' });
+  });
+
+  test('#set line stripped; a following reference remains', () => {
+    const ast = parseTemplate('#set %g% = hi\n%g%');
+    expect(ast.setDefs).toEqual({ g: 'hi' });
+    expect(ast.nodes).toEqual([lit('\n'), v('g')]);
+  });
+
+  test('#set on its OWN line inside a group is still globally extracted (the blocking case)', () => {
+    const ast = parseTemplate('{\n#set %x% = A\n|%x%}');
+    expect(ast.setDefs).toEqual({ x: 'A' });
+    expect(ast.nodes).toEqual([
+      { type: 'enumeration', options: [[lit('\n\n')], [v('x')]] },
     ]);
   });
 
-  test('#set leaves the trailing newline as literal, then the reference', () => {
-    expect(nodes('#set %g% = hi\n%g%')).toEqual([
-      { type: 'set', name: 'g', value: [lit('hi')] },
-      lit('\n'),
-      v('g'),
-    ]);
-  });
-
-  test('#include directive', () => {
-    expect(nodes('#include "hero"')).toEqual([{ type: 'include', ref: 'hero' }]);
-  });
-
-  test('malformed #set (no =) is not a directive — stays literal + var', () => {
-    expect(nodes('#set %v% hello')).toEqual([lit('#set '), v('v'), lit(' hello')]);
-  });
-
-  test('CRLF: directive line with a trailing \\r is still recognized', () => {
-    expect(nodes('#set %g% = hi\r\n%g%')).toEqual([
-      { type: 'set', name: 'g', value: [lit('hi')] },
-      lit('\n'),
-      v('g'),
-    ]);
-    expect(nodes('#include "hero"\r\nx')).toEqual([{ type: 'include', ref: 'hero' }, lit('\nx')]);
-  });
-
-  test('#set is NOT detected inside an enumeration option', () => {
-    expect(nodes('{a|#set %x% = b}')).toEqual([
+  test('mid-line #set is NOT a directive (needs its own line) — stays enum text', () => {
+    const ast = parseTemplate('{a|#set %x% = b}');
+    expect(ast.setDefs).toEqual({});
+    expect(ast.nodes).toEqual([
       { type: 'enumeration', options: [[lit('a')], [lit('#set '), v('x'), lit(' = b')]] },
     ]);
+  });
+
+  test('malformed #set (no =) is not extracted — stays literal', () => {
+    const ast = parseTemplate('#set %v% hello');
+    expect(ast.setDefs).toEqual({});
+    expect(ast.nodes).toEqual([lit('#set '), v('v'), lit(' hello')]);
+  });
+
+  test('#include stays literal (renderer resolves it as a post-tree pass)', () => {
+    expect(nodes('#include "hero"')).toEqual([lit('#include "hero"')]);
+  });
+
+  test('CRLF: #set with a trailing \\r extracts cleanly', () => {
+    const ast = parseTemplate('#set %g% = hi\r\n%g%');
+    expect(ast.setDefs).toEqual({ g: 'hi' });
+    expect(ast.nodes).toEqual([lit('\n'), v('g')]);
   });
 });
 

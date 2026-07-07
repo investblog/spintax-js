@@ -136,8 +136,10 @@ function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[
 
 /** Self-reference + circular `#set` (errors) and undefined `%var%`/conditional refs (warnings). */
 function checkVariableReferences(text: string, out: Diagnostic[]): void {
+  // `[ \t]` (single-line), uniform with the parser's extract_set_directives and
+  // extract.ts — so a malformed cross-line `#set` isn't treated as a definition.
   const defs = new Map<string, string>();
-  for (const m of text.matchAll(/^[ \t]*#set\s+%(\w+)%\s*=\s*(.*?)$/gmu)) {
+  for (const m of text.matchAll(/^[ \t]*#set[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)$/gmu)) {
     defs.set((m[1] ?? '').toLowerCase(), m[2] ?? '');
   }
 
@@ -150,7 +152,7 @@ function checkVariableReferences(text: string, out: Diagnostic[]): void {
     detectCycle(name, defs, [name], out);
   }
 
-  const body = text.replace(/^[ \t]*#set\s+%\w+%\s*=\s*.*?$/gmu, '');
+  const body = text.replace(/^[ \t]*#set[ \t]+%\w+%[ \t]*=[ \t]*.*?$/gmu, '');
   const refs = new Set<string>();
   for (const m of body.matchAll(/%(\w+)%/gu)) refs.add((m[1] ?? '').toLowerCase());
   for (const m of body.matchAll(/\{\?!?([A-Za-z_]\w*)\?/gu)) refs.add((m[1] ?? '').toLowerCase());
