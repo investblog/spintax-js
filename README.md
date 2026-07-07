@@ -4,9 +4,10 @@ Framework-agnostic [spintax](https://spintax.net) engine for JS/TS — parse, re
 validate, and extract variables from GTW-compatible spintax templates, with **zero
 WordPress dependency**. Runs on Cloudflare Workers, Node 18+, and in the browser.
 
-> **Status: pre-code (DRAFT).** This repo currently holds the design + scaffolding only.
-> First engine code lands at milestone **M1** (see the [spec](./docs/spec-npm-engine.md)).
-> Nothing is published to npm yet.
+> **Status: `0.1.0-rc.1`.** The engine (`@spintax/core`) is feature-complete — parse, render,
+> validate, extract, analyze, neutralize — and passes the full deterministic parity corpus. The
+> API is being dogfooded by a reference Cloudflare Worker (M4) before the `0.1.0` npm publish.
+> See the [spec](./docs/spec-npm-engine.md) and [`packages/core`](./packages/core/README.md).
 
 ## What this is
 
