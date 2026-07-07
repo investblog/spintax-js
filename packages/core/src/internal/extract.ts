@@ -29,7 +29,7 @@ export interface ExtractResult {
 // NOT \s, which would let a malformed multi-line `#set` be read as a definition.
 const SET_DEF_RE = /^[ \t]*#set[ \t]+%(\w+)%[ \t]*=/gmu;
 const SET_LHS_RE = /^[ \t]*#set[ \t]+%\w+%[ \t]*=/gmu;
-const INCLUDE_RE = /^[ \t]*#include\s+"([^"]+)"\s*$/gmu;
+const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu; // ASCII \s (PHP parity)
 const VARIABLE_RE = /%(\w+)%/gu;
 const CONDITIONAL_REF_RE = /\{\?!?([A-Za-z_]\w*)\?/gu;
 

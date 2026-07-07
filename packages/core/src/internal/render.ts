@@ -20,12 +20,70 @@
  * cases use order-independent sequences. Permutation matches the plugin's exact
  * pick→Fisher-Yates, so its rng-strategy cases are exact.
  */
-import type { Node, PermutationNode, PluralNode, ConditionalNode } from './ast';
-import { parseSequence } from './parser';
+import type { Node, ParsedAst, PermutationNode, PluralNode, ConditionalNode } from './ast';
+import { IncludeResolverError } from './errors';
+import { parseSequence, parseTemplate } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 
 const MAX_VARIABLE_DEPTH = 50;
+// ASCII whitespace only — PHP `\s` under /u is ASCII; JS `\s` matches Unicode
+// whitespace (NBSP etc.), which would diverge on exotic input. Parity.
+const INCLUDE_LINE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu;
+
+/** Document-level render context (threads through nested #include resolution). */
+export interface RenderCtx {
+  /** Runtime/host variable map — inherited by child #includes (NOT parent #set). */
+  readonly runtimeContext: Readonly<Record<string, string>>;
+  readonly rng: Rng;
+  readonly locale: string;
+  readonly resolver: ((ref: string) => string | null) | undefined;
+  readonly maxDepth: number;
+  /** #include ref chain for circular-reference detection. */
+  readonly includeStack: readonly string[];
+}
+
+/**
+ * Render a parsed template: collapse-once #set → tree-walk → resolve #includes
+ * (post-tree string pass, like the plugin's Stage 9 resolve_nested, AFTER
+ * enum/perm). Post-process (Stage 10) is layered on by the public render().
+ */
+export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
+  const vars = buildVars(ast.setDefs, ctx.runtimeContext, ctx.rng);
+  const text = renderNodes(ast.nodes, { vars, rng: ctx.rng, locale: ctx.locale, depth: 0 });
+  return ctx.resolver ? resolveIncludes(text, ctx) : text;
+}
+
+/**
+ * Replace each `#include "ref"` (line-anchored) with the host-resolved child
+ * template, rendered with a CHILD scope: inherits runtime context but NOT the
+ * parent's #set locals (plugin `for_child_render`). Circular refs / runaway
+ * depth resolve to '' (lenient); a resolver that throws surfaces as
+ * IncludeResolverError (programmer error).
+ *
+ * NOTE: cycles are detected by the ref STRING (the engine has no template
+ * identity beyond the host-supplied ref, §4.1), so two aliased refs for one
+ * template aren't seen as a cycle and recurse until `maxDepth`. `maxDepth` also
+ * caps deep ACYCLIC chains (silently → ''), a guard the plugin lacks.
+ */
+function resolveIncludes(text: string, ctx: RenderCtx): string {
+  INCLUDE_LINE_RE.lastIndex = 0;
+  return text.replace(INCLUDE_LINE_RE, (_m, ref: string): string => {
+    if (ctx.includeStack.includes(ref) || ctx.includeStack.length >= ctx.maxDepth) return '';
+    let included: string | null;
+    try {
+      included = ctx.resolver!(ref);
+    } catch (cause) {
+      throw new IncludeResolverError(`includeResolver threw for "${ref}"`, { cause });
+    }
+    if (included === null) return '';
+    return renderAst(parseTemplate(included), {
+      ...ctx,
+      runtimeContext: ctx.runtimeContext, // child inherits runtime, not parent #set
+      includeStack: [...ctx.includeStack, ref],
+    });
+  });
+}
 
 export interface RenderInternalOptions {
   /** Merged variable map, keys LOWER-CASED (runtime context wins over #set). */
