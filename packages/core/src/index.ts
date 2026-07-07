@@ -42,6 +42,12 @@ export interface ValidateOptions {
   locale?: string;
   /** Slug/id allow-list; enables "unknown #include target" verdicts. */
   knownIncludes?: readonly string[];
+  /**
+   * Variable names the host will supply at render (globals / context keys).
+   * Suppresses the `variable.undefined` WARNING for them — verdict is unaffected
+   * (an undefined var is never an error). Case-insensitive.
+   */
+  knownVariables?: readonly string[];
 }
 
 export interface Diagnostic {
