@@ -50,8 +50,9 @@ export function stripComments(text: string): string {
   return text.replace(/\/#[\s\S]*?#\//g, '');
 }
 
-/** Parse a run of text into a node sequence. */
-function parseSequence(text: string): Node[] {
+/** Parse a run of text into a node sequence (construct parsing only — no comment
+ *  strip / #set extraction; the renderer uses this to re-process variable values). */
+export function parseSequence(text: string): Node[] {
   const nodes: Node[] = [];
   let literal = '';
   let i = 0;
@@ -160,12 +161,9 @@ function tryParseConditional(content: string): Node | null {
 /** Parse `<count>: forms` (the part after the `plural ` prefix). */
 function parsePlural(afterPrefix: string): Node {
   const colon = afterPrefix.indexOf(':');
-  const countRaw = afterPrefix.slice(0, colon);
-  const formsRaw = afterPrefix.slice(colon + 1);
-  // Forms split on every pipe (plugin uses explode('|', …)); each form is
-  // trimmed. Nested brackets in a form are invalid (validator's job).
-  const forms = formsRaw.split('|').map((f) => parseSequence(phpTrim(f)));
-  return { type: 'plural', countRaw, formsRaw, forms };
+  // Count + raw forms are kept as strings; the renderer expands variables in them
+  // FIRST (Stage 6d runs after var-expansion, before enum/perm), then splits/checks.
+  return { type: 'plural', countRaw: afterPrefix.slice(0, colon), formsRaw: afterPrefix.slice(colon + 1) };
 }
 
 // ─── Permutation parsing (config + per-element separators) ────────────────────

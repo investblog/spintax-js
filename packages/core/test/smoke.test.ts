@@ -11,9 +11,8 @@ describe('package smoke', () => {
     expect(DEFAULT_MAX_DEPTH).toBe(20);
   });
 
-  test('not-yet-implemented ops throw NotImplementedError', () => {
+  test('neutralize still throws NotImplementedError (M2e)', () => {
     expect(() => api.neutralize('x')).toThrow(NotImplementedError);
-    expect(() => api.render('{?flag?a|b}')).toThrow(NotImplementedError); // conditional render is M2b
   });
 
   test('implemented ops do not throw', () => {
@@ -21,6 +20,8 @@ describe('package smoke', () => {
     expect(() => api.validate('{a|b}')).not.toThrow();
     expect(api.render('hello')).toBe('hello');
     expect(api.render('Hi %name%', { context: { name: 'World' } })).toBe('Hi World');
+    expect(api.render('{?f?a|b}', { context: { f: '1' } })).toBe('a');
+    expect(api.render('{plural 2: item|items}', { locale: 'en' })).toBe('items');
   });
 });
 

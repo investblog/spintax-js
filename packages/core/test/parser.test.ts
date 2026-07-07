@@ -195,27 +195,12 @@ describe('parseTemplate — conditionals', () => {
 });
 
 describe('parseTemplate — plurals', () => {
-  test('count + forms (formsRaw kept verbatim for the lenient path)', () => {
-    expect(nodes('{plural 2: one|two}')).toEqual([
-      { type: 'plural', countRaw: '2', formsRaw: ' one|two', forms: [[lit('one')], [lit('two')]] },
-    ]);
+  test('count + raw forms are kept as strings (renderer expands vars, then splits/trims)', () => {
+    expect(nodes('{plural 2: one|two}')).toEqual([{ type: 'plural', countRaw: '2', formsRaw: ' one|two' }]);
   });
 
   test('count may be a %var%', () => {
-    expect(nodes('{plural %n%: a|b}')).toEqual([
-      { type: 'plural', countRaw: '%n%', formsRaw: ' a|b', forms: [[lit('a')], [lit('b')]] },
-    ]);
-  });
-
-  test('forms are trimmed', () => {
-    expect(nodes('{plural 1: товар | товара | товаров}')).toEqual([
-      {
-        type: 'plural',
-        countRaw: '1',
-        formsRaw: ' товар | товара | товаров',
-        forms: [[lit('товар')], [lit('товара')], [lit('товаров')]],
-      },
-    ]);
+    expect(nodes('{plural %n%: a|b}')).toEqual([{ type: 'plural', countRaw: '%n%', formsRaw: ' a|b' }]);
   });
 
   test('no colon ⇒ not a plural, treated as enumeration', () => {

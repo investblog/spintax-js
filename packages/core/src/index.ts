@@ -10,7 +10,7 @@
 import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
-import { renderNodes } from './internal/render';
+import { buildVars, renderNodes } from './internal/render';
 import { makeRng } from './internal/rng';
 import { AstVersionError, NotImplementedError } from './internal/errors';
 import { isParsedAst, type Ast, type ParsedAst } from './internal/ast';
@@ -101,8 +101,9 @@ export function parse(src: string): Ast {
 
 export function render(input: string | Ast, opts: RenderOptions = {}): string {
   const ast = resolveAst(input);
-  const context = lowerKeys(opts.context ?? {});
-  return renderNodes(ast.nodes, { context, setDefs: ast.setDefs, rng: makeRng(opts.seed) });
+  const rng = makeRng(opts.seed);
+  const vars = buildVars(ast.setDefs, opts.context ?? {}, rng);
+  return renderNodes(ast.nodes, { vars, rng, locale: opts.locale ?? '', depth: 0 });
 }
 
 /** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */
@@ -110,12 +111,6 @@ function resolveAst(input: string | Ast): ParsedAst {
   if (typeof input === 'string') return parseTemplate(input);
   if (isParsedAst(input)) return input;
   throw new AstVersionError('Ast was not produced by this engine version.');
-}
-
-function lowerKeys(obj: Readonly<Record<string, string>>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, value] of Object.entries(obj)) out[k.toLowerCase()] = value;
-  return out;
 }
 
 export function validate(input: string | Ast, opts: ValidateOptions = {}): Diagnostic[] {

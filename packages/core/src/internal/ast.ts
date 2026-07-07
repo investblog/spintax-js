@@ -102,21 +102,17 @@ export interface ConditionalNode {
 }
 
 /**
- * `{plural <count>: one|few|many}`. `countRaw` is the raw count slot (may be a
- * `%var%` resolved at render, then integer-parsed); `forms` are the pipe-split
- * form sequences. Discriminated by the literal `{plural ` prefix + a `:`.
+ * `{plural <count>: one|few|many}`. Both slots are kept RAW (they may hold
+ * `%var%`): the renderer expands variables in them first (plurals run after
+ * var-expansion, before enum/perm), then splits/checks/pick. The lenient path
+ * (nested `{}`/`[]` in a form, or arity mismatch) re-emits
+ * `{plural <countRaw>:<formsRaw>}` with fullwidth braces (U+FF5B/FF5D).
+ * Discriminated by the literal `{plural ` prefix + a `:`.
  */
 export interface PluralNode {
   readonly type: 'plural';
   readonly countRaw: string;
-  /**
-   * Raw forms text after the colon, kept verbatim. The valid path renders
-   * `forms`; the lenient path (a form containing nested `{}`/`[]`, or an arity
-   * mismatch) needs the raw text to re-emit the whole construct with fullwidth
-   * braces (U+FF5B/FF5D), so M2 reconstructs `{plural <countRaw>:<formsRaw>}`.
-   */
   readonly formsRaw: string;
-  readonly forms: readonly (readonly Node[])[];
 }
 
 /** Depth-first walk over every node, descending into all child sequences. */
@@ -131,14 +127,11 @@ export function walk(nodes: readonly Node[], visit: (n: Node) => void): void {
         walk(n.then, visit);
         walk(n.else, visit);
         break;
-      case 'plural':
-        for (const form of n.forms) walk(form, visit);
-        break;
       case 'permutation':
         for (const opt of n.options) walk(opt.nodes, visit);
         break;
       default:
-        break; // literal / variable: no child nodes
+        break; // literal / variable / plural (raw slots): no child nodes
     }
   }
 }
