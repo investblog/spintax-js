@@ -1,6 +1,6 @@
 {
   "name": "@spintax/core",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0",
   "description": "GTW-compatible spintax parser, renderer, validator and variable extractor — framework-agnostic",
   "keywords": [
     "spintax",
