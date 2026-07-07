@@ -18,10 +18,12 @@ describe('package smoke', () => {
   test('implemented ops do not throw', () => {
     expect(() => api.parse('{a|b}')).not.toThrow();
     expect(() => api.validate('{a|b}')).not.toThrow();
-    expect(api.render('hello')).toBe('hello');
+    // render() post-processes by default (§0.1), so the first letter is capitalized.
+    expect(api.render('hello')).toBe('Hello');
     expect(api.render('Hi %name%', { context: { name: 'World' } })).toBe('Hi World');
-    expect(api.render('{?f?a|b}', { context: { f: '1' } })).toBe('a');
-    expect(api.render('{plural 2: item|items}', { locale: 'en' })).toBe('items');
+    expect(api.render('{?f?a|b}', { context: { f: '1' } })).toBe('A');
+    expect(api.render('{plural 2: item|items}', { locale: 'en' })).toBe('Items');
+    expect(api.render('hello', { postProcess: false })).toBe('hello');
   });
 });
 

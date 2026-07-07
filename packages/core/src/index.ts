@@ -11,6 +11,7 @@ import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
 import { renderAst, type RenderCtx } from './internal/render';
+import { postProcess } from './internal/postprocess';
 import { makeRng } from './internal/rng';
 import { AstVersionError, NotImplementedError } from './internal/errors';
 import { isParsedAst, type Ast, type ParsedAst } from './internal/ast';
@@ -108,7 +109,10 @@ export function render(input: string | Ast, opts: RenderOptions = {}): string {
     maxDepth: opts.maxDepth ?? DEFAULT_MAX_DEPTH,
     includeStack: [],
   };
-  return renderAst(resolveAst(input), ctx);
+  const out = renderAst(resolveAst(input), ctx);
+  // Cosmetic post-process defaults ON (§0.1); false skips it. (The mandatory
+  // neutralize safety-restore, §6, is separate and always runs — M2e.)
+  return opts.postProcess === false ? out : postProcess(out);
 }
 
 /** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */

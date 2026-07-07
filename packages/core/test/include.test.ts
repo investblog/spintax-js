@@ -1,11 +1,15 @@
 import { describe, test, expect } from 'vitest';
-import { render, IncludeResolverError, type RenderOptions } from '../src/index';
+import { render as publicRender, IncludeResolverError, type RenderOptions } from '../src/index';
 
 /** A resolver from a slug→template map (null for unknown). */
 const from =
   (map: Record<string, string>): ((ref: string) => string | null) =>
   (ref) =>
     map[ref] ?? null;
+
+/** render with postProcess OFF so these tests isolate #include behavior (no cosmetic trim/cap). */
+const render = (src: string, opts: RenderOptions = {}): string =>
+  publicRender(src, { postProcess: false, ...opts });
 
 describe('render — #include resolution', () => {
   test('resolves to the rendered child template', () => {
