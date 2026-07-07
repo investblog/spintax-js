@@ -39,5 +39,17 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
       - name: Test
         run: npm test
+
+      # Packaging gates for the published artifact: manifest/exports (publint),
+      # type resolution across module systems (attw), and a real install + dual
+      # import of the tarball (smoke).
+      - name: Package checks (publint + attw)
+        run: npm run check:pkg
+
+      - name: Tarball smoke (install + ESM/CJS import)
+        run: npm run smoke:pack
