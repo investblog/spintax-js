@@ -8,6 +8,11 @@ function nodes(src: string): Node[] {
 
 const lit = (value: string): Node => ({ type: 'literal', value });
 const v = (name: string): Node => ({ type: 'variable', name });
+const DEF_CFG = { minsize: null, maxsize: null, sep: ' ', lastsep: null };
+const opt = (
+  n: Node[],
+  separator: string | null = null,
+): { nodes: Node[]; separator: string | null } => ({ nodes: n, separator });
 
 describe('parseTemplate — core constructs', () => {
   test('literal only', () => {
@@ -46,20 +51,112 @@ describe('parseTemplate — core constructs', () => {
     expect(nodes('{|a}')).toEqual([{ type: 'enumeration', options: [[], [lit('a')]] }]);
   });
 
-  test('permutation captures raw inner (split deferred to PR-11)', () => {
-    expect(nodes('[a|b]')).toEqual([{ type: 'permutation', rawInner: 'a|b' }]);
-  });
-
-  test('permutation raw inner preserves a pipe inside a quoted config', () => {
-    // PR-11 extracts <config> before splitting; PR-10 must not corrupt it.
-    expect(nodes('[<sep="|">a|b]')).toEqual([{ type: 'permutation', rawInner: '<sep="|">a|b' }]);
+  test('permutation (default config)', () => {
+    expect(nodes('[a|b]')).toEqual([
+      { type: 'permutation', config: DEF_CFG, options: [opt([lit('a')]), opt([lit('b')])] },
+    ]);
   });
 
   test('mixed nesting: permutation inside enumeration', () => {
     expect(nodes('{a|[b|c]}')).toEqual([
       {
         type: 'enumeration',
-        options: [[lit('a')], [{ type: 'permutation', rawInner: 'b|c' }]],
+        options: [
+          [lit('a')],
+          [{ type: 'permutation', config: DEF_CFG, options: [opt([lit('b')]), opt([lit('c')])] }],
+        ],
+      },
+    ]);
+  });
+});
+
+describe('parseTemplate — permutation config & separators', () => {
+  test('full config: minsize/maxsize/sep/lastsep', () => {
+    expect(nodes('[<minsize=2;maxsize=3;sep=", ";lastsep=" and "> a|b|c]')).toEqual([
+      {
+        type: 'permutation',
+        config: { minsize: 2, maxsize: 3, sep: ', ', lastsep: ' and ' },
+        options: [opt([lit('a')]), opt([lit('b')]), opt([lit('c')])],
+      },
+    ]);
+  });
+
+  test('config is extracted BEFORE the split — a pipe in a quoted sep is not a separator', () => {
+    expect(nodes('[<sep="|">a|b]')).toEqual([
+      {
+        type: 'permutation',
+        config: { minsize: null, maxsize: null, sep: '|', lastsep: null },
+        options: [opt([lit('a')]), opt([lit('b')])],
+      },
+    ]);
+  });
+
+  test('single-separator form: the whole config string is sep (and lastsep)', () => {
+    expect(nodes('[<+>a|b]')).toEqual([
+      {
+        type: 'permutation',
+        config: { minsize: null, maxsize: null, sep: '+', lastsep: '+' },
+        options: [opt([lit('a')]), opt([lit('b')])],
+      },
+    ]);
+  });
+
+  test('leading <li>…</li> is HTML, not config', () => {
+    expect(nodes('[<li>a</li>|b]')).toEqual([
+      {
+        type: 'permutation',
+        config: DEF_CFG,
+        options: [opt([lit('<li>a</li>')]), opt([lit('b')])],
+      },
+    ]);
+  });
+
+  test('per-element separator: a trailing < sep > travels to the next element', () => {
+    expect(nodes('[a < and > | b]')).toEqual([
+      {
+        type: 'permutation',
+        config: DEF_CFG,
+        options: [opt([lit('a')], null), opt([lit('b')], ' and ')],
+      },
+    ]);
+  });
+
+  test('a trailing < sep > on the LAST part is NOT extracted (stays literal)', () => {
+    expect(nodes('[a|b< , >]')).toEqual([
+      {
+        type: 'permutation',
+        config: DEF_CFG,
+        options: [opt([lit('a')]), opt([lit('b< , >')])],
+      },
+    ]);
+  });
+
+  test('minsize-only config (sep stays default)', () => {
+    expect(nodes('[<minsize=2>a|b|c]')).toEqual([
+      {
+        type: 'permutation',
+        config: { minsize: 2, maxsize: null, sep: ' ', lastsep: null },
+        options: [opt([lit('a')]), opt([lit('b')]), opt([lit('c')])],
+      },
+    ]);
+  });
+
+  test('empty and config-only permutations yield no options', () => {
+    expect(nodes('[]')).toEqual([{ type: 'permutation', config: DEF_CFG, options: [] }]);
+    expect(nodes('[<sep=",">]')).toEqual([
+      { type: 'permutation', config: { minsize: null, maxsize: null, sep: ',', lastsep: null }, options: [] },
+    ]);
+  });
+
+  test('nested permutation is a nested node', () => {
+    expect(nodes('[a|[b|c]]')).toEqual([
+      {
+        type: 'permutation',
+        config: DEF_CFG,
+        options: [
+          opt([lit('a')]),
+          opt([{ type: 'permutation', config: DEF_CFG, options: [opt([lit('b')]), opt([lit('c')])] }]),
+        ],
       },
     ]);
   });

@@ -14,7 +14,7 @@
  * literal here; the renderer resolves it as a post-tree string pass (like the
  * plugin's post-enum `resolve_includes`).
  */
-import { AST_VERSION, type Node, type ParsedAst } from './ast';
+import { AST_VERSION, type Node, type ParsedAst, type PermConfig, type PermOption } from './ast';
 
 const VARIABLE_RE = /^%(\w+)%/;
 // `\r?` before the multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
@@ -88,7 +88,7 @@ function parseSequence(text: string): Node[] {
         continue;
       }
       flushLiteral();
-      nodes.push({ type: 'permutation', rawInner: text.slice(i + 1, end) });
+      nodes.push(parsePermutation(text.slice(i + 1, end)));
       i = end + 1;
       continue;
     }
@@ -164,8 +164,161 @@ function parsePlural(afterPrefix: string): Node {
   const formsRaw = afterPrefix.slice(colon + 1);
   // Forms split on every pipe (plugin uses explode('|', …)); each form is
   // trimmed. Nested brackets in a form are invalid (validator's job).
-  const forms = formsRaw.split('|').map((f) => parseSequence(f.trim()));
+  const forms = formsRaw.split('|').map((f) => parseSequence(phpTrim(f)));
   return { type: 'plural', countRaw, formsRaw, forms };
+}
+
+// ─── Permutation parsing (config + per-element separators) ────────────────────
+
+const CONFIG_KEY_RE = /\b(?:minsize|maxsize|sep|lastsep)\s*=/i;
+const MINSIZE_RE = /minsize\s*=\s*(\d+)/i;
+const MAXSIZE_RE = /maxsize\s*=\s*(\d+)/i;
+const SEP_RE = /(?<!last)sep\s*=\s*"([^"]*)"/i; // negative lookbehind excludes "lastsep"
+const LASTSEP_RE = /lastsep\s*=\s*"([^"]*)"/i;
+const HTML_TAG_RE = /^([a-zA-Z][a-zA-Z0-9-]*)(?:\s+[^>]*)?\/?$/;
+const PER_ELEM_HTML_RE = /^[a-zA-Z][a-zA-Z0-9]*\s/;
+
+function defaultPermConfig(): PermConfig {
+  return { minsize: null, maxsize: null, sep: ' ', lastsep: null };
+}
+
+/** Parse a permutation body `[<config>a|b|c]` inner → config + options with per-element seps. */
+function parsePermutation(rawInner: string): Node {
+  const { config, content } = extractPermutationConfig(rawInner);
+  const options = extractPerElementSeparators(splitTopLevel(content));
+  return { type: 'permutation', config, options };
+}
+
+/** Split a leading `<config>` off the body (config is extracted BEFORE the top-level split). */
+function extractPermutationConfig(content: string): { config: PermConfig; content: string } {
+  const trimmed = phpLtrim(content);
+  if (trimmed === '' || trimmed.charAt(0) !== '<') {
+    return { config: defaultPermConfig(), content };
+  }
+  const end = findConfigEnd(trimmed);
+  if (end === -1) return { config: defaultPermConfig(), content };
+
+  const configStr = trimmed.slice(1, end);
+  const remaining = trimmed.slice(end + 1);
+  // A leading `<li>…</li>`-style tag is HTML, not config.
+  if (looksLikeHtmlStartTag(configStr, remaining)) {
+    return { config: defaultPermConfig(), content };
+  }
+  return { config: parseConfigString(configStr), content: remaining };
+}
+
+/** Index of the closing `>` of a `<…>` config, respecting quoted strings; -1 if none. */
+function findConfigEnd(text: string): number {
+  let inQuote = false;
+  for (let i = 1; i < text.length; i += 1) {
+    const ch = text.charAt(i);
+    if (ch === '"') inQuote = !inQuote;
+    if (ch === '>' && !inQuote) return i;
+  }
+  return -1;
+}
+
+function parseConfigString(str: string): PermConfig {
+  if (!CONFIG_KEY_RE.test(str)) {
+    // Single-separator form: the whole string is sep (and lastsep).
+    return { minsize: null, maxsize: null, sep: str, lastsep: str };
+  }
+  return {
+    minsize: intGroup(MINSIZE_RE.exec(str)),
+    maxsize: intGroup(MAXSIZE_RE.exec(str)),
+    sep: strGroup(SEP_RE.exec(str)) ?? ' ',
+    lastsep: strGroup(LASTSEP_RE.exec(str)),
+  };
+}
+
+function looksLikeHtmlStartTag(tagText: string, remaining: string): boolean {
+  const trimmed = phpTrim(tagText);
+  if (trimmed === '') return false;
+  const m = HTML_TAG_RE.exec(trimmed);
+  if (!m) return false;
+  if (trimmed.endsWith('/')) return true; // self-closing
+  const tagName = (m[1] ?? '').toLowerCase();
+  return new RegExp(`</${escapeRegExp(tagName)}\\s*>`, 'iu').test(remaining);
+}
+
+/**
+ * Turn raw split parts into elements, moving a trailing `<sep>` on part[i] to be
+ * the per-element separator of the element from part[i+1]. Each element's text is
+ * trimmed; empty elements are dropped (plugin `extract_per_element_separators`).
+ */
+function extractPerElementSeparators(rawParts: string[]): PermOption[] {
+  const options: PermOption[] = [];
+  let pendingSep: string | null = null;
+
+  rawParts.forEach((part, i) => {
+    let text = part;
+    let trailingSep: string | null = null;
+    if (i < rawParts.length - 1) {
+      const extracted = extractTrailingSep(part);
+      if (extracted) {
+        text = extracted.text;
+        trailingSep = extracted.sep;
+      }
+    }
+    const trimmed = phpTrim(text);
+    if (trimmed !== '') {
+      options.push({ nodes: parseSequence(trimmed), separator: pendingSep });
+    }
+    pendingSep = trailingSep;
+  });
+
+  return options;
+}
+
+/** Detect a trailing `< sep >` on a part (not an HTML tag). Returns {text, sep} or null. */
+function extractTrailingSep(part: string): { text: string; sep: string } | null {
+  const trimmed = phpRtrim(part);
+  const len = trimmed.length;
+  if (len === 0 || trimmed.charAt(len - 1) !== '>') return null;
+
+  let openPos = -1;
+  for (let i = len - 2; i >= 0; i -= 1) {
+    const ch = trimmed.charAt(i);
+    if (ch === '<') {
+      openPos = i;
+      break;
+    }
+    if (ch === '>') return null; // nested/complex, bail
+  }
+  if (openPos === -1) return null;
+
+  const inner = trimmed.slice(openPos + 1, len - 1);
+  const innerTrimmed = phpTrim(inner);
+  // HTML tag → not a separator: closing </x>, self-closing <x/>, or tag-with-attrs `<x …>`.
+  if (innerTrimmed.startsWith('/') || innerTrimmed.endsWith('/') || PER_ELEM_HTML_RE.test(innerTrimmed)) {
+    return null;
+  }
+  return { text: trimmed.slice(0, openPos), sep: inner };
+}
+
+function intGroup(m: RegExpExecArray | null): number | null {
+  return m && m[1] !== undefined ? Number.parseInt(m[1], 10) : null;
+}
+function strGroup(m: RegExpExecArray | null): string | null {
+  return m && m[1] !== undefined ? m[1] : null;
+}
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+// PHP trim strips only [ \t\n\r\0\x0B] — NOT the full JS Unicode whitespace set —
+// so use these for byte-exact parity wherever the plugin trims (permutation
+// config / element text / separators, plural forms).
+const PHP_LTRIM_RE = /^[ \t\n\r\0\x0B]+/u;
+const PHP_RTRIM_RE = /[ \t\n\r\0\x0B]+$/u;
+function phpTrim(s: string): string {
+  return s.replace(PHP_LTRIM_RE, '').replace(PHP_RTRIM_RE, '');
+}
+function phpLtrim(s: string): string {
+  return s.replace(PHP_LTRIM_RE, '');
+}
+function phpRtrim(s: string): string {
+  return s.replace(PHP_RTRIM_RE, '');
 }
 
 /**
