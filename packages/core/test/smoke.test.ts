@@ -11,14 +11,16 @@ describe('package smoke', () => {
     expect(DEFAULT_MAX_DEPTH).toBe(20);
   });
 
-  test('not-yet-implemented ops throw NotImplementedError (M2)', () => {
-    expect(() => api.render('x')).toThrow(NotImplementedError);
+  test('not-yet-implemented ops throw NotImplementedError', () => {
     expect(() => api.neutralize('x')).toThrow(NotImplementedError);
+    expect(() => api.render('{?flag?a|b}')).toThrow(NotImplementedError); // conditional render is M2b
   });
 
   test('implemented ops do not throw', () => {
     expect(() => api.parse('{a|b}')).not.toThrow();
     expect(() => api.validate('{a|b}')).not.toThrow();
+    expect(api.render('hello')).toBe('hello');
+    expect(api.render('Hi %name%', { context: { name: 'World' } })).toBe('Hi World');
   });
 });
 

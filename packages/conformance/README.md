@@ -97,6 +97,13 @@ A `kind:deterministic` render case may carry an `rng` strategy to fix the picks 
 its output exact and cross-engine-comparable. `kind:rng` cases run in seeded (PRNG) mode and
 assert invariants only.
 
+> **Nested-enum deterministic cases must use order-independent `rng` sequences.** The
+> engines consume enum RNG in different orders (and the TS tree-walk skips unpicked branches,
+> so even the call count differs) — cross-engine RNG-sequence parity is a non-goal (§3.2). So
+> a `{sequence}` on a nested enum only stays a valid cross-engine gate when every ordering
+> yields the same output (e.g. `{a|{b|c}}` with `[1,1]`). Permutation is exact (both engines
+> follow the same pick→Fisher-Yates), so its rng-strategy cases are unrestricted.
+
 ## Validating fixtures against the schema
 
 ```
