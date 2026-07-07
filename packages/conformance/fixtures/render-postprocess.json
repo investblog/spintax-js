@@ -154,12 +154,12 @@
   },
   {
     "id": "postprocess/abbrev-multidot",
-    "note": "Multi-dot abbreviation 'т.д.' (2+ dotted groups) is shielded by step 5a.",
+    "note": "Multi-dot abbreviation 'e.g.' (2+ dotted groups) is shielded by step 5a. NB: step 5a uses \\b, which — like PHP PCRE without UCP — is ASCII, so it shields ASCII abbreviations but NOT a Cyrillic one like т.д. (parity holds; the ru whitelist covers single-token Cyrillic via a \\p{L} lookbehind).",
     "kind": "deterministic",
     "op": "render",
-    "template": "Текст и т.д. далее",
+    "template": "See e.g. this",
     "postProcess": true,
-    "expect": { "output": "Текст и т.д. далее" }
+    "expect": { "output": "See e.g. this" }
   },
   {
     "id": "postprocess/trim-and-collapse",
