@@ -1,6 +1,6 @@
 {
   "name": "@spintax/core",
-  "version": "0.0.0",
+  "version": "0.1.0-rc.1",
   "description": "GTW-compatible spintax parser, renderer, validator and variable extractor — framework-agnostic",
   "keywords": [
     "spintax",
@@ -13,6 +13,14 @@
   "license": "MIT",
   "author": "301st (https://301.st)",
   "homepage": "https://spintax.net",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/investblog/spintax-js.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/investblog/spintax-js/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -32,7 +40,8 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=18"
