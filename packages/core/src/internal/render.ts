@@ -1,27 +1,81 @@
 /**
- * Tree-walk renderer (M2a scope: literal / variable / enumeration / permutation).
- * conditional / plural land in M2b; recursive %var% + #set collapse-once in M2b;
- * #include + post-process + neutralize later.
+ * Tree-walk renderer with the plugin's staged semantics layered on (parity with
+ * Renderer::process_template). Not a naive walk — the deterministic stages are
+ * reproduced in order:
+ *   - #set is a global pre-pass (parser) → setDefs; those enum values are
+ *     COLLAPSED ONCE here (buildVars), skipping values with `{?`/`{plural ` (they
+ *     reference vars and defer to the body) — plugin Stage 4b.
+ *   - variables resolve against the merged map (runtime context > #set); a value
+ *     that itself contains constructs is re-parsed and rendered (recursive, depth
+ *     capped) — this covers conditionals/plurals introduced by a variable value
+ *     (Stages 6b–6c), so a separate pre/post conditional pass isn't needed.
+ *   - conditionals test truthiness against the raw var map; plurals resolve the
+ *     count (vars already expanded) then pick the bucket, lenient fullwidth
+ *     fallback (Stage 6d, after vars).
+ *   - #include (post-tree string pass) and post-process are later PRs.
  *
  * RNG note: cross-engine RNG-sequence parity is a non-goal (§3.2). Enumerations
- * are rendered outer-first and LAZILY — only the picked branch's nested RNG is
- * consumed, whereas the plugin resolves innermost-out and eagerly (nested RNG in
- * UNPICKED branches too). So a nested enum can diverge from the plugin in both
- * RNG order AND call count. This is corpus-safe because deterministic nested-enum
- * cases use order-independent `rng` sequences (see the conformance README).
- * Permutation, by contrast, resolves all elements eagerly and follows the
- * plugin's exact pick→Fisher-Yates, so its rng-strategy cases are exact.
+ * render outer-first and LAZILY (only the picked branch's nested RNG is used) vs
+ * the plugin's eager innermost-out; corpus-safe because deterministic nested-enum
+ * cases use order-independent sequences. Permutation matches the plugin's exact
+ * pick→Fisher-Yates, so its rng-strategy cases are exact.
  */
-import type { Node, PermutationNode } from './ast';
-import { NotImplementedError } from './errors';
+import type { Node, PermutationNode, PluralNode, ConditionalNode } from './ast';
+import { parseSequence } from './parser';
+import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 
+const MAX_VARIABLE_DEPTH = 50;
+
 export interface RenderInternalOptions {
-  /** Variable map, keys LOWER-CASED by the caller (context wins over setDefs). */
-  readonly context: Readonly<Record<string, string>>;
-  /** Globally-extracted `#set` definitions (keys already lowercased). */
-  readonly setDefs: Readonly<Record<string, string>>;
+  /** Merged variable map, keys LOWER-CASED (runtime context wins over #set). */
+  readonly vars: Readonly<Record<string, string>>;
   readonly rng: Rng;
+  /** Plural-bucket locale (raw; normalized per lookup). Empty ⇒ default 2-form. */
+  readonly locale: string;
+  /** Variable re-processing depth (guards runaway/circular expansion). */
+  readonly depth: number;
+}
+
+/**
+ * Build the merged variable map: collapse-once each `#set` value (Stage 4b) then
+ * overlay the runtime context (which wins). Context keys are lowercased.
+ */
+export function buildVars(
+  setDefs: Readonly<Record<string, string>>,
+  context: Readonly<Record<string, string>>,
+  rng: Rng,
+): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const [name, value] of Object.entries(setDefs)) {
+    vars[name] = collapseSetValue(value, rng);
+  }
+  for (const [name, value] of Object.entries(context)) {
+    vars[name.toLowerCase()] = value;
+  }
+  return vars;
+}
+
+/** Stage 4b: resolve ONLY enumerations in a #set value once; skip {? / {plural values. */
+function collapseSetValue(value: string, rng: Rng): string {
+  if (!value.includes('{')) return value;
+  if (value.includes('{?') || value.includes('{plural ')) return value;
+  return resolveEnumerationsString(value, rng);
+}
+
+/** Innermost-out `{a|b}` resolution over a raw string (perms / %vars% untouched). */
+function resolveEnumerationsString(text: string, rng: Rng): string {
+  let out = text;
+  for (let guard = 0; guard < 1000; guard += 1) {
+    let changed = false;
+    out = out.replace(/\{([^{}]*)\}/gu, (_m, inner: string): string => {
+      changed = true;
+      const options = splitTopLevelPipes(inner);
+      return options.length === 0 ? '' : (options[randomInt(rng, 0, options.length - 1)] ?? '');
+    });
+    if (!changed) break;
+  }
+  return out;
 }
 
 export function renderNodes(nodes: readonly Node[], opts: RenderInternalOptions): string {
@@ -41,8 +95,9 @@ function renderNode(node: Node, opts: RenderInternalOptions): string {
     case 'permutation':
       return renderPermutation(node, opts);
     case 'conditional':
+      return renderConditional(node, opts);
     case 'plural':
-      throw new NotImplementedError(`render of '${node.type}'`); // M2b
+      return renderPlural(node, opts);
   }
 }
 
@@ -51,11 +106,74 @@ function randomInt(rng: Rng, min: number, max: number): number {
   return min === max ? min : rng(min, max);
 }
 
-/** M2a: plain lookup (recursive expansion / collapse-once land in M2b). */
+/**
+ * Resolve a `%var%`. A value containing constructs is re-parsed and rendered
+ * (recursive, depth-capped) so nested vars / conditionals / plurals introduced by
+ * the value are resolved; a plain value is returned as-is; unresolved ⇒ verbatim.
+ */
 function resolveVariable(name: string, opts: RenderInternalOptions): string {
-  const key = name.toLowerCase();
-  const value = opts.context[key] ?? opts.setDefs[key];
-  return value ?? `%${name}%`; // unresolved ⇒ left verbatim
+  const value = opts.vars[name.toLowerCase()];
+  if (value === undefined) return `%${name}%`;
+  // At the cap, stop expanding (lenient: partial output, never throws — unlike the
+  // plugin which throws→'' on runaway; §9.2 render never throws on content).
+  if (opts.depth >= MAX_VARIABLE_DEPTH || !/[{[%]/u.test(value)) return value;
+  // parseSequence, NOT parseTemplate: a value must not be re-comment-stripped or
+  // re-#set-extracted (those are one-time body passes in the plugin).
+  return renderNodes(parseSequence(value), { ...opts, depth: opts.depth + 1 });
+}
+
+/** Variable-expansion ONLY (plugin `expand_variables` fixpoint) — leaves enums/perms literal. */
+function expandVarsOnly(text: string, opts: RenderInternalOptions): string {
+  let out = text;
+  for (let i = 0; i < MAX_VARIABLE_DEPTH; i += 1) {
+    let changed = false;
+    out = out.replace(/%(\w+)%/gu, (m, name: string): string => {
+      const value = opts.vars[name.toLowerCase()];
+      if (value === undefined) return m;
+      changed = true;
+      return value;
+    });
+    if (!changed) break;
+  }
+  return out;
+}
+
+/** Truthy = the raw var value is set and has a non-whitespace char (plugin is_truthy). */
+function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): string {
+  const value = opts.vars[node.name.toLowerCase()];
+  const baseTruthy = value !== undefined && /\S/u.test(value);
+  const truthy = node.inverted ? !baseTruthy : baseTruthy;
+  return renderNodes(truthy ? node.then : node.else, opts);
+}
+
+/**
+ * Plural agreement (Stage 6d — after variable-expansion, before enum/perm). The
+ * count/forms are expanded with VARIABLES ONLY, so the checks (nested-bracket,
+ * numeric erase, arity) see the same state the plugin does — enums/perms still
+ * literal. Order: bracket check → numeric erase → arity → bucket pick. The two
+ * error paths emit the (var-expanded) construct verbatim with fullwidth braces.
+ */
+function renderPlural(node: PluralNode, opts: RenderInternalOptions): string {
+  const countRaw = expandVarsOnly(node.countRaw, opts);
+  const formsRaw = expandVarsOnly(node.formsRaw, opts);
+
+  if (/[{}[\]]/u.test(formsRaw)) return fullwidthVerbatim(countRaw, formsRaw);
+
+  const count = phpTrim(countRaw);
+  if (!/^-?\d+$/u.test(count)) return ''; // empty / non-numeric ⇒ erase the block
+
+  const base = normalizeBaseLang(opts.locale);
+  const forms = formsRaw.split('|').map((f) => phpTrim(f));
+  if (forms.length !== pluralArity(base)) return fullwidthVerbatim(countRaw, formsRaw);
+
+  // The picked form re-enters the pipeline (its enums/perms resolve after plurals).
+  const picked = pluralFor(base, Number.parseInt(count, 10), forms);
+  return renderNodes(parseSequence(picked), opts);
+}
+
+/** Emit the plural construct verbatim with fullwidth braces so later passes leave it alone. */
+function fullwidthVerbatim(countRaw: string, formsRaw: string): string {
+  return `{plural ${countRaw}:${formsRaw}}`.replace(/\{/gu, '｛').replace(/\}/gu, '｝');
 }
 
 /** Pick one option (outer-first) and render it. */
@@ -71,7 +189,6 @@ interface Element {
 }
 
 function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): string {
-  // Resolve every element's text first (nested RNG consumed here), then pick+shuffle.
   const elements: Element[] = node.options.map((o) => ({
     text: renderNodes(o.nodes, opts),
     sep: o.separator,
@@ -102,8 +219,7 @@ function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): 
 
   const pick = randomInt(opts.rng, min, max);
   shuffle(elements, opts.rng);
-  const selected = elements.slice(0, pick);
-  return joinWithSeparators(selected, config.sep, config.lastsep ?? config.sep);
+  return joinWithSeparators(elements.slice(0, pick), config.sep, config.lastsep ?? config.sep);
 }
 
 /** Fisher-Yates, matching the plugin: i = n-1 … 1, j = randomInt(0, i), swap. */
@@ -136,6 +252,28 @@ function padSeparator(sep: string): string {
   if (trimmed === '') return sep;
   if (/^\p{L}+$/u.test(trimmed)) return ` ${trimmed} `;
   return sep;
+}
+
+/** Split on top-level `|` (brace/bracket-depth aware) — for the collapse-once enum resolver. */
+function splitTopLevelPipes(inner: string): string[] {
+  const parts: string[] = [];
+  let brace = 0;
+  let bracket = 0;
+  let cur = '';
+  for (const ch of inner) {
+    if (ch === '{') brace += 1;
+    else if (ch === '}') brace -= 1;
+    else if (ch === '[') bracket += 1;
+    else if (ch === ']') bracket -= 1;
+    if (ch === '|' && brace === 0 && bracket === 0) {
+      parts.push(cur);
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  parts.push(cur);
+  return parts;
 }
 
 const PHP_LTRIM_RE = /^[ \t\n\r\0\x0B]+/u;
