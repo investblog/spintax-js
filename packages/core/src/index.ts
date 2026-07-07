@@ -10,7 +10,10 @@
 import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
-import { isParsedAst, type Ast } from './internal/ast';
+import { renderNodes } from './internal/render';
+import { makeRng } from './internal/rng';
+import { AstVersionError, NotImplementedError } from './internal/errors';
+import { isParsedAst, type Ast, type ParsedAst } from './internal/ast';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
@@ -82,57 +85,37 @@ export const DEFAULT_MAX_DEPTH = 20;
 
 // ─── Errors (§9.3 — minimal, not a taxonomy) ─────────────────────────────────
 
-/** Base class for programmer-error throws from render(). */
-export class SpintaxError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SpintaxError';
-  }
-}
+export {
+  SpintaxError,
+  IncludeResolverError,
+  MaxDepthExceededError,
+  AstVersionError,
+  NotImplementedError,
+} from './internal/errors';
 
-/** A host-injected includeResolver itself threw. */
-export class IncludeResolverError extends SpintaxError {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message);
-    this.name = 'IncludeResolverError';
-    if (options && 'cause' in options) {
-      (this as { cause?: unknown }).cause = options.cause;
-    }
-  }
-}
-
-/** Nested #include / parse depth exceeded maxDepth. */
-export class MaxDepthExceededError extends SpintaxError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'MaxDepthExceededError';
-  }
-}
-
-/** An Ast produced by an incompatible engine version was passed back in. */
-export class AstVersionError extends SpintaxError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AstVersionError';
-  }
-}
-
-/** Thrown by the M0.5 stubs until the engine lands (M1/M2). */
-export class NotImplementedError extends SpintaxError {
-  constructor(what: string) {
-    super(`${what} is not implemented yet (lands at M1/M2).`);
-    this.name = 'NotImplementedError';
-  }
-}
-
-// ─── Public API surface (§9.2) — stubs ───────────────────────────────────────
+// ─── Public API surface (§9.2) ───────────────────────────────────────────────
 
 export function parse(src: string): Ast {
   return parseTemplate(src);
 }
 
-export function render(_input: string | Ast, _opts?: RenderOptions): string {
-  throw new NotImplementedError('render()');
+export function render(input: string | Ast, opts: RenderOptions = {}): string {
+  const ast = resolveAst(input);
+  const context = lowerKeys(opts.context ?? {});
+  return renderNodes(ast.nodes, { context, setDefs: ast.setDefs, rng: makeRng(opts.seed) });
+}
+
+/** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */
+function resolveAst(input: string | Ast): ParsedAst {
+  if (typeof input === 'string') return parseTemplate(input);
+  if (isParsedAst(input)) return input;
+  throw new AstVersionError('Ast was not produced by this engine version.');
+}
+
+function lowerKeys(obj: Readonly<Record<string, string>>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, value] of Object.entries(obj)) out[k.toLowerCase()] = value;
+  return out;
 }
 
 export function validate(input: string | Ast, opts: ValidateOptions = {}): Diagnostic[] {
