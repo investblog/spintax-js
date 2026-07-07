@@ -15,7 +15,7 @@ import { stripComments } from './parser';
 import { findPluralBlocks, normalizeBaseLang, pluralArity } from './plurals';
 
 const KNOWN_CONFIG_KEYS = new Set(['minsize', 'maxsize', 'sep', 'lastsep']);
-const INCLUDE_RE = /^[ \t]*#include\s+"([^"]+)"\s*$/gmu;
+const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu; // ASCII \s (PHP parity)
 
 /**
  * Pure raw-text validation — exactly like the plugin's `Validator` (which does

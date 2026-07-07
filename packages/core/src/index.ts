@@ -10,7 +10,7 @@
 import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
-import { buildVars, renderNodes } from './internal/render';
+import { renderAst, type RenderCtx } from './internal/render';
 import { makeRng } from './internal/rng';
 import { AstVersionError, NotImplementedError } from './internal/errors';
 import { isParsedAst, type Ast, type ParsedAst } from './internal/ast';
@@ -100,10 +100,15 @@ export function parse(src: string): Ast {
 }
 
 export function render(input: string | Ast, opts: RenderOptions = {}): string {
-  const ast = resolveAst(input);
-  const rng = makeRng(opts.seed);
-  const vars = buildVars(ast.setDefs, opts.context ?? {}, rng);
-  return renderNodes(ast.nodes, { vars, rng, locale: opts.locale ?? '', depth: 0 });
+  const ctx: RenderCtx = {
+    runtimeContext: opts.context ?? {},
+    rng: makeRng(opts.seed),
+    locale: opts.locale ?? '',
+    resolver: opts.includeResolver,
+    maxDepth: opts.maxDepth ?? DEFAULT_MAX_DEPTH,
+    includeStack: [],
+  };
+  return renderAst(resolveAst(input), ctx);
 }
 
 /** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */
