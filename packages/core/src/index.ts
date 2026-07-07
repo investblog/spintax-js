@@ -2,9 +2,8 @@
  * @spintax/core — framework-agnostic Spintax engine (parse / render / validate /
  * extract / analyze / neutralize). Public API contract per spec §9.2 / §9.3.
  *
- * STATUS: M2. `parse` / `validate` / `extract` / `render` / `neutralize` are
- * implemented; `analyze` is a stub that throws {@link NotImplementedError}
- * until M3.
+ * STATUS: M3. The full §9.2 surface — parse / render / validate / extract /
+ * analyze / neutralize — is implemented.
  */
 
 import { parseTemplate } from './internal/parser';
@@ -13,8 +12,8 @@ import { extractFromSource } from './internal/extract';
 import { renderWith } from './internal/pipeline';
 import { neutralize as neutralizeValue } from './internal/neutralize';
 import { makeRng } from './internal/rng';
-import { AstVersionError, NotImplementedError } from './internal/errors';
-import { isParsedAst, type Ast } from './internal/ast';
+import { AstVersionError } from './internal/errors';
+import { isParsedAst, walk, type Ast, type ParsedAst } from './internal/ast';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
@@ -120,8 +119,42 @@ export function extract(input: string | Ast): ExtractResult {
   return extractFromSource(resolveSource(input));
 }
 
-export function analyze(_input: string | Ast, _opts?: ValidateOptions): Analysis {
-  throw new NotImplementedError('analyze()');
+export function analyze(input: string | Ast, opts: ValidateOptions = {}): Analysis {
+  const ast = resolveAst(input);
+  const extracted = extractFromSource(ast.source);
+  return {
+    ...extracted,
+    diagnostics: validateTemplate(ast.source, opts),
+    constructs: countConstructs(ast, extracted.includes.length),
+  };
+}
+
+/** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */
+function resolveAst(input: string | Ast): ParsedAst {
+  if (typeof input === 'string') return parseTemplate(input);
+  if (isParsedAst(input)) return input;
+  throw new AstVersionError('Ast was not produced by this engine version.');
+}
+
+/**
+ * Best-effort construct census (§9.3) — counts author-visible constructs, NOT a
+ * variant-cardinality promise. `set`/`include` are directive counts; the rest are
+ * AST node types (nested nodes included; literals excluded).
+ */
+function countConstructs(ast: ParsedAst, includeCount: number): Record<string, number> {
+  const counts: Record<string, number> = {
+    enumeration: 0,
+    permutation: 0,
+    variable: 0,
+    conditional: 0,
+    plural: 0,
+  };
+  walk(ast.nodes, (n) => {
+    if (n.type in counts) counts[n.type] = (counts[n.type] ?? 0) + 1;
+  });
+  counts.set = Object.keys(ast.setDefs).length;
+  counts.include = includeCount;
+  return counts;
 }
 
 export function neutralize(value: string): string {
