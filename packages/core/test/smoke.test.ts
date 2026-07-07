@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import * as api from '../src/index';
-import { DEFAULT_MAX_DEPTH, NotImplementedError } from '../src/index';
+import { DEFAULT_MAX_DEPTH } from '../src/index';
 import { rngFromStrategy } from './corpus-harness';
 
 describe('package smoke', () => {
@@ -11,13 +11,10 @@ describe('package smoke', () => {
     expect(DEFAULT_MAX_DEPTH).toBe(20);
   });
 
-  test('analyze still throws NotImplementedError (M3)', () => {
-    expect(() => api.analyze('x')).toThrow(NotImplementedError);
-  });
-
   test('implemented ops do not throw', () => {
     expect(() => api.parse('{a|b}')).not.toThrow();
     expect(() => api.validate('{a|b}')).not.toThrow();
+    expect(() => api.analyze('{a|b}')).not.toThrow();
     // render() post-processes by default (§0.1), so the first letter is capitalized.
     expect(api.render('hello')).toBe('Hello');
     expect(api.render('Hi %name%', { context: { name: 'World' } })).toBe('Hi World');
