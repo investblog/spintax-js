@@ -22,6 +22,7 @@
  */
 import type { Node, ParsedAst, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { IncludeResolverError } from './errors';
+import { stripSentinels } from './neutralize';
 import { parseSequence, parseTemplate } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
@@ -77,7 +78,7 @@ function resolveIncludes(text: string, ctx: RenderCtx): string {
       throw new IncludeResolverError(`includeResolver threw for "${ref}"`, { cause });
     }
     if (included === null) return '';
-    return renderAst(parseTemplate(included), {
+    return renderAst(parseTemplate(stripSentinels(included)), {
       ...ctx,
       runtimeContext: ctx.runtimeContext, // child inherits runtime, not parent #set
       includeStack: [...ctx.includeStack, ref],

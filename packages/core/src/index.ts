@@ -12,6 +12,7 @@ import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
 import { renderAst, type RenderCtx } from './internal/render';
 import { postProcess } from './internal/postprocess';
+import { neutralize as neutralizeValue, safetyRestore, stripSentinels } from './internal/neutralize';
 import { makeRng } from './internal/rng';
 import { AstVersionError, NotImplementedError } from './internal/errors';
 import { isParsedAst, type Ast, type ParsedAst } from './internal/ast';
@@ -109,10 +110,14 @@ export function render(input: string | Ast, opts: RenderOptions = {}): string {
     maxDepth: opts.maxDepth ?? DEFAULT_MAX_DEPTH,
     includeStack: [],
   };
-  const out = renderAst(resolveAst(input), ctx);
-  // Cosmetic post-process defaults ON (§0.1); false skips it. (The mandatory
-  // neutralize safety-restore, §6, is separate and always runs — M2e.)
-  return opts.postProcess === false ? out : postProcess(out);
+  // Strip stray engine sentinels from author markup so only neutralize() introduces them.
+  const ast = resolveAst(typeof input === 'string' ? stripSentinels(input) : input);
+  let out = renderAst(ast, ctx);
+  // Cosmetic post-process defaults ON (§0.1); false skips it. It operates on the
+  // still-shielded form (neutralize sentinels are inert here).
+  if (opts.postProcess !== false) out = postProcess(out);
+  // Mandatory neutralize safety-restore (§6) — ALWAYS runs, even with postProcess:false.
+  return safetyRestore(out);
 }
 
 /** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */
@@ -141,6 +146,6 @@ export function analyze(_input: string | Ast, _opts?: ValidateOptions): Analysis
   throw new NotImplementedError('analyze()');
 }
 
-export function neutralize(_value: string): string {
-  throw new NotImplementedError('neutralize()');
+export function neutralize(value: string): string {
+  return neutralizeValue(value);
 }
