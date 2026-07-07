@@ -31,11 +31,13 @@ jobs:
       - name: Validate golden corpus (schema)
         run: npm run conformance:validate
 
-      - name: Typecheck
-        run: npm run typecheck
-
+      # Build first: consumers (examples/worker) resolve @spintax/core via its
+      # published exports (./dist), so typecheck/test need the build to exist.
       - name: Build
         run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Test
         run: npm test
