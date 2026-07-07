@@ -5,9 +5,10 @@ All notable changes to `@spintax/core` are documented here. This project adheres
 
 ## 0.1.0 — 2026-07-07
 
-First public release. Feature-complete engine; passes the full **deterministic** golden
-parity corpus (validation verdicts, plural buckets, conditional truthiness, `#set` collapse,
-post-process output, enum/perm selection) against the Spintax WordPress plugin's contract.
+First public release. Feature-complete engine; the TS suite passes the full **deterministic**
+golden corpus that encodes the Spintax WordPress plugin's behavior contract (validation verdicts,
+plural buckets, conditional truthiness, `#set` collapse, post-process output, enum/perm selection).
+Cross-engine execution of that corpus by the PHP plugin is the remaining verification gate (see Notes).
 
 ### Added
 

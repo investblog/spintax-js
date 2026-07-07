@@ -5,12 +5,15 @@ parse, render, validate, extract, analyze, and neutralize GTW-compatible spintax
 
 - **Zero runtime dependencies.** Runs unchanged on Cloudflare Workers, Node 18+, and in the browser.
 - **ESM-first, dual CJS.** Ships `.d.ts` types for both.
-- **Parity-tested** against the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/)
-  via a shared golden corpus — an *independent* TypeScript implementation, not a line-by-line port.
+- **Built to the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/)'s behavior
+  contract** via a shared golden corpus — an *independent* TypeScript implementation, not a
+  line-by-line port. The TS suite passes the full deterministic corpus; cross-engine execution
+  of that corpus by the PHP plugin is pending.
 - **MIT** licensed.
 
 > **Status: `0.1.0`** — first public release. Feature-complete; passes the full deterministic
-> parity corpus; the §9.2 API is proven by a reference Cloudflare Worker (`examples/worker`).
+> golden corpus (encoding the plugin's contract, TS side); the §9.2 API is proven by a reference
+> Cloudflare Worker (`examples/worker`).
 
 ## Install
 
@@ -26,7 +29,7 @@ import { render, validate, extract } from '@spintax/core';
 render('{Hello|Hi|Hey} %name%!', { context: { name: 'Ada' }, seed: 42 });
 // → "Hi Ada!"  (deterministic for a given seed; post-processed by default)
 
-validate('{a|b');          // → [{ severity: 'error', code: 'bracket.unbalanced', … }]
+validate('{a|b');          // → [{ severity: 'error', code: 'bracket.unclosed', … }]
 extract('%title% {?promo?Sale}'); // → { refs: ['title', 'promo'], sets: [], includes: [] }
 ```
 
