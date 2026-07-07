@@ -2,20 +2,19 @@
  * @spintax/core — framework-agnostic Spintax engine (parse / render / validate /
  * extract / analyze / neutralize). Public API contract per spec §9.2 / §9.3.
  *
- * STATUS: M1. `parse` / `validate` / `extract` are implemented; `render`,
- * `neutralize`, and `analyze` are stubs that throw {@link NotImplementedError}
- * until M2 (renderer + post-process + shielding).
+ * STATUS: M2. `parse` / `validate` / `extract` / `render` / `neutralize` are
+ * implemented; `analyze` is a stub that throws {@link NotImplementedError}
+ * until M3.
  */
 
 import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
-import { renderAst, type RenderCtx } from './internal/render';
-import { postProcess } from './internal/postprocess';
-import { neutralize as neutralizeValue, safetyRestore, stripSentinels } from './internal/neutralize';
+import { renderWith } from './internal/pipeline';
+import { neutralize as neutralizeValue } from './internal/neutralize';
 import { makeRng } from './internal/rng';
 import { AstVersionError, NotImplementedError } from './internal/errors';
-import { isParsedAst, type Ast, type ParsedAst } from './internal/ast';
+import { isParsedAst, type Ast } from './internal/ast';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
@@ -83,7 +82,7 @@ export interface Analysis extends ExtractResult {
 }
 
 /** Default value for {@link RenderOptions.maxDepth}. */
-export const DEFAULT_MAX_DEPTH = 20;
+export { DEFAULT_MAX_DEPTH } from './internal/pipeline';
 
 // ─── Errors (§9.3 — minimal, not a taxonomy) ─────────────────────────────────
 
@@ -102,29 +101,8 @@ export function parse(src: string): Ast {
 }
 
 export function render(input: string | Ast, opts: RenderOptions = {}): string {
-  const ctx: RenderCtx = {
-    runtimeContext: opts.context ?? {},
-    rng: makeRng(opts.seed),
-    locale: opts.locale ?? '',
-    resolver: opts.includeResolver,
-    maxDepth: opts.maxDepth ?? DEFAULT_MAX_DEPTH,
-    includeStack: [],
-  };
-  // Strip stray engine sentinels from author markup so only neutralize() introduces them.
-  const ast = resolveAst(typeof input === 'string' ? stripSentinels(input) : input);
-  let out = renderAst(ast, ctx);
-  // Cosmetic post-process defaults ON (§0.1); false skips it. It operates on the
-  // still-shielded form (neutralize sentinels are inert here).
-  if (opts.postProcess !== false) out = postProcess(out);
-  // Mandatory neutralize safety-restore (§6) — ALWAYS runs, even with postProcess:false.
-  return safetyRestore(out);
-}
-
-/** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */
-function resolveAst(input: string | Ast): ParsedAst {
-  if (typeof input === 'string') return parseTemplate(input);
-  if (isParsedAst(input)) return input;
-  throw new AstVersionError('Ast was not produced by this engine version.');
+  // Public entry: seed the rng, then run the shared pipeline (internal/pipeline).
+  return renderWith(input, makeRng(opts.seed), opts);
 }
 
 export function validate(input: string | Ast, opts: ValidateOptions = {}): Diagnostic[] {
