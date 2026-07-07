@@ -13,8 +13,7 @@
  *   - `#include` is resolved by the renderer as a post-tree string pass (the
  *     plugin's `resolve_includes` runs after enum/perm), so it stays literal in
  *     the AST here.
- * Permutation's `<config>` + per-element separators are parsed from `rawInner`
- * in PR-11b.
+ * Permutation's `<config>` + per-element separators are fully parsed (PR-11b).
  */
 
 /** Bumped only on a breaking change to the node shape (independent of syntax v1). */
@@ -67,9 +66,24 @@ export interface EnumerationNode {
  * the plugin's `extract_permutation_config` → `split_top_level` order) and
  * parses the per-element separators + option node sequences.
  */
+/** Permutation `<config>` (parsed in PR-11b). `null` size ⇒ default rules at render (§4.2). */
+export interface PermConfig {
+  readonly minsize: number | null;
+  readonly maxsize: number | null;
+  readonly sep: string;
+  readonly lastsep: string | null;
+}
+
+/** One permutation element + its per-element separator (a trailing `<sep>` from the PREVIOUS part). */
+export interface PermOption {
+  readonly nodes: readonly Node[];
+  readonly separator: string | null;
+}
+
 export interface PermutationNode {
   readonly type: 'permutation';
-  readonly rawInner: string;
+  readonly config: PermConfig;
+  readonly options: readonly PermOption[];
 }
 
 /**
@@ -120,8 +134,11 @@ export function walk(nodes: readonly Node[], visit: (n: Node) => void): void {
       case 'plural':
         for (const form of n.forms) walk(form, visit);
         break;
+      case 'permutation':
+        for (const opt of n.options) walk(opt.nodes, visit);
+        break;
       default:
-        break; // literal / variable / permutation (rawInner): no child nodes
+        break; // literal / variable: no child nodes
     }
   }
 }
