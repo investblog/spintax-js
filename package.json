@@ -17,6 +17,16 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "lint": "eslint .",
+    "check:pkg": "npm run check:pkg -w @spintax/core",
+    "smoke:pack": "bash scripts/smoke-tarball.sh",
     "conformance:validate": "npm run validate -w @spintax/conformance"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.4",
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "publint": "^0.3.21",
+    "typescript-eslint": "^8.63.0"
   }
 }
