@@ -7,28 +7,42 @@
  * later passes would consume them). Structural *diagnostics* are the validator's
  * job (PR-12), not the parser's.
  *
- * `#set` / `#include` are line-anchored and detected only at true top-level line
- * starts (the plugin extracts them with `^…$` multiline regexes over the whole
- * template) — never inside a recursively-parsed option/branch, so
- * `{a|#set %x%=b}` stays an enumeration.
- *
- * Known descent-vs-global-pass gaps (not exercised by the corpus; revisit at M2
- * if needed): a directive on its own line INSIDE a multi-line `{…}` group is not
- * extracted (the plugin's global `/m` regex is brace-oblivious); and the
- * plugin's `\n{3,}`→`\n\n` collapse after stripping `#set` lines is an M2 render
- * concern (the parser leaves every newline as a literal).
+ * `#set` is extracted GLOBALLY before the tree is built ({@link extractSetDirectives},
+ * line-anchored like the plugin's `extract_set_directives`), so a `#set` on its
+ * own line even inside a `{…}`/`[…]` group is a global definition — matching the
+ * plugin's brace-oblivious `/m` extraction — not literal text. `#include` stays
+ * literal here; the renderer resolves it as a post-tree string pass (like the
+ * plugin's post-enum `resolve_includes`).
  */
 import { AST_VERSION, type Node, type ParsedAst } from './ast';
 
 const VARIABLE_RE = /^%(\w+)%/;
-const SET_LINE_RE = /^[ \t]*#set[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \t]*$/;
-const INCLUDE_LINE_RE = /^[ \t]*#include[ \t]+"([^"]+)"[ \t]*$/;
+// `\r?` before the multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
+const SET_DIRECTIVE_RE = /^[ \t]*#set[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \t]*\r?$/gmu;
 const CONDITIONAL_NAME_RE = /^[A-Za-z_]\w*/;
 const PLURAL_PREFIX = 'plural ';
 
-/** Parse a full template into an AST (comments stripped first). */
+/** Parse a full template into an AST (comments stripped + `#set` extracted first). */
 export function parseTemplate(src: string): ParsedAst {
-  return { astVersion: AST_VERSION, source: src, nodes: parseSequence(stripComments(src), true) };
+  const { body, setDefs } = extractSetDirectives(stripComments(src));
+  return { astVersion: AST_VERSION, source: src, setDefs, nodes: parseSequence(body) };
+}
+
+/**
+ * Global `#set` extraction (parity with `extract_set_directives`): pull every
+ * line-anchored `#set %name% = value` out of the text — regardless of brace
+ * nesting — collecting name→value (name lowercased), strip the lines, then
+ * collapse `\n{3,}`→`\n\n`. Whitespace is `[ \t]` (not `\s`) so a directive is a
+ * single line.
+ */
+export function extractSetDirectives(text: string): { body: string; setDefs: Record<string, string> } {
+  const setDefs: Record<string, string> = {};
+  SET_DIRECTIVE_RE.lastIndex = 0;
+  const stripped = text.replace(SET_DIRECTIVE_RE, (_full: string, name: string, value: string): string => {
+    setDefs[name.toLowerCase()] = value;
+    return '';
+  });
+  return { body: stripped.replace(/\n{3,}/gu, '\n\n'), setDefs };
 }
 
 /** Remove `/# … #/` block comments (non-greedy, spans newlines). */
@@ -36,12 +50,8 @@ export function stripComments(text: string): string {
   return text.replace(/\/#[\s\S]*?#\//g, '');
 }
 
-/**
- * Parse a run of text into a node sequence. `detectDirectives` enables the
- * line-anchored `#set`/`#include` scan — true only for the outermost template
- * scan, false for recursive option/branch/form parses.
- */
-function parseSequence(text: string, detectDirectives: boolean): Node[] {
+/** Parse a run of text into a node sequence. */
+function parseSequence(text: string): Node[] {
   const nodes: Node[] = [];
   let literal = '';
   let i = 0;
@@ -54,36 +64,6 @@ function parseSequence(text: string, detectDirectives: boolean): Node[] {
   };
 
   while (i < text.length) {
-    // Line-anchored directives (#set / #include) at a real line start.
-    if (detectDirectives && (i === 0 || text.charAt(i - 1) === '\n')) {
-      const lineEnd = indexOfOrEnd(text, '\n', i);
-      // Drop a trailing CR so CRLF templates match (the plugin uses \s/\m). The
-      // \r is inside [i, lineEnd) and is consumed with the directive line.
-      const rawLine = text.slice(i, lineEnd);
-      const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-
-      const setM = SET_LINE_RE.exec(line);
-      if (setM) {
-        const name = setM[1];
-        const valueRaw = setM[2];
-        if (name !== undefined) {
-          flushLiteral();
-          nodes.push({ type: 'set', name, value: parseSequence(valueRaw ?? '', false) });
-          i = lineEnd; // leave the trailing "\n" as literal (matches the plugin)
-          continue;
-        }
-      }
-
-      const incM = INCLUDE_LINE_RE.exec(line);
-      const ref = incM?.[1];
-      if (ref !== undefined) {
-        flushLiteral();
-        nodes.push({ type: 'include', ref });
-        i = lineEnd;
-        continue;
-      }
-    }
-
     const ch = text.charAt(i);
 
     if (ch === '{') {
@@ -144,7 +124,7 @@ function parseBraceConstruct(content: string): Node {
   } else if (content.startsWith(PLURAL_PREFIX) && content.slice(PLURAL_PREFIX.length).includes(':')) {
     return parsePlural(content.slice(PLURAL_PREFIX.length));
   }
-  return { type: 'enumeration', options: splitTopLevel(content).map((o) => parseSequence(o, false)) };
+  return { type: 'enumeration', options: splitTopLevel(content).map((o) => parseSequence(o)) };
 }
 
 /** Parse `?VAR?then|else` / `?!VAR?then` (content starts with `?`), or null if malformed. */
@@ -172,8 +152,8 @@ function tryParseConditional(content: string): Node | null {
     type: 'conditional',
     name,
     inverted,
-    then: parseSequence(thenRaw, false),
-    else: parseSequence(elseRaw, false),
+    then: parseSequence(thenRaw),
+    else: parseSequence(elseRaw),
   };
 }
 
@@ -184,7 +164,7 @@ function parsePlural(afterPrefix: string): Node {
   const formsRaw = afterPrefix.slice(colon + 1);
   // Forms split on every pipe (plugin uses explode('|', …)); each form is
   // trimmed. Nested brackets in a form are invalid (validator's job).
-  const forms = formsRaw.split('|').map((f) => parseSequence(f.trim(), false));
+  const forms = formsRaw.split('|').map((f) => parseSequence(f.trim()));
   return { type: 'plural', countRaw, formsRaw, forms };
 }
 
@@ -251,9 +231,4 @@ function firstTopLevelPipe(body: string): number {
     }
   }
   return -1;
-}
-
-function indexOfOrEnd(text: string, search: string, from: number): number {
-  const idx = text.indexOf(search, from);
-  return idx === -1 ? text.length : idx;
 }

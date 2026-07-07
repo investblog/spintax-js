@@ -297,5 +297,17 @@
     "expect": {
       "output": "Hi %missing%"
     }
+  },
+  {
+    "id": "set/global-scope-inside-group",
+    "note": "A #set on its OWN line INSIDE an enumeration is extracted GLOBALLY (like extract_set_directives), so %x% in the other option sees it. rng:last picks the %x% option ⇒ 'A'. Regression for the directive-global-pass gap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{\n#set %x% = A\n|%x%}",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "A"
+    }
   }
 ]
