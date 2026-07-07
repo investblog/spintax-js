@@ -3,9 +3,9 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0-rc.1 — unreleased
+## 0.1.0 — 2026-07-07
 
-First release candidate. Feature-complete engine; passes the full **deterministic** golden
+First public release. Feature-complete engine; passes the full **deterministic** golden
 parity corpus (validation verdicts, plural buckets, conditional truthiness, `#set` collapse,
 post-process output, enum/perm selection) against the Spintax WordPress plugin's contract.
 

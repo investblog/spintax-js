@@ -9,9 +9,8 @@ parse, render, validate, extract, analyze, and neutralize GTW-compatible spintax
   via a shared golden corpus — an *independent* TypeScript implementation, not a line-by-line port.
 - **MIT** licensed.
 
-> **Status: `0.1.0-rc.1`** — release candidate. The engine is feature-complete and passes the
-> full deterministic parity corpus; the API is being dogfooded by a reference Cloudflare Worker
-> before the `0.1.0` publish.
+> **Status: `0.1.0`** — first public release. Feature-complete; passes the full deterministic
+> parity corpus; the §9.2 API is proven by a reference Cloudflare Worker (`examples/worker`).
 
 ## Install
 
