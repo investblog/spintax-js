@@ -503,7 +503,9 @@ interface RenderOptions {
 interface ValidateOptions {                 // validation is locale- and include-aware (§3.1)
   locale?: string                           // plural-bucket verdicts; SAME vocab as render/corpus; omit ⇒ default 2-form
   knownIncludes?: readonly string[]         // slug/id allow-list; enables "unknown #include target" errors
-}                                           //   (omit ⇒ include targets are NOT verdict-checked — parity with the plugin)
+                                            //   (omit ⇒ include targets are NOT verdict-checked — parity with the plugin)
+  knownVariables?: readonly string[]        // host-supplied var names (globals/context); suppresses the
+}                                           //   `variable.undefined` WARNING for them (verdict unaffected). Case-insensitive.
 
 interface Diagnostic {
   severity: 'error' | 'warning'

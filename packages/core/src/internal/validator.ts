@@ -30,7 +30,7 @@ export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagn
   checkSetDirectives(text, diagnostics);
   checkPermutationConfigs(text, diagnostics);
   checkPlurals(text, opts.locale, diagnostics);
-  checkVariableReferences(text, diagnostics);
+  checkVariableReferences(text, opts.knownVariables, diagnostics);
   if (opts.knownIncludes && opts.knownIncludes.length > 0) {
     checkIncludeTargets(text, opts.knownIncludes, diagnostics);
   }
@@ -135,7 +135,8 @@ function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[
 }
 
 /** Self-reference + circular `#set` (errors) and undefined `%var%`/conditional refs (warnings). */
-function checkVariableReferences(text: string, out: Diagnostic[]): void {
+function checkVariableReferences(text: string, known: readonly string[] | undefined, out: Diagnostic[]): void {
+  const knownSet = new Set((known ?? []).map((n) => n.toLowerCase()));
   // `[ \t]` (single-line), uniform with the parser's extract_set_directives and
   // extract.ts — so a malformed cross-line `#set` isn't treated as a definition.
   const defs = new Map<string, string>();
@@ -157,7 +158,7 @@ function checkVariableReferences(text: string, out: Diagnostic[]): void {
   for (const m of body.matchAll(/%(\w+)%/gu)) refs.add((m[1] ?? '').toLowerCase());
   for (const m of body.matchAll(/\{\?!?([A-Za-z_]\w*)\?/gu)) refs.add((m[1] ?? '').toLowerCase());
   for (const ref of refs) {
-    if (!defs.has(ref)) {
+    if (!defs.has(ref) && !knownSet.has(ref)) {
       out.push(warn('variable.undefined', `Variable '${ref}' is not defined — may be a runtime variable.`));
     }
   }

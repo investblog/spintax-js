@@ -39,6 +39,13 @@ describe('validator — regression guards (beyond the corpus)', () => {
     expect(d.some((x) => x.severity === 'error')).toBe(false);
   });
 
+  test('knownVariables suppresses the undefined-var warning (verdict unaffected)', () => {
+    expect(validate('%brand%').some((d) => d.code === 'variable.undefined')).toBe(true);
+    const d = validate('%Brand%', { knownVariables: ['brand'] }); // case-insensitive
+    expect(d.some((x) => x.code === 'variable.undefined')).toBe(false);
+    expect(d.some((x) => x.severity === 'error')).toBe(false);
+  });
+
   test('validate accepts a parsed Ast (string|Ast)', () => {
     const ast = parse('{a|b');
     expect(validate(ast).some((d) => d.code === 'bracket.unclosed')).toBe(true);
