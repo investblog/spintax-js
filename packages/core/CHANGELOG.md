@@ -3,6 +3,18 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1 — 2026-07-08
+
+Docs + metadata. First release published from CI with **provenance** (npm Trusted Publishing).
+No engine or API changes.
+
+### Changed
+
+- npm `keywords` + `description` reworked for discoverability — spintax / text-spinning /
+  LLM-authoring workflow; dropped the obscure `gtw` tag.
+- README: badges, npm + [301.st](https://301.st) links, and LLM-pairing positioning (draft a
+  template with a model once, generate unlimited deterministic variations on-device).
+
 ## 0.1.0 — 2026-07-07
 
 First public release. Feature-complete engine; the TS suite passes the full **deterministic**

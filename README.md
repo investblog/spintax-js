@@ -72,4 +72,4 @@ the two coexist cleanly.
 
 ---
 
-Built and maintained by [301.st](https://301.st). Project home: [spintax.net](https://spintax.net).
+Part of the **[301.st](https://301.st)** toolset. Product home: [spintax.net](https://spintax.net).

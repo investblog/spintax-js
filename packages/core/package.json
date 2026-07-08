@@ -1,14 +1,21 @@
 {
   "name": "@spintax/core",
-  "version": "0.1.0",
-  "description": "GTW-compatible spintax parser, renderer, validator and variable extractor — framework-agnostic",
+  "version": "0.1.1",
+  "description": "Framework-agnostic spintax / text-spinning engine for JS & TS — turn one LLM-drafted {a|b|c} template into endless deterministic variations. Render, validate, extract. Zero-dependency; Node, Workers, browser.",
   "keywords": [
     "spintax",
-    "gtw",
+    "text-spinning",
+    "text-generation",
+    "content-generation",
     "template",
-    "text generation",
+    "template-engine",
     "seo",
-    "content"
+    "permutations",
+    "substitution",
+    "variations",
+    "ai",
+    "llm",
+    "typescript"
   ],
   "license": "MIT",
   "author": "301st (https://301.st)",
