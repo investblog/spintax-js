@@ -57,6 +57,9 @@ polluting it.
 
 ## Design & specs
 
+Releases publish from CI with provenance via npm Trusted Publishing — see
+[`RELEASING.md`](./RELEASING.md).
+
 The governing spec is [`docs/spec-npm-engine.md`](./docs/spec-npm-engine.md) in this repo —
 it holds the locked decisions, the parity contract, and the milestone plan. It mirrors the
 behavior contract of the parent [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/)

@@ -1,0 +1,61 @@
+name: Release
+
+# Publishes @spintax/core to npm with PROVENANCE via OIDC Trusted Publishing —
+# no tokens, no OTP. One-time setup on npmjs.com is required (see RELEASING.md):
+# package @spintax/core → Settings → Trusted Publisher → GitHub Actions →
+# org/repo = investblog/spintax-js, workflow = release.yml.
+#
+# Release flow: bump packages/core/package.json → commit → tag vX.Y.Z → push tag.
+# Or run this workflow manually (workflow_dispatch) after tagging.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required: OIDC token for npm trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing / provenance needs npm >= 11.5.1 — newer than the npm
+      # bundled with the Node runtime, so upgrade it.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Install
+        run: npm ci
+
+      # Safety: a pushed vX.Y.Z tag must match the version we're about to publish,
+      # so a stale/mismatched tag fails loudly instead of republishing.
+      - name: Verify tag matches @spintax/core version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./packages/core/package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag v$TAG does not match @spintax/core version $PKG"
+            exit 1
+          fi
+          echo "Publishing @spintax/core@$PKG"
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
+      # publish token automatically, and attaches a provenance attestation.
+      - name: Publish @spintax/core (provenance via OIDC)
+        run: npm publish -w @spintax/core --provenance --access public
