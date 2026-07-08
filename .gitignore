@@ -23,6 +23,11 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+# local secrets (CF keys, bot token) + wrangler runtime vars — NEVER commit
+.secrets/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 
 # editor / OS
 .vscode/

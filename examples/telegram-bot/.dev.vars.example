@@ -1,0 +1,4 @@
+# Copy to .dev.vars (gitignored) for local `wrangler dev`.
+TELEGRAM_BOT_TOKEN="123456:your-bot-token-from-BotFather"
+# Optional: set the same value when registering the webhook to reject spoofed calls.
+TELEGRAM_WEBHOOK_SECRET=""
