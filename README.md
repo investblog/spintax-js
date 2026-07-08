@@ -1,8 +1,19 @@
 # Spintax for JavaScript / TypeScript
 
+[![npm](https://img.shields.io/npm/v/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
+[![CI](https://github.com/investblog/spintax-js/actions/workflows/ci.yml/badge.svg)](https://github.com/investblog/spintax-js/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/@spintax/core.svg)](./LICENSE)
+
 Framework-agnostic [spintax](https://spintax.net) engine for JS/TS — parse, render,
 validate, and extract variables from GTW-compatible spintax templates, with **zero
 WordPress dependency**. Runs on Cloudflare Workers, Node 18+, and in the browser.
+
+```sh
+npm install @spintax/core
+```
+
+→ **[`@spintax/core` on npm](https://www.npmjs.com/package/@spintax/core)** · package docs in
+[`packages/core`](./packages/core/README.md).
 
 > **Status: `0.1.0`.** The engine (`@spintax/core`) is feature-complete — parse, render,
 > validate, extract, analyze, neutralize — passes the full deterministic parity corpus, and is
@@ -47,11 +58,15 @@ polluting it.
 ## Design & specs
 
 The governing spec is [`docs/spec-npm-engine.md`](./docs/spec-npm-engine.md) in this repo —
-it holds the locked decisions, the parity contract, and the milestone plan. The spec
-references the parent WordPress-plugin repo (`W:\projects\spintax\`) for the PHP engine and
-roadmap docs.
+it holds the locked decisions, the parity contract, and the milestone plan. It mirrors the
+behavior contract of the parent [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/)
+(the PHP engine this port is verified against).
 
 ## License
 
 [MIT](./LICENSE). The Spintax WordPress plugin remains GPL; MIT/Expat is GPL-compatible, so
 the two coexist cleanly.
+
+---
+
+Built and maintained by [301.st](https://301.st). Project home: [spintax.net](https://spintax.net).
