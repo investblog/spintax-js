@@ -16,7 +16,7 @@ interface Env {
   AI: Ai;
 }
 
-const DRAFT_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const DRAFT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const DRAFT_SYSTEM = [
   'You write spintax templates. Spintax expands ONE template into many text variations:',
   '- {a|b|c} → the renderer randomly picks ONE of a, b, c.',
@@ -112,7 +112,8 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
       ],
     })) as { response?: string };
     template = cleanTemplate(res.response ?? '');
-  } catch {
+  } catch (e) {
+    console.error('draft: AI error =', e instanceof Error ? e.message : String(e));
     return (
       '⚠️ AI drafting isn’t available on this bot yet (Workers AI not enabled).\n' +
       'You can still send a spintax template directly — e.g. {Hi|Hello} %name%! — and I’ll validate + preview it.'
