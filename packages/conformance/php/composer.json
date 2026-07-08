@@ -1,0 +1,15 @@
+{
+    "name": "spintax/conformance-runner",
+    "description": "Runs the shared golden corpus against the PHP Spintax plugin engine to verify cross-engine parity with @spintax/core.",
+    "license": "MIT",
+    "type": "project",
+    "require": {
+        "php": ">=7.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6"
+    },
+    "scripts": {
+        "test": "phpunit"
+    }
+}
