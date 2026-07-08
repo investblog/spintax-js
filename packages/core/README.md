@@ -7,7 +7,11 @@
 [![license](https://img.shields.io/npm/l/@spintax/core.svg)](https://github.com/investblog/spintax-js/blob/main/LICENSE)
 
 Framework-agnostic **[spintax](https://spintax.net) engine** for JavaScript / TypeScript —
-parse, render, validate, extract, analyze, and neutralize GTW-compatible spintax templates.
+parse, render, validate, extract, analyze, and neutralize spintax templates.
+
+> **Pairs naturally with LLMs.** Have a model draft a spintax template once, then generate
+> unlimited variations on-device — deterministic, free, and offline, with no per-generation
+> API calls. The LLM handles creativity; the engine handles scale.
 
 - **Zero runtime dependencies.** Runs unchanged on Cloudflare Workers, Node 18+, and in the browser.
 - **ESM-first, dual CJS.** Ships `.d.ts` types for both.
@@ -127,7 +131,8 @@ plural buckets, conditional truthiness, `#set` collapse, post-process output) is
 
 - 📦 npm — [`@spintax/core`](https://www.npmjs.com/package/@spintax/core)
 - 🧩 Source — [investblog/spintax-js](https://github.com/investblog/spintax-js)
-- 🌐 Project — [spintax.net](https://spintax.net)
+- 🌐 Product — [spintax.net](https://spintax.net)
+- 🏠 Maintainer — [301.st](https://301.st)
 
 ## License
 
@@ -136,4 +141,4 @@ remains GPL; MIT/Expat is GPL-compatible.
 
 ---
 
-Built and maintained by [301.st](https://301.st).
+Part of the [301.st](https://301.st) toolset. Product home: [spintax.net](https://spintax.net).
