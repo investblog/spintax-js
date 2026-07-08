@@ -1,7 +1,6 @@
 # @spintax/core
 
 [![npm](https://img.shields.io/npm/v/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
-[![npm downloads](https://img.shields.io/npm/dm/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
 [![CI](https://github.com/investblog/spintax-js/actions/workflows/ci.yml/badge.svg)](https://github.com/investblog/spintax-js/actions/workflows/ci.yml)
 [![types](https://img.shields.io/npm/types/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
 [![license](https://img.shields.io/npm/l/@spintax/core.svg)](https://github.com/investblog/spintax-js/blob/main/LICENSE)
