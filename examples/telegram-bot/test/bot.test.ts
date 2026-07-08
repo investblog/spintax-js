@@ -66,6 +66,7 @@ describe('telegram bot', () => {
     expect(sent[0].text).toContain('Template:');
     expect(sent[0].text).toContain('there');
     expect(sent[0].text).toContain('Sample variations');
+    expect(sent[0].text).toContain('spintax.net/docs/authoring-mindset');
   });
 
   test('/draft with no brief shows usage (no model call)', async () => {

@@ -27,6 +27,11 @@ const DRAFT_SYSTEM = [
   'the template text — no explanations, no quotes, no code fences.',
 ].join('\n');
 
+const DRAFT_NOTE =
+  '\n\n💡 Heads up: this demo runs a small, low-cost model, so drafts are rough. ' +
+  'Modern LLMs write far better spintax when you prompt them with authoring intent, ' +
+  'not a one-line ask — see the guide: https://spintax.net/docs/authoring-mindset/';
+
 const VARIANTS = 5;
 const TG_LIMIT = 4000; // Telegram hard-caps messages at 4096 chars.
 
@@ -140,7 +145,11 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
     reply += `\n\n⚠️ (${errors.length} syntax issue${errors.length === 1 ? '' : 's'} — tweak before use)`;
   }
   reply += `\n\n✨ Sample variations:\n${variants.map((v, i) => `${i + 1}. ${v}`).join('\n')}`;
-  return reply.length > TG_LIMIT ? `${reply.slice(0, TG_LIMIT)}\n…` : reply;
+  // Always keep the note; trim the body if the whole thing would overflow.
+  if (reply.length + DRAFT_NOTE.length > TG_LIMIT) {
+    reply = `${reply.slice(0, TG_LIMIT - DRAFT_NOTE.length - 1)}…`;
+  }
+  return reply + DRAFT_NOTE;
 }
 
 async function sendMessage(
