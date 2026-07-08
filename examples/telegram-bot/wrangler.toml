@@ -4,3 +4,7 @@
 name = "spintax-bot"
 main = "src/index.ts"
 compatibility_date = "2024-11-27"
+
+# Workers AI — powers the /draft command (LLM writes a spintax template from a brief).
+[ai]
+binding = "AI"
