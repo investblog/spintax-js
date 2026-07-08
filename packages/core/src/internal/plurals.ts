@@ -7,6 +7,8 @@ const PLURAL_PREFIX = '{plural ';
 
 export interface PluralBlock {
   readonly start: number;
+  /** Exclusive end offset — one past the block's closing `}` (for diagnostics). */
+  readonly end: number;
   readonly countSlot: string;
   readonly formsRaw: string;
 }
@@ -47,7 +49,7 @@ export function findPluralBlocks(text: string): PluralBlock[] {
       i = j + 1; // no colon ⇒ not a plural
       continue;
     }
-    blocks.push({ start, countSlot: inner.slice(0, colon), formsRaw: inner.slice(colon + 1) });
+    blocks.push({ start, end: j + 1, countSlot: inner.slice(0, colon), formsRaw: inner.slice(colon + 1) });
     i = j + 1;
   }
   return blocks;

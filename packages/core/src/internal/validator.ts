@@ -38,11 +38,32 @@ export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagn
   return diagnostics;
 }
 
-function err(code: string, message: string, line = 1, column = 1): Diagnostic {
-  return { severity: 'error', code, message, line, column };
+/** Position (+ optional end and structured data) attached to a Diagnostic. */
+interface Pos { line: number; column: number; endLine?: number; endColumn?: number; data?: Record<string, unknown> }
+
+function err(code: string, message: string, pos: Pos): Diagnostic {
+  return { severity: 'error', code, message, ...pos };
 }
-function warn(code: string, message: string, line = 1, column = 1): Diagnostic {
-  return { severity: 'warning', code, message, line, column };
+function warn(code: string, message: string, pos: Pos): Diagnostic {
+  return { severity: 'warning', code, message, ...pos };
+}
+
+/** 1-based (line, column) of a character offset. */
+function offsetToLineCol(text: string, offset: number): { line: number; column: number } {
+  let line = 1;
+  let lineStart = 0;
+  const end = Math.min(Math.max(offset, 0), text.length);
+  for (let i = 0; i < end; i += 1) {
+    if (text.charAt(i) === '\n') { line += 1; lineStart = i + 1; }
+  }
+  return { line, column: end - lineStart + 1 };
+}
+
+/** A full [offset, offset+length) span as start + end positions. */
+function span(text: string, offset: number, length: number): Pos {
+  const s = offsetToLineCol(text, offset);
+  const e = offsetToLineCol(text, offset + length);
+  return { line: s.line, column: s.column, endLine: e.line, endColumn: e.column };
 }
 
 /** Balanced `{}`/`[]` with proper nesting (raw char scan, real line/col). */
@@ -63,16 +84,16 @@ function checkBrackets(text: string, out: Diagnostic[]): void {
     } else if (ch === '}' || ch === ']') {
       const top = stack.pop();
       if (top === undefined) {
-        out.push(err('bracket.unexpected-closing', `Unexpected closing '${ch}'.`, line, column));
+        out.push(err('bracket.unexpected-closing', `Unexpected closing '${ch}'.`, { line, column, endLine: line, endColumn: column + 1, data: { bracket: ch } }));
       } else if (top.expect !== ch) {
-        out.push(err('bracket.mismatched', `'${top.char}' closed by '${ch}'.`, line, column));
+        out.push(err('bracket.mismatched', `'${top.char}' closed by '${ch}'.`, { line, column, endLine: line, endColumn: column + 1, data: { open: top.char, close: ch } }));
       }
     }
     column += 1;
   }
 
   for (const unclosed of stack) {
-    out.push(err('bracket.unclosed', `Unclosed '${unclosed.char}'.`, unclosed.line, unclosed.column));
+    out.push(err('bracket.unclosed', `Unclosed '${unclosed.char}'.`, { line: unclosed.line, column: unclosed.column, endLine: unclosed.line, endColumn: unclosed.column + 1, data: { bracket: unclosed.char } }));
   }
 }
 
@@ -83,7 +104,9 @@ function checkSetDirectives(text: string, out: Diagnostic[]): void {
     const trimmed = lineText.replace(/^[ \t]+/, '');
     if (!trimmed.startsWith('#set ') && !trimmed.startsWith('#set\t')) return;
     if (!/^#set\s+%(\w+)%\s*=\s*(.+)$/u.test(trimmed)) {
-      out.push(err('set.malformed', 'Malformed #set. Expected: #set %name% = value', idx + 1));
+      const column = lineText.length - trimmed.length + 1; // first non-space char
+      const line = idx + 1;
+      out.push(err('set.malformed', 'Malformed #set. Expected: #set %name% = value', { line, column, endLine: line, endColumn: lineText.length + 1 }));
     }
   });
 }
@@ -93,21 +116,24 @@ function checkPermutationConfigs(text: string, out: Diagnostic[]): void {
   for (const m of text.matchAll(/\[<([^>]*?)>/gu)) {
     const configStr = m[1] ?? '';
     if (!/\w+\s*=/.test(configStr)) continue; // not a key=value config
-    const line = countLines(text, m.index ?? 0);
+    const configBase = (m.index ?? 0) + 2; // offset of configStr in text (past "[<")
 
     for (const km of configStr.matchAll(/(\w+)\s*=/gu)) {
       const key = (km[1] ?? '').toLowerCase();
       if (!KNOWN_CONFIG_KEYS.has(key)) {
-        out.push(err('permutation.unknown-key', `Unknown permutation config key: '${km[1]}'.`, line));
+        out.push(err('permutation.unknown-key', `Unknown permutation config key: '${km[1]}'.`,
+          { ...span(text, configBase + (km.index ?? 0), (km[1] ?? '').length), data: { key: km[1] } }));
       }
     }
     const min = /minsize\s*=\s*([^;>\s]+)/i.exec(configStr);
     if (min && !/^\d+$/.test(min[1] ?? '')) {
-      out.push(err('permutation.minsize-not-integer', `minsize must be a positive integer, got '${min[1]}'.`, line));
+      out.push(err('permutation.minsize-not-integer', `minsize must be a positive integer, got '${min[1]}'.`,
+        { ...span(text, configBase + min.index, min[0].length), data: { value: min[1] } }));
     }
     const max = /maxsize\s*=\s*([^;>\s]+)/i.exec(configStr);
     if (max && !/^\d+$/.test(max[1] ?? '')) {
-      out.push(err('permutation.maxsize-not-integer', `maxsize must be a positive integer, got '${max[1]}'.`, line));
+      out.push(err('permutation.maxsize-not-integer', `maxsize must be a positive integer, got '${max[1]}'.`,
+        { ...span(text, configBase + max.index, max[0].length), data: { value: max[1] } }));
     }
   }
 }
@@ -120,15 +146,16 @@ function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[
   const arity = base !== '' ? pluralArity(base) : 0;
 
   for (const block of findPluralBlocks(text)) {
-    const line = countLines(text, block.start);
+    const at = span(text, block.start, block.end - block.start);
     if (/[{}[\]]/.test(block.formsRaw)) {
-      out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets.', line));
+      out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets.', at));
       continue;
     }
     if (arity > 0) {
       const count = block.formsRaw.split('|').length;
       if (count !== arity) {
-        out.push(err('plural.arity', `{plural ...}: expected ${arity} forms, got ${count}.`, line));
+        out.push(err('plural.arity', `{plural ...}: expected ${arity} forms, got ${count}.`,
+          { ...at, data: { expected: arity, got: count } }));
       }
     }
   }
@@ -140,40 +167,51 @@ function checkVariableReferences(text: string, known: readonly string[] | undefi
   // `[ \t]` (single-line), uniform with the parser's extract_set_directives and
   // extract.ts — so a malformed cross-line `#set` isn't treated as a definition.
   const defs = new Map<string, string>();
+  const defPos = new Map<string, Pos>(); // %name% token span in its #set line
   for (const m of text.matchAll(/^[ \t]*#set[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)$/gmu)) {
-    defs.set((m[1] ?? '').toLowerCase(), m[2] ?? '');
+    const name = (m[1] ?? '').toLowerCase();
+    defs.set(name, m[2] ?? '');
+    const nameOffset = (m.index ?? 0) + m[0].indexOf('%');
+    defPos.set(name, span(text, nameOffset, name.length + 2));
   }
 
+  const somewhere: Pos = { line: 1, column: 1 };
   for (const [name, value] of defs) {
     if (value.toLowerCase().includes(`%${name}%`)) {
-      out.push(err('variable.self-reference', `Variable '${name}' references itself.`));
+      out.push(err('variable.self-reference', `Variable '${name}' references itself.`, defPos.get(name) ?? somewhere));
     }
   }
   for (const name of defs.keys()) {
-    detectCycle(name, defs, [name], out);
+    detectCycle(name, defs, [name], defPos.get(name) ?? somewhere, out);
   }
 
-  const body = text.replace(/^[ \t]*#set[ \t]+%\w+%[ \t]*=[ \t]*.*?$/gmu, '');
-  const refs = new Set<string>();
-  for (const m of body.matchAll(/%(\w+)%/gu)) refs.add((m[1] ?? '').toLowerCase());
-  for (const m of body.matchAll(/\{\?!?([A-Za-z_]\w*)\?/gu)) refs.add((m[1] ?? '').toLowerCase());
-  for (const ref of refs) {
-    if (!defs.has(ref) && !knownSet.has(ref)) {
-      out.push(warn('variable.undefined', `Variable '${ref}' is not defined — may be a runtime variable.`));
-    }
+  // Blank #set lines to same-length whitespace so ref offsets still map to `text`
+  // (a bare removal would shift every later column).
+  const body = text.replace(/^[ \t]*#set[ \t]+%\w+%[ \t]*=[ \t]*.*?$/gmu, (m) => m.replace(/[^\n]/g, ' '));
+  const seen = new Set<string>();
+  const undefinedAt = (name: string, offset: number, length: number): void => {
+    const key = name.toLowerCase();
+    if (defs.has(key) || knownSet.has(key) || seen.has(key)) return;
+    seen.add(key);
+    out.push(warn('variable.undefined', `Variable '${name}' is not defined — may be a runtime variable.`,
+      { ...span(text, offset, length), data: { name } }));
+  };
+  for (const m of body.matchAll(/%(\w+)%/gu)) undefinedAt(m[1] ?? '', m.index ?? 0, m[0].length);
+  for (const m of body.matchAll(/\{\?!?([A-Za-z_]\w*)\?/gu)) {
+    undefinedAt(m[1] ?? '', (m.index ?? 0) + m[0].indexOf(m[1] ?? ''), (m[1] ?? '').length);
   }
 }
 
-function detectCycle(current: string, defs: Map<string, string>, visited: string[], out: Diagnostic[]): void {
+function detectCycle(current: string, defs: Map<string, string>, visited: string[], rootPos: Pos, out: Diagnostic[]): void {
   const value = defs.get(current) ?? '';
   for (const m of value.matchAll(/%(\w+)%/gu)) {
     const ref = (m[1] ?? '').toLowerCase();
     if (ref === current) continue; // self-reference already reported
     if (visited.includes(ref)) {
-      out.push(err('variable.circular-reference', `Circular variable reference: ${[...visited, ref].join(' → ')}.`));
+      out.push(err('variable.circular-reference', `Circular variable reference: ${[...visited, ref].join(' → ')}.`, rootPos));
       return;
     }
-    if (defs.has(ref)) detectCycle(ref, defs, [...visited, ref], out);
+    if (defs.has(ref)) detectCycle(ref, defs, [...visited, ref], rootPos, out);
   }
 }
 
@@ -184,17 +222,9 @@ function checkIncludeTargets(text: string, known: readonly string[], out: Diagno
   for (const m of text.matchAll(INCLUDE_RE)) {
     const ref = m[1] ?? '';
     if (!set.has(ref)) {
-      out.push(
-        err('include.unknown-target', `#include target '${ref}' does not match any known template.`, countLines(text, m.index ?? 0)),
-      );
+      const refOffset = (m.index ?? 0) + m[0].indexOf('"') + 1; // inside the quotes
+      out.push(err('include.unknown-target', `#include target '${ref}' does not match any known template.`,
+        { ...span(text, refOffset, ref.length), data: { target: ref } }));
     }
   }
-}
-
-function countLines(text: string, offset: number): number {
-  let n = 1;
-  for (let i = 0; i < offset && i < text.length; i += 1) {
-    if (text.charAt(i) === '\n') n += 1;
-  }
-  return n;
 }

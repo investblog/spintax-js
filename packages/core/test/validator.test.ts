@@ -51,3 +51,42 @@ describe('validator — regression guards (beyond the corpus)', () => {
     expect(validate(ast).some((d) => d.code === 'bracket.unclosed')).toBe(true);
   });
 });
+
+describe('validator — diagnostic positions (line/column/end + data)', () => {
+  const only = (src: string, code: string, opts?: Parameters<typeof validate>[1]) =>
+    validate(src, opts).find((d) => d.code === code)!;
+
+  test('undefined %var% spans the whole %name% token and carries data.name', () => {
+    const d = only('Hello %missing% here', 'variable.undefined');
+    expect(d).toMatchObject({ line: 1, column: 7, endLine: 1, endColumn: 16, data: { name: 'missing' } });
+    // column 7..15 is exactly "%missing%"
+    expect('Hello %missing% here'.slice(d.column - 1, (d.endColumn ?? 0) - 1)).toBe('%missing%');
+  });
+
+  test('undefined ref reports its FIRST occurrence, once per unique name', () => {
+    const diags = validate('%x% then %x% again').filter((d) => d.code === 'variable.undefined');
+    expect(diags).toHaveLength(1);
+    expect(diags[0]).toMatchObject({ column: 1, data: { name: 'x' } });
+  });
+
+  test('bracket.unclosed points at the offending bracket (real line + column)', () => {
+    const d = only('ok\nPick {a|b', 'bracket.unclosed');
+    expect(d).toMatchObject({ line: 2, column: 6, endLine: 2, endColumn: 7, data: { bracket: '{' } });
+  });
+
+  test('plural.arity spans the block and carries expected/got', () => {
+    const d = only('x {plural %n%: a|b|c} y', 'plural.arity', { locale: 'en' });
+    expect(d).toMatchObject({ line: 1, column: 3, endColumn: 22, data: { expected: 2, got: 3 } });
+    expect('x {plural %n%: a|b|c} y'.slice(d.column - 1, (d.endColumn ?? 0) - 1)).toBe('{plural %n%: a|b|c}');
+  });
+
+  test('permutation.minsize-not-integer points at the config token with data.value', () => {
+    const d = only('[<minsize=x>a|b]', 'permutation.minsize-not-integer');
+    expect(d).toMatchObject({ line: 1, column: 3, data: { value: 'x' } });
+  });
+
+  test('positions are 1-based on later lines too (multi-line offset mapping)', () => {
+    const d = only('line one\nline two %gone%', 'variable.undefined');
+    expect(d).toMatchObject({ line: 2, column: 10, data: { name: 'gone' } });
+  });
+});

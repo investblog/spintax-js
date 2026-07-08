@@ -3,6 +3,31 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.3 — 2026-07-08
+
+Precise diagnostic positions. Backward-compatible — `validate()` verdicts (pass/fail),
+codes, and severities are unchanged (still not parity-gated per §3.1); only the
+best-effort position fields are improved. No render/parse behavior change.
+
+### Added
+
+- **`validate()` diagnostics now carry accurate `line`/`column` for every code**, not just
+  brackets. Previously `plural.*`, `permutation.*`, `set.malformed`, and `include.*` reported
+  a line with `column: 1`, and `variable.*` had no position at all (defaulted to `1:1`). All
+  now point at the offending token.
+- **`endLine`/`endColumn`** are populated so a consumer can underline the exact span (e.g. the
+  whole `%name%` reference or `{plural …}` block).
+- **Structured `data`** on diagnostics: `variable.undefined` → `{ name }`; `plural.arity` →
+  `{ expected, got }`; `permutation.*` → `{ key }` / `{ value }`; `bracket.*` → `{ bracket }` /
+  `{ open, close }`; `include.unknown-target` → `{ target }`. Lets a bot/editor build UI without
+  parsing the (non-parity-gated) `message`.
+- `PluralBlock.end` (internal) — exclusive end offset, so validation can span the full block.
+
+### Notes
+
+- `variable.undefined` still reports **once per unique name**, now anchored at its first
+  occurrence. Consumers that want to highlight every occurrence can expand via `data.name`.
+
 ## 0.1.2 — 2026-07-08
 
 Docs. No engine or API changes.
