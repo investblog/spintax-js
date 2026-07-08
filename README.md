@@ -5,8 +5,8 @@
 [![license](https://img.shields.io/npm/l/@spintax/core.svg)](./LICENSE)
 
 Framework-agnostic [spintax](https://spintax.net) engine for JS/TS — parse, render,
-validate, and extract variables from GTW-compatible spintax templates, with **zero
-WordPress dependency**. Runs on Cloudflare Workers, Node 18+, and in the browser.
+validate, and extract variables from spintax templates, with **zero WordPress dependency**.
+Runs on Cloudflare Workers, Node 18+, and in the browser.
 
 ```sh
 npm install @spintax/core
@@ -15,17 +15,17 @@ npm install @spintax/core
 → **[`@spintax/core` on npm](https://www.npmjs.com/package/@spintax/core)** · package docs in
 [`packages/core`](./packages/core/README.md).
 
-> **Status: `0.1.0`.** The engine (`@spintax/core`) is feature-complete — parse, render,
-> validate, extract, analyze, neutralize — passes the full deterministic parity corpus, and is
-> proven by a reference Cloudflare Worker (`examples/worker`, M4).
+> **Status: released & stable.** The engine (`@spintax/core`) is feature-complete — parse, render,
+> validate, extract, analyze, neutralize. Its deterministic golden corpus passes against **both**
+> the TS engine and the PHP plugin, and it's proven by a reference Cloudflare Worker (`examples/worker`, M4).
 > See the [spec](./docs/spec-npm-engine.md) and [`packages/core`](./packages/core/README.md).
 
 ## What this is
 
 The open-source core engine behind the Spintax ecosystem. It is a **companion** to the
-[Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) — an *independent*
-TypeScript implementation that shares the same syntax and a machine-checked **parity
-contract** (via a shared golden test corpus), not a line-by-line port.
+[Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) — an *independent* TypeScript
+implementation that shares the same syntax and a machine-checked **parity contract**: a shared
+golden corpus that passes against **both** engines (verified, not just intended). Not a line-by-line port.
 
 One engine, many surfaces: the planned Cloudflare Workers API, a Telegram authoring bot, and
 a client-side playground on `spintax.net` are all consumers of this package.

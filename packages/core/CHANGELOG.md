@@ -3,6 +3,17 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.2 — 2026-07-08
+
+Docs. No engine or API changes.
+
+### Changed
+
+- **Cross-engine parity is now machine-verified.** The shared golden corpus was executed against
+  the actual PHP Spintax plugin engine (via the new `packages/conformance/php` runner) — 88 cases,
+  no divergence. Upgraded the README claim from "TS side; PHP execution pending" to parity-verified
+  against both engines.
+
 ## 0.1.1 — 2026-07-08
 
 Docs + metadata. First release published from CI with **provenance** (npm Trusted Publishing).

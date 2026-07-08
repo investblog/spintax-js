@@ -15,15 +15,16 @@ parse, render, validate, extract, analyze, and neutralize spintax templates.
 
 - **Zero runtime dependencies.** Runs unchanged on Cloudflare Workers, Node 18+, and in the browser.
 - **ESM-first, dual CJS.** Ships `.d.ts` types for both.
-- **Built to the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/)'s behavior
-  contract** via a shared golden corpus — an *independent* TypeScript implementation, not a
-  line-by-line port. The TS suite passes the full deterministic corpus; cross-engine execution
-  of that corpus by the PHP plugin is pending.
+- **Parity-verified against the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/).**
+  An *independent* TypeScript implementation (not a line-by-line port) held to the plugin's behavior
+  contract by a shared golden corpus — the **same** fixtures pass against both this engine and the
+  PHP plugin (deterministic verdicts, plural buckets, conditionals, `#set` collapse, post-process),
+  with no divergence.
 - **MIT** licensed.
 
-> **Status: `0.1.0`** — first public release. Feature-complete; passes the full deterministic
-> golden corpus (encoding the plugin's contract, TS side); the §9.2 API is proven by a reference
-> Cloudflare Worker (`examples/worker`).
+> **Status: released & stable.** Feature-complete — parse / render / validate / extract / analyze /
+> neutralize. The deterministic golden corpus passes against **both** this engine and the PHP
+> plugin, and the §9.2 API is proven by a reference Cloudflare Worker (`examples/worker`).
 
 ## Install
 
