@@ -20,6 +20,17 @@ npm install @spintax/core
 > the TS engine and the PHP plugin, and it's proven by a reference Cloudflare Worker (`examples/worker`, M4).
 > See the [spec](./docs/spec-npm-engine.md) and [`packages/core`](./packages/core/README.md).
 
+## Try it live 🎮
+
+- 🤖 **Telegram bot — [@spintaxnetbot](https://t.me/spintaxnetbot)** — paste a spintax template and
+  it validates it and replies with random variations; or `/draft <brief>` and an AI writes the
+  template for you.
+- 🌐 **Reference Worker API** — `validate-template` / `preview-render` / `extract-variables` /
+  `analyze-template` / `render-batch` over HTTP.
+
+Both are thin reference consumers built on `@spintax/core` (they import the engine, never the other
+way round) — source in [`examples/`](./examples).
+
 ## What this is
 
 The open-source core engine behind the Spintax ecosystem. It is a **companion** to the
@@ -46,8 +57,8 @@ Full authoring reference lives in the parent project's `docs/gtw-syntax-referenc
 packages/
   core/           # @spintax/core — the engine (M1+)
 examples/
-  worker/         # Cloudflare Worker — API dogfood gate (M4)
-  telegram-bot/   # Telegram authoring bot — flagship example (M5)
+  worker/         # Cloudflare Worker — HTTP API (validate/render/extract/analyze); deployed
+  telegram-bot/   # Telegram bot @spintaxnetbot — validate + preview + AI /draft; deployed
 docs/spec-npm-engine.md  # governing spec (design source of truth)
 LICENSE           # MIT
 ```

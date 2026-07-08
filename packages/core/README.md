@@ -130,6 +130,7 @@ plural buckets, conditional truthiness, `#set` collapse, post-process output) is
 ## Links
 
 - 📦 npm — [`@spintax/core`](https://www.npmjs.com/package/@spintax/core)
+- 🤖 Try it — [@spintaxnetbot](https://t.me/spintaxnetbot) (Telegram: validate + preview + AI `/draft`)
 - 🧩 Source — [investblog/spintax-js](https://github.com/investblog/spintax-js)
 - 🌐 Product — [spintax.net](https://spintax.net)
 - 🏠 Maintainer — [301.st](https://301.st)
