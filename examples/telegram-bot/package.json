@@ -1,13 +1,14 @@
 {
-  "name": "@spintax/example-worker",
+  "name": "@spintax/example-telegram-bot",
   "version": "0.0.0",
   "private": true,
-  "description": "Reference Cloudflare Worker — the @spintax/core API acceptance gate (§8)",
+  "description": "Reference Telegram bot for @spintax/core — validate + preview spintax variations (§8, M5)",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "@spintax/core": "*"
