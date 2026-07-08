@@ -1,13 +1,19 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import bot from '../src/index';
 
-const ENV = { TELEGRAM_BOT_TOKEN: 'test-token', TELEGRAM_WEBHOOK_SECRET: 'sekret' };
+const aiRun = vi.fn(async () => ({ response: '{Hi|Hello} there, %name%!' }));
+const ENV = {
+  TELEGRAM_BOT_TOKEN: 'test-token',
+  TELEGRAM_WEBHOOK_SECRET: 'sekret',
+  AI: { run: aiRun },
+} as unknown as Parameters<typeof bot.fetch>[1];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let sent: any[];
 
 beforeEach(() => {
   sent = [];
+  aiRun.mockClear();
   vi.stubGlobal(
     'fetch',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,6 +58,20 @@ describe('telegram bot', () => {
   test('undefined variables are noted as runtime-filled', async () => {
     await bot.fetch(update('Hello %name%'), ENV);
     expect(sent[0].text).toContain('%name%');
+  });
+
+  test('/draft asks the model, then returns the template + variations', async () => {
+    await bot.fetch(update('/draft a friendly welcome'), ENV);
+    expect(aiRun).toHaveBeenCalledOnce();
+    expect(sent[0].text).toContain('Template:');
+    expect(sent[0].text).toContain('there');
+    expect(sent[0].text).toContain('Sample variations');
+  });
+
+  test('/draft with no brief shows usage (no model call)', async () => {
+    await bot.fetch(update('/draft'), ENV);
+    expect(aiRun).not.toHaveBeenCalled();
+    expect(sent[0].text).toContain('Usage');
   });
 
   test('GET is a health check (200, no message sent)', async () => {
