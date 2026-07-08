@@ -1,5 +1,11 @@
 # @spintax/core
 
+[![npm](https://img.shields.io/npm/v/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
+[![npm downloads](https://img.shields.io/npm/dm/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
+[![CI](https://github.com/investblog/spintax-js/actions/workflows/ci.yml/badge.svg)](https://github.com/investblog/spintax-js/actions/workflows/ci.yml)
+[![types](https://img.shields.io/npm/types/@spintax/core.svg)](https://www.npmjs.com/package/@spintax/core)
+[![license](https://img.shields.io/npm/l/@spintax/core.svg)](https://github.com/investblog/spintax-js/blob/main/LICENSE)
+
 Framework-agnostic **[spintax](https://spintax.net) engine** for JavaScript / TypeScript —
 parse, render, validate, extract, analyze, and neutralize GTW-compatible spintax templates.
 
@@ -117,6 +123,17 @@ With a `seed`, `render` is reproducible within this engine. Cross-engine RNG-seq
 with the PHP plugin is a **non-goal** — only the *deterministic* behavior (validation verdicts,
 plural buckets, conditional truthiness, `#set` collapse, post-process output) is parity-gated.
 
+## Links
+
+- 📦 npm — [`@spintax/core`](https://www.npmjs.com/package/@spintax/core)
+- 🧩 Source — [investblog/spintax-js](https://github.com/investblog/spintax-js)
+- 🌐 Project — [spintax.net](https://spintax.net)
+
 ## License
 
-[MIT](../../LICENSE). The Spintax WordPress plugin remains GPL; MIT/Expat is GPL-compatible.
+[MIT](https://github.com/investblog/spintax-js/blob/main/LICENSE). The Spintax WordPress plugin
+remains GPL; MIT/Expat is GPL-compatible.
+
+---
+
+Built and maintained by [301.st](https://301.st).
