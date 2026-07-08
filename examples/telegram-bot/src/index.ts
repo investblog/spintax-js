@@ -31,18 +31,29 @@ const VARIANTS = 5;
 const TG_LIMIT = 4000; // Telegram hard-caps messages at 4096 chars.
 
 const HELP = [
-  '👋 *Spintax bot*',
+  '👋 <b>Spintax bot</b>',
   '',
-  "Send me a spintax template — I'll validate it and show a few random variations.",
-  'Or `/draft <brief>` and an AI will write the template for you.',
+  'Turn one template into many text variations — great for SEO copy, outreach, and',
+  'ad/subject-line testing. Send me a spintax template and I’ll validate it and reply',
+  'with a few random variations.',
   '',
-  'Example:',
-  '`{Hi|Hello|Hey} %name%! Check out our [great|amazing] {deal|offer}.`',
+  '<b>Syntax</b>',
+  '<code>{a|b|c}</code> — pick one   <code>[a|b|c]</code> — shuffle &amp; join',
+  '<code>%name%</code> — variable   <code>{?flag?yes|no}</code> — conditional',
+  '<code>{plural %n%: one|few|many}</code> — plural agreement',
   '',
-  'Syntax:',
-  '• `{a|b|c}` — pick one   • `[a|b|c]` — shuffle',
-  '• `%var%` — variable   • `{?flag?yes|no}` — conditional',
-  '• `{plural %n%: one|many}` — plural agreement',
+  '<b>Example</b> (send this):',
+  '<code>{Hi|Hello|Hey} %name%! Check out our [great|amazing] {deal|offer}.</code>',
+  '',
+  '<b>AI draft</b> (beta)',
+  '<code>/draft &lt;brief&gt;</code> — describe the copy in plain words and an AI writes the template.',
+  '',
+  '<b>Docs &amp; source</b>',
+  '📦 <a href="https://www.npmjs.com/package/@spintax/core">npm — @spintax/core</a>',
+  '💻 <a href="https://github.com/investblog/spintax-js">GitHub — source &amp; examples</a>',
+  '🌐 <a href="https://spintax.net">spintax.net</a>',
+  '',
+  'Powered by the open-source <code>@spintax/core</code> engine · by 301.st',
 ].join('\n');
 
 /** Validate a template and render up to VARIANTS distinct variations. */
@@ -102,7 +113,10 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
     })) as { response?: string };
     template = cleanTemplate(res.response ?? '');
   } catch {
-    return '⚠️ Could not reach the model right now — try again in a moment.';
+    return (
+      '⚠️ AI drafting isn’t available on this bot yet (Workers AI not enabled).\n' +
+      'You can still send a spintax template directly — e.g. {Hi|Hello} %name%! — and I’ll validate + preview it.'
+    );
   }
   if (!template) {
     return '⚠️ The model returned nothing usable. Try rephrasing the brief.';
@@ -128,7 +142,12 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
   return reply.length > TG_LIMIT ? `${reply.slice(0, TG_LIMIT)}\n…` : reply;
 }
 
-async function sendMessage(token: string, chatId: number, text: string, markdown = false): Promise<void> {
+async function sendMessage(
+  token: string,
+  chatId: number,
+  text: string,
+  parseMode?: 'HTML' | 'Markdown',
+): Promise<void> {
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -136,7 +155,7 @@ async function sendMessage(token: string, chatId: number, text: string, markdown
       chat_id: chatId,
       text,
       disable_web_page_preview: true,
-      ...(markdown ? { parse_mode: 'Markdown' } : {}),
+      ...(parseMode ? { parse_mode: parseMode } : {}),
     }),
   });
 }
@@ -170,7 +189,7 @@ export default {
 
     const trimmed = text.trim();
     if (trimmed === '/start' || trimmed === '/help') {
-      await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, HELP, true);
+      await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, HELP, 'HTML');
     } else if (trimmed === '/draft' || trimmed.startsWith('/draft ')) {
       const reply = await draftTemplate(env, trimmed.slice('/draft'.length).trim());
       await sendMessage(env.TELEGRAM_BOT_TOKEN, chatId, reply);
