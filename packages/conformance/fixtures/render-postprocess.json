@@ -118,6 +118,42 @@
     "expect": { "output": "Mail me@example.com please" }
   },
   {
+    "id": "postprocess/mailto-uri-shielded",
+    "note": "mailto: has no // authority so the URL rule misses it; it must be shielded before the EMAIL pass so the whole href survives instead of a bare 'mailto:' getting a space injected after its colon (spintax-js#41).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "email mailto:contact@example.com now",
+    "postProcess": true,
+    "expect": { "output": "Email mailto:contact@example.com now" }
+  },
+  {
+    "id": "postprocess/mailto-uri-in-href-shielded",
+    "note": "The production bug: the email shield carved contact@example.com out of the href, leaving 'mailto:' whose colon then got a space, producing a malformed 'mailto: contact@…' link.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "<a href=\"mailto:contact@example.com\">write us</a>",
+    "postProcess": true,
+    "expect": { "output": "<a href=\"mailto:contact@example.com\">Write us</a>" }
+  },
+  {
+    "id": "postprocess/mailto-uri-trailing-punctuation",
+    "note": "A trailing '.' is split off the mailto: URI (like URLs) so it still ends the sentence and caps the next word, address intact.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see mailto:contact@example.com. next",
+    "postProcess": true,
+    "expect": { "output": "See mailto:contact@example.com. Next" }
+  },
+  {
+    "id": "postprocess/tel-uri-shielded",
+    "note": "tel: URI shielded before the 'space after colon' rule can split 'tel:' from its number.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "reach us at tel:+1-800-555-0000 today",
+    "postProcess": true,
+    "expect": { "output": "Reach us at tel:+1-800-555-0000 today" }
+  },
+  {
     "id": "postprocess/bare-domain-shielded-then-sentence",
     "note": "Domain is shielded; the '.' after it still ends the sentence and caps the next word.",
     "kind": "deterministic",

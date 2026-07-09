@@ -34,6 +34,17 @@ describe('postProcess — shielding', () => {
     expect(postProcess('visit example.com. next')).toBe('Visit example.com. Next');
     expect(postProcess('open xn--e1afmapc.xn--p1ai today')).toBe('Open xn--e1afmapc.xn--p1ai today');
   });
+  test('mailto: / tel: URIs (spintax-js#41)', () => {
+    // Shielded before the EMAIL pass so the whole URI survives — otherwise the
+    // email is carved out and the bare 'mailto:' gets a space after its colon.
+    expect(postProcess('email mailto:contact@example.com now')).toBe('Email mailto:contact@example.com now');
+    expect(postProcess('<a href="mailto:contact@example.com">write us</a>')).toBe(
+      '<a href="mailto:contact@example.com">Write us</a>',
+    );
+    // Trailing '.' splits off like a URL: sentence ends, address intact, next cap.
+    expect(postProcess('see mailto:contact@example.com. next')).toBe('See mailto:contact@example.com. Next');
+    expect(postProcess('reach us at tel:+1-800-555-0000 today')).toBe('Reach us at tel:+1-800-555-0000 today');
+  });
   test('abbreviations (ru whitelist / en whitelist / multi-dot)', () => {
     // Single-token whitelist uses a \p{L} lookbehind (Unicode-aware), so Cyrillic works.
     expect(postProcess('Текст соц. сети тут')).toBe('Текст соц. сети тут');

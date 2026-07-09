@@ -29,6 +29,11 @@ const S = `[${WS}]`;
 const DOMAIN_PART =
   '(?:(?:(?:xn--)?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*)\\.)+(?:xn--[a-z0-9\\-]{2,59}|[\\p{L}][\\p{L}\\p{N}-]{1,62})';
 const URL_RE = new RegExp(`(?:https?|ftp):\\/\\/[^${WS}<>"')\\]]+`, 'giu');
+// `mailto:`/`tel:` URIs have no `//` authority, so URL_RE misses them. Without
+// this shield the EMAIL/DOMAIN passes swallow the address, the bare `mailto:` /
+// `tel:` prefix is left behind, and the "space after :" rule splits it into a
+// malformed `mailto: contact@…` href (spintax-js#41).
+const MAILTEL_RE = new RegExp(`(?:mailto|tel):[^${WS}<>"')\\]]+`, 'giu');
 const EMAIL_RE = new RegExp(`[a-z0-9._%+\\-]+@${DOMAIN_PART}\\b`, 'giu');
 const DOMAIN_RE = new RegExp(`\\b${DOMAIN_PART}\\b`, 'giu');
 const DECIMAL_RE = /\b\d+\.\d+\b/gu;
@@ -69,8 +74,10 @@ export function postProcess(input: string): string {
 
   let text = input;
 
-  // 1-5: shield.
+  // 1-5: shield. mailto:/tel: shielded before EMAIL/DOMAIN so the whole URI
+  // survives instead of the address being carved out from under its prefix.
   text = text.replace(URL_RE, (m) => storeWithTrailingPunct(m, 'URL'));
+  text = text.replace(MAILTEL_RE, (m) => storeWithTrailingPunct(m, 'URI'));
   text = text.replace(EMAIL_RE, (m) => store(m, 'EMAIL'));
   text = text.replace(DOMAIN_RE, (m) => store(m, 'DOM'));
   text = text.replace(DECIMAL_RE, (m) => store(m, 'NUM'));
