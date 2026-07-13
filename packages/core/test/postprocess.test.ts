@@ -93,6 +93,46 @@ describe('sentence openers — ¿ and ¡ (Spanish)', () => {
     expect(postProcess('Elige una. (a) primero')).toBe('Elige una. (a) primero');
     expect(postProcess('Он сказал. "привет"')).toBe('Он сказал. "привет"');
   });
+
+  // `¡¿Qué haces?!` is RAE's form for a sentence that is both question and exclamation, so a lead
+  // that allows exactly ONE opener leaves the most Spanish construction there is uncapitalized.
+  test('a sentence can open with TWO marks', () => {
+    expect(postProcess('¡¿qué haces?!')).toBe('¡¿Qué haces?!');
+    expect(postProcess('¿¡qué haces!?')).toBe('¿¡Qué haces!?');
+    expect(postProcess('hola. ¡¿qué haces?! adiós')).toBe('Hola. ¡¿Qué haces?! Adiós');
+  });
+
+  // The opened word is routinely wrapped in markup, which puts a tag AFTER the opener — the lead
+  // has to allow tags on both sides of it, not just before.
+  test('capitalizes through an opener followed by an inline tag', () => {
+    expect(postProcess('¿<strong>cómo</strong> estás?')).toBe('¿<strong>Cómo</strong> estás?');
+    expect(postProcess('Hola. ¿<em>qué</em> tal?')).toBe('Hola. ¿<em>Qué</em> tal?');
+    expect(postProcess('<p>¿<a href="/ayuda">necesitas ayuda</a>?</p>')).toBe(
+      '<p>¿<a href="/ayuda">Necesitas ayuda</a>?</p>',
+    );
+  });
+});
+
+// A run of sentence punctuation is ONE sentence end, not several. The "space after .!?" rule fired
+// between the marks and shredded the copy — in every language, not just Spanish: "Wow! ! !",
+// "Wait. . . what", "Really? !". The ASCII ellipsis is the common casualty; the Unicode "…" was
+// never in the class and so was never affected.
+describe('sentence punctuation runs', () => {
+  test('a run is never split from the inside', () => {
+    expect(postProcess('wait... what?')).toBe('Wait... What?');
+    expect(postProcess('wow!!!')).toBe('Wow!!!');
+    expect(postProcess('really?! yes.')).toBe('Really?! Yes.');
+    expect(postProcess('Что?! Не может быть!!')).toBe('Что?! Не может быть!!');
+  });
+
+  test('the space goes after the whole run when the next word touches it', () => {
+    expect(postProcess('wait...what?')).toBe('Wait... What?');
+    expect(postProcess('hola.¡genial!')).toBe('Hola. ¡Genial!');
+  });
+
+  test('a single mark still gets its space', () => {
+    expect(postProcess('a.b')).toBe('A. B');
+  });
 });
 
 describe('render — postProcess is on by default, off with postProcess:false', () => {

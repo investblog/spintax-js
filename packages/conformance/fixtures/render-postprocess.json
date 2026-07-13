@@ -330,5 +330,93 @@
     "expect": {
       "output": "Он сказал. \"привет\" и добавил. «пока»"
     }
+  },
+  {
+    "id": "postprocess/es-opener-double-mark",
+    "note": "RAE's form for a sentence that is both a question and an exclamation opens with TWO marks. A lead that allows exactly one opener leaves the most Spanish construction there is uncapitalized — and the closing '?!' is a run, so it must survive the spacing pass intact too. Both halves of the defect are visible in this one case.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "¡¿qué haces?!",
+    "postProcess": true,
+    "expect": {
+      "output": "¡¿Qué haces?!"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-double-mark-reversed",
+    "note": "The other order RAE sanctions. Locks that the lead is a RUN of openers rather than a hardcoded '¡¿' pair.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "hola. ¿¡qué haces!? adiós",
+    "postProcess": true,
+    "expect": {
+      "output": "Hola. ¿¡Qué haces!? Adiós"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-before-inline-tag",
+    "note": "The opened word is routinely wrapped in markup, which puts a tag AFTER the opener. The lead has to allow tags on BOTH sides of it: 'boundary → tags → opener → letter' was handled, 'boundary → opener → tags → letter' was not.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "¿<strong>cómo</strong> estás? hola. ¿<em>qué</em> tal?",
+    "postProcess": true,
+    "expect": {
+      "output": "¿<strong>Cómo</strong> estás? Hola. ¿<em>Qué</em> tal?"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-before-link-in-block-tag",
+    "note": "The commonest real shape of all: an HTML paragraph whose Spanish question opens with a link. Exercises the block-tag capitalizer through an opener followed by an anchor.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "<p>¿<a href=\"/ayuda\">necesitas ayuda</a>?</p>",
+    "postProcess": true,
+    "expect": {
+      "output": "<p>¿<a href=\"/ayuda\">Necesitas ayuda</a>?</p>"
+    }
+  },
+  {
+    "id": "postprocess/sentence-run-ascii-ellipsis",
+    "note": "A run of sentence punctuation is ONE sentence end, not several. The 'space after .!?' rule fired between the marks and shredded the copy in EVERY language: 'Wait... what' became 'Wait. . . what'. The Unicode '…' was never in the [.!?] class and so was never affected — which is exactly why the corpus's ellipsis fixture missed this.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "wait... what?",
+    "postProcess": true,
+    "expect": {
+      "output": "Wait... What?"
+    }
+  },
+  {
+    "id": "postprocess/sentence-run-at-end-of-text",
+    "note": "A run that ends the text gets no trailing space. Guards the backtracking trap: a greedy '+' alone still backs INTO the run to satisfy the lookaheads, yielding 'Wow!! !'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "wow!!!",
+    "postProcess": true,
+    "expect": {
+      "output": "Wow!!!"
+    }
+  },
+  {
+    "id": "postprocess/sentence-run-interrobang",
+    "note": "'?!' is one sentence end: it must not be split, and the capitalizer must still fire on the word after it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "что?! не может быть!!",
+    "postProcess": true,
+    "expect": {
+      "output": "Что?! Не может быть!!"
+    }
+  },
+  {
+    "id": "postprocess/sentence-run-then-word",
+    "note": "The space belongs AFTER the whole run, never inside it — so a word glued to the run is separated from it, once.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "wait...what? hola.¡genial!",
+    "postProcess": true,
+    "expect": {
+      "output": "Wait... What? Hola. ¡Genial!"
+    }
   }
 ]
