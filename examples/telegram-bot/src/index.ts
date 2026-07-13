@@ -7,6 +7,7 @@
  * bot-side leaks back into the engine.
  */
 import { render, validate, extract, parse, type Diagnostic } from '@spintax/core';
+import { buildAuthoringPrompt, buildRepairPrompt, cleanModelTemplate } from '@spintax/authoring-prompt';
 
 interface Env {
   TELEGRAM_BOT_TOKEN: string;
@@ -17,15 +18,6 @@ interface Env {
 }
 
 const DRAFT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-const DRAFT_SYSTEM = [
-  'You write spintax templates. Spintax expands ONE template into many text variations:',
-  '- {a|b|c} → the renderer randomly picks ONE of a, b, c.',
-  '- [a|b|c] → shuffles and joins all of them.',
-  '- %name% → a placeholder variable, filled in later.',
-  'Given a request, reply with ONE spintax template capturing natural variations of the requested',
-  'copy, using {…|…} for interchangeable words/phrases. It may span a few sentences. Output ONLY',
-  'the template text — no explanations, no quotes, no code fences.',
-].join('\n');
 
 const DRAFT_NOTE =
   '\n\n💡 Heads up: this demo runs a small, low-cost model, so drafts are rough. ' +
@@ -35,6 +27,25 @@ const DRAFT_NOTE =
 const VARIANTS = 5;
 const TG_LIMIT = 4000; // Telegram hard-caps messages at 4096 chars.
 
+const EXAMPLE_BASIC = '{Hi|Hello|Hey} %name%! Our {deal|offer} ends {today|tonight}.';
+
+// Shows the three things the old help never did: #set picks ONCE (so the copy can't contradict
+// itself), variables nest inside other variables, and a permutation shuffles clauses of EQUAL
+// weight — with an explicit sep, because the default separator is a space and would run the
+// clauses together.
+const EXAMPLE_POWER = [
+  '#set %product% = {course|training}',
+  '#set %offer% = our new %product%',
+  '{Hi|Hello} %name%! Get %offer% — we can [<sep=", ">enrol you today|answer any question|refund within 14 days]. The %product% starts on Monday.',
+].join('\n');
+
+/** Every spintax snippet the help shows. The test suite runs each one through the engine. */
+export const HELP_EXAMPLES = [EXAMPLE_BASIC, EXAMPLE_POWER] as const;
+
+/** Telegram HTML mode: the raw templates contain `<`, `>` and `&`, which must be escaped. */
+const esc = (s: string): string =>
+  s.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;');
+
 const HELP = [
   '👋 <b>Spintax bot</b>',
   '',
@@ -43,12 +54,20 @@ const HELP = [
   'with a few random variations.',
   '',
   '<b>Syntax</b>',
-  '<code>{a|b|c}</code> — pick one   <code>[a|b|c]</code> — shuffle &amp; join',
-  '<code>%name%</code> — variable   <code>{?flag?yes|no}</code> — conditional',
+  `<code>{a|b|c}</code> — pick one <i>(rerolls at every occurrence)</i>`,
+  `<code>#set %v% = …</code> — pick <b>once</b>, reuse everywhere`,
+  `<code>%name%</code> — variable <i>(can nest inside a #set)</i>`,
+  `<code>${esc('[<sep=", ">a|b|c]')}</code> — shuffle &amp; join equal-weight parts`,
+  '<code>{?flag?yes|no}</code> — conditional',
   '<code>{plural %n%: one|few|many}</code> — plural agreement',
   '',
   '<b>Example</b> (send this):',
-  '<code>{Hi|Hello|Hey} %name%! Check out our [great|amazing] {deal|offer}.</code>',
+  `<code>${esc(EXAMPLE_BASIC)}</code>`,
+  '',
+  '<b>Putting it together</b> — <code>#set</code> picks once, variables nest, and the',
+  'permutation reorders three clauses that carry equal weight:',
+  `<code>${esc(EXAMPLE_POWER)}</code>`,
+  'Every variant names the same product twice — never “course … training”.',
   '',
   '<b>AI draft</b> (beta)',
   '<code>/draft &lt;brief&gt;</code> — describe the copy in plain words and an AI writes the template.',
@@ -93,30 +112,46 @@ function handleTemplate(src: string): string {
   return reply.length > TG_LIMIT ? `${reply.slice(0, TG_LIMIT)}\n…` : reply;
 }
 
-/** Strip code fences / surrounding quotes the model may wrap the template in. */
-function cleanTemplate(raw: string): string {
-  let t = raw.trim();
-  t = t.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/u, '').trim();
-  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith('“') && t.endsWith('”'))) {
-    t = t.slice(1, -1).trim();
-  }
-  return t;
+/** One round-trip to the model, with the model's habitual fences/quotes stripped off. */
+async function askModel(env: Env, systemPrompt: string, userPrompt: string): Promise<string> {
+  const res = (await env.AI.run(DRAFT_MODEL, {
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+  })) as { response?: string };
+  return cleanModelTemplate(res.response ?? '');
 }
 
-/** /draft: an LLM (Workers AI) writes a spintax template from a plain-language brief. */
+/**
+ * /draft: an LLM writes a spintax template from a plain-language brief.
+ *
+ * Uses the CANONICAL authoring prompt (`@spintax/authoring-prompt`) — the bot must not carry its
+ * own dialect of it, or every surface drifts. If the draft comes back invalid, we close the loop
+ * once with a repair prompt built from the diagnostics, rather than handing the user broken markup.
+ */
 async function draftTemplate(env: Env, brief: string): Promise<string> {
   if (!brief) {
     return 'Usage: /draft <describe the copy>\ne.g. /draft a friendly welcome for new SaaS signups';
   }
+
   let template: string;
   try {
-    const res = (await env.AI.run(DRAFT_MODEL, {
-      messages: [
-        { role: 'system', content: DRAFT_SYSTEM },
-        { role: 'user', content: brief },
-      ],
-    })) as { response?: string };
-    template = cleanTemplate(res.response ?? '');
+    const prompt = buildAuthoringPrompt({ brief, locale: 'en', variationLevel: 'balanced' });
+    template = await askModel(env, prompt.systemPrompt, prompt.userPrompt);
+
+    // Repair loop, capped at one attempt — the whole point of precise diagnostics is that we can
+    // hand the model the exact offending span instead of "something is wrong".
+    if (template) {
+      const bad = validate(template);
+      if (bad.some((d) => d.severity === 'error')) {
+        const repair = buildRepairPrompt(template, bad);
+        const fixed = await askModel(env, repair.systemPrompt, repair.userPrompt);
+        if (fixed && !validate(fixed).some((d) => d.severity === 'error')) {
+          template = fixed;
+        }
+      }
+    }
   } catch (e) {
     console.error('draft: AI error =', e instanceof Error ? e.message : String(e));
     return (
