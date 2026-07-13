@@ -49,11 +49,33 @@ jobs:
           fi
           echo "Publishing @spintax/core@$PKG"
 
+      # A tag can point at ANY commit — main's CI passing is not a precondition for
+      # publishing. So the release job re-runs the full CI gate set rather than
+      # trusting an upstream green: it must be independently sufficient to prove the
+      # artifact. Keep these steps in sync with ci.yml (build first — consumers
+      # resolve @spintax/core via its published exports, so typecheck/test need dist).
+      - name: Validate golden corpus (schema)
+        run: npm run conformance:validate
+
       - name: Build
         run: npm run build
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
       - name: Test
         run: npm test
+
+      # Gates on the published artifact itself: a broken exports map or a tarball
+      # that won't import survives build+test, but not these.
+      - name: Package checks (publint + attw)
+        run: npm run check:pkg
+
+      - name: Tarball smoke (install + ESM/CJS import)
+        run: npm run smoke:pack
 
       # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
       # publish token automatically, and attaches a provenance attestation.
