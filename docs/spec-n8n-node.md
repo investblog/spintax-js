@@ -28,6 +28,54 @@ point of building it. What must **not** happen is convenience creep back into th
 
 ## 3. Operations
 
+> **The node is not a renderer — it is an authoring funnel.** Render/Validate alone make a utility;
+> the prompt operations below are what make an n8n user able to *produce* a good template without
+> learning spintax theory. **Prerequisite: [`spec-llm-authoring-prompt.md`](./spec-llm-authoring-prompt.md)
+> (#45) ships first** — the node consumes the canonical prompt, it does not invent its own. That is
+> the whole point: today the bot has its own ad-hoc prompt, and a second one here is exactly the
+> drift we are fixing.
+
+### Build Authoring Prompt
+We do **not** embed an LLM provider or ship credentials — the node emits a prompt, the user wires
+their own LLM node (OpenAI / Anthropic / Gemini / local). Provider-agnostic by construction.
+
+Inputs: `brief` / source text · `targetLanguage` · `allowedVariables` (derived from the current
+item's fields — e.g. `first_name`, `company`, `plan`) · `channel` (email / SMS / push / landing) ·
+`variationLevel` (conservative / balanced / aggressive — see the prompt spec for the operational
+definition; without one it is unreproducible).
+
+Output:
+
+```json
+{
+  "systemPrompt": "…",
+  "userPrompt": "…",
+  "allowedVariables": ["first_name", "company"],
+  "promptVersion": "1",
+  "nextStep": "Send this to your LLM node, then run Validate on the returned template"
+}
+```
+
+### Build Repair Prompt
+`(template, Diagnostic[]) → a fix-it prompt.` Without this the workflow **dead-ends** the first
+time the model returns something invalid — and it will. The precise spans from 0.1.3
+(`line`/`column`/`endLine`/`endColumn` + structured `data`) let the repair prompt point at the exact
+offending token rather than saying "something is wrong".
+
+The loop must be **capped** (e.g. 2 repair attempts), and the node must **defensively strip code
+fences/quotes** from the model's reply before validating — the prompt forbids them, models emit
+them anyway. Contract in the prompt, tolerant parsing in the host.
+
+Resulting workflow:
+
+```
+Sheets/CRM item → Build Authoring Prompt → LLM node → Validate ──ok──→ Render samples → Email/TG/CRM
+                                                          │
+                                                        errors
+                                                          ↓
+                                              Build Repair Prompt → LLM node ──┘ (capped)
+```
+
 ### Render
 Inputs: `template`, `context` (mapped from the incoming item's fields), `seed` (optional,
 expression-friendly), `locale`, `postProcess` (default **on**, matching the engine).
