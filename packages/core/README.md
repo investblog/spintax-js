@@ -43,6 +43,33 @@ validate('{a|b');          // → [{ severity: 'error', code: 'bracket.unclosed'
 extract('%title% {?promo?Sale}'); // → { refs: ['title', 'promo'], sets: [], includes: [] }
 ```
 
+## Use cases
+
+Anywhere one message has to go out many times without reading like a form letter:
+
+- **Cold email & outreach** — one template, a distinct body per recipient, personalized through `context`.
+- **SMS / push / notifications** — deterministic output in a few kilobytes, no API call per send.
+- **Chatbots & agents** — vary canned replies so a bot doesn't repeat itself verbatim.
+- **A/B and multivariate testing** — enumerate copy variants in the template instead of in application code.
+- **Programmatic SEO / content generation** — thousands of pages from one authored source.
+- **LLM output at scale** — have a model draft the template once, then spin it locally, forever, for free.
+
+The core renders a **single** string per call — batching is a host concern. To emit N variants, call
+`render` N times with different seeds; a seeded call is reproducible, so any variant can be
+regenerated later from its seed alone:
+
+```ts
+const template = '{Hi|Hello|Hey} %name%, {quick|short|small} question about {pricing|billing}';
+const variants = [1, 2, 3].map((seed) => render(template, { context: { name: 'Ada' }, seed }));
+// → [ 'Hello Ada, quick question about billing',
+//     'Hey Ada, quick question about pricing',
+//     'Hey Ada, quick question about pricing' ]   ← same as seed 2; see the caveat below
+```
+
+Distinct seeds are **independent draws, not distinct results** — like any sampling they can repeat,
+and the fewer combinations a template has, the more often they will. If you need N *unique* variants,
+dedupe in the host and cap the retries: a template may simply not have N combinations to give.
+
 ## Spintax syntax
 
 | Construct | Example | Meaning |
