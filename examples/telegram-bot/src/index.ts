@@ -1,10 +1,14 @@
 /**
  * Reference Telegram bot for @spintax/core (spec §8, M5).
  *
- * A stateless Cloudflare Worker webhook: paste a spintax template, it validates
- * it and replies with a few random variations. A second, interactive dogfood of
- * the public API — imports `@spintax/core` ONLY (purity boundary §8), nothing
- * bot-side leaks back into the engine.
+ * A stateless Cloudflare Worker webhook: paste a spintax template, it validates it and replies
+ * with a few random variations; `/draft` has an LLM write one from a plain-language brief.
+ *
+ * It imports the engine (`@spintax/core`) and the shared authoring prompt
+ * (`@spintax/authoring-prompt`) — and contributes nothing back to either. The purity boundary
+ * (spec §8) is about DIRECTION, not import count: a consumer proves the API, it must not pollute
+ * it. The prompt lives in its own package precisely so that this bot cannot grow a private dialect
+ * of it (see `docs/spec-llm-authoring-prompt.md`).
  */
 import { render, validate, extract, parse, type Diagnostic } from '@spintax/core';
 import { buildAuthoringPrompt, buildRepairPrompt, cleanModelTemplate } from '@spintax/authoring-prompt';
@@ -28,6 +32,21 @@ const DRAFT_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
  * cosmetic argument; it is what makes validation agree with rendering.
  */
 export const LOCALE = 'en';
+
+/**
+ * The demo data `/draft` renders with — and, therefore, the ONLY variables the model is allowed to
+ * use. The two must be the same list, or the prompt and the render disagree.
+ *
+ * An empty allow-list looks safer and is worse: the prompt then forbids variables outright, the
+ * model uses one anyway, and `variable.undefined` is only a *warning* — so the draft was accepted
+ * and rendered with the placeholder still in it. Worse still for a plural: an unresolved count
+ * makes the whole `{plural …}` block render to nothing, silently eating the noun.
+ *
+ * `n` is here so the model can actually use `{plural %n%: …}` — the construct the canonical prompt
+ * now teaches.
+ */
+const DRAFT_CONTEXT: Record<string, string> = { name: 'Ada', company: 'Acme', n: '3' };
+const DRAFT_VARS = Object.keys(DRAFT_CONTEXT);
 
 const DRAFT_NOTE =
   '\n\n💡 Heads up: this demo runs a small, low-cost model, so drafts are rough. ' +
@@ -172,18 +191,27 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
 
   let template: string;
   try {
-    const prompt = buildAuthoringPrompt({ brief, locale: LOCALE, variationLevel: 'balanced' });
+    const prompt = buildAuthoringPrompt({
+      brief,
+      locale: LOCALE,
+      allowedVariables: DRAFT_VARS,
+      variationLevel: 'balanced',
+    });
     template = await askModel(env, prompt.systemPrompt, prompt.userPrompt);
 
     // Repair loop, capped at one attempt — the whole point of precise diagnostics is that we can
     // hand the model the exact offending span instead of "something is wrong". Validate under the
     // SAME locale we render with, or a wrong-arity plural sails through and renders as ｛…｝.
     if (template) {
-      const bad = validate(template, { locale: LOCALE });
+      const bad = validate(template, { locale: LOCALE, knownVariables: DRAFT_VARS });
       if (bad.some((d) => d.severity === 'error')) {
-        const repair = buildRepairPrompt(template, bad, { locale: LOCALE });
+        const repair = buildRepairPrompt(template, bad, {
+          locale: LOCALE,
+          allowedVariables: DRAFT_VARS,
+        });
         const fixed = await askModel(env, repair.systemPrompt, repair.userPrompt);
-        if (fixed && !validate(fixed, { locale: LOCALE }).some((d) => d.severity === 'error')) {
+        const stillBad = validate(fixed, { locale: LOCALE, knownVariables: DRAFT_VARS });
+        if (fixed && !stillBad.some((d) => d.severity === 'error')) {
           template = fixed;
         }
       }
@@ -199,7 +227,9 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
     return '⚠️ The model returned nothing usable. Try rephrasing the brief.';
   }
 
-  const errors = validate(template, { locale: LOCALE }).filter((d) => d.severity === 'error');
+  const errors = validate(template, { locale: LOCALE, knownVariables: DRAFT_VARS }).filter(
+    (d) => d.severity === 'error',
+  );
   let reply = `📝 Template:\n${template}`;
 
   if (errors.length > 0) {
@@ -218,13 +248,24 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
   const variants: string[] = [];
   const ast = parse(template);
   for (let seed = 1; variants.length < 3 && seed <= 18; seed += 1) {
-    const out = render(ast, { seed, locale: LOCALE });
+    const out = render(ast, { seed, locale: LOCALE, context: DRAFT_CONTEXT });
     if (!seen.has(out)) {
       seen.add(out);
       variants.push(out);
     }
   }
   reply += `\n\n✨ Sample variations:\n${variants.map((v, i) => `${i + 1}. ${v}`).join('\n')}`;
+  reply += `\n\nℹ️ Rendered with demo data: ${DRAFT_VARS.map((v) => `%${v}%=${DRAFT_CONTEXT[v] ?? ''}`).join(', ')}`;
+
+  // The prompt allows exactly DRAFT_VARS. If the model reached for another name it is only a
+  // `variable.undefined` WARNING, so the draft is still usable — but the samples above will carry
+  // a raw %placeholder% (or, for a count, silently drop the {plural …} block). Say so.
+  const invented = extract(template).refs.filter((r) => !DRAFT_VARS.includes(r));
+  if (invented.length > 0) {
+    reply +=
+      `\n⚠️ The draft also used ${invented.map((v) => `%${v}%`).join(', ')} — outside the demo set, ` +
+      'so they stay unfilled above. Your app would supply them.';
+  }
   // Always keep the note; trim the body if the whole thing would overflow.
   if (reply.length + DRAFT_NOTE.length > TG_LIMIT) {
     reply = `${reply.slice(0, TG_LIMIT - DRAFT_NOTE.length - 1)}…`;

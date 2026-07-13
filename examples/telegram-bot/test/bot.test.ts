@@ -183,6 +183,45 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
     expect(text).not.toMatch(/^\d+\. .*｛plural/mu); // …and never dressed up as a sample variation
   });
 
+  test('the prompt is given the demo variables, so the model may actually use them', async () => {
+    await bot.fetch(update('/draft a welcome email'), ENV);
+    const { user } = promptOf(0);
+    expect(user).toContain('ALLOWED VARIABLES: %name%, %company%, %n%');
+    expect(user).not.toContain('do not use any %variable%');
+  });
+
+  test('samples are rendered with demo data, not left full of raw placeholders', async () => {
+    aiRun.mockResolvedValueOnce({ response: '{Hi|Hello} %name%, welcome to %company%!' });
+    await bot.fetch(update('/draft a welcome'), ENV);
+
+    const text: string = sent[0].text;
+    expect(text).toMatch(/\d\. (Hi|Hello) Ada, welcome to Acme!/u); // filled in
+    expect(text).toContain('Rendered with demo data');
+    // The template itself still shows the variables — only the SAMPLES are filled.
+    expect(text).toContain('📝 Template:\n{Hi|Hello} %name%, welcome to %company%!');
+  });
+
+  // An unresolved count does not merely print a placeholder — the whole {plural …} block renders
+  // to NOTHING, silently eating the noun. That is why `n` is in the demo set.
+  test('a drafted plural renders for real instead of vanishing', async () => {
+    aiRun.mockResolvedValueOnce({ response: 'You have %n% {plural %n%: item|items} waiting.' });
+    await bot.fetch(update('/draft cart reminder'), ENV);
+
+    const text: string = sent[0].text;
+    expect(text).toMatch(/\d\. You have 3 items waiting\./u);
+    expect(text).not.toMatch(/\d\. You have %n% {2}waiting\./u); // the noun did not disappear
+  });
+
+  test('a variable outside the demo set is reported, not silently left raw', async () => {
+    aiRun.mockResolvedValueOnce({ response: 'Hi %name%, your %plan% plan is ready.' });
+    await bot.fetch(update('/draft a plan upgrade'), ENV);
+
+    const text: string = sent[0].text;
+    expect(text).toContain('%plan%');
+    expect(text).toContain('outside the demo set');
+    expect(text).toMatch(/\d\. Hi Ada, your %plan% plan is ready\./u); // honest about what rendered
+  });
+
   test('an invalid draft is repaired in one extra round-trip, not handed over broken', async () => {
     aiRun
       .mockResolvedValueOnce({ response: '{Hi|Hello there, %name%!' }) // unbalanced brace
