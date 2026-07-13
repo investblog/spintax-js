@@ -3,6 +3,44 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.6 — 2026-07-13
+
+Two post-process fixes. **Supersedes 0.1.5** — upgrade straight past it. No API change.
+
+### Fixed
+
+- **A run of sentence punctuation is no longer split from the inside.** This is not a Spanish issue
+  and it predates the 0.1.5 work: the "space after `.!?`" rule looked exactly one character ahead
+  and never at the rest of the run, so it fired *between* the marks.
+
+  ```
+  wait... what?   →  Wait. . . What?      (0.1.5 and earlier)
+  wow!!!          →  Wow! ! !
+  really?!        →  Really? !
+  ```
+
+  The ASCII ellipsis is the common casualty — and the Unicode `…` is *not* in the `[.!?]` class,
+  which is exactly why the corpus's existing ellipsis fixture never caught it. A run is now matched
+  whole and required to be complete: `([.!?]+)(?![.!?])`. The guard is load-bearing — a greedy `+`
+  alone gives ground back *into* the run to satisfy the lookaheads and yields `Wow!! !`.
+
+- **`¡¿Qué haces?!` keeps its capital.** The 0.1.5 opener rule allowed exactly *one* opener, so the
+  RAE form for a sentence that is both a question and an exclamation — the most Spanish sentence
+  there is — still lost its capital. An opener followed by markup (`¿<strong>cómo</strong> estás?`,
+  `<p>¿<a href="/ayuda">necesitas ayuda</a>?</p>`) failed for the same reason: the old lead only
+  allowed `tags → opener → letter`, never `opener → tags → letter`.
+
+  The lead is now any run of tags, sentence openers and whitespace, in any order. The opener set
+  stays deliberately **narrow** — quotes and brackets are still not openers, and the fixtures added
+  in 0.1.5 keep guarding that.
+
+### Notes
+
+- Mirrored into the PHP plugin engine (released there as 2.3.3). Verified against the shared golden
+  corpus in both engines: TS 243 tests; the conformance runner against the real plugin engine 107
+  tests / 120 assertions. No performance regression — the pathological-input cost is unchanged from
+  0.1.5 and comes from the URL/domain shields, not from these rules.
+
 ## 0.1.5 — 2026-07-13
 
 Spanish post-process fix. No API change.
