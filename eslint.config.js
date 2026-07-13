@@ -15,6 +15,14 @@ export default tseslint.config(
       // to mirror PHP's ASCII `\s` (no PCRE_UCP) for post-process/parse parity —
       // these control chars are intentional, not stray copy-paste artifacts.
       'no-control-regex': 'off',
+      // `_foo` = intentionally unused: a parameter that only exists to position the ones after
+      // it, or to give a test mock the real call signature so the test can assert on what was
+      // passed. The codebase already writes them that way; state the convention instead of
+      // leaning on no-unused-vars' "after-used" default, which only covers the first case.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
     },
   },
 );
