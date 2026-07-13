@@ -319,5 +319,16 @@
     "expect": {
       "output": "Elige una. (a) primero"
     }
+  },
+  {
+    "id": "postprocess/opener-set-excludes-quotes",
+    "note": "Cross-engine guard for the NARROWNESS of SENTENCE_OPENERS: a quote is not an opener. Both straight (\") and guillemet («) forms stay lowercase after a sentence boundary, while the start-of-text capitalisation still fires — so the rule is proven to be narrow rather than simply dead. A TS unit test alone would not bind the PHP engine; this is the parity gate. Companion to postprocess/opener-set-excludes-quotes-and-brackets, which guards the bracket case.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "он сказал. \"привет\" и добавил. «пока»",
+    "postProcess": true,
+    "expect": {
+      "output": "Он сказал. \"привет\" и добавил. «пока»"
+    }
   }
 ]
