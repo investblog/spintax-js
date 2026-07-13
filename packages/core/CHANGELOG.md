@@ -3,6 +3,29 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.4 — 2026-07-13
+
+A post-process bug fix (hit in production) plus docs. No API change.
+
+### Fixed
+
+- **`postProcess` no longer mangles `mailto:` / `tel:` URIs.** They carry no `//` authority,
+  so the URL shield missed them; the email shield then carved the address out from under the
+  prefix, and the "space after a colon" rule split the leftover into a malformed
+  `mailto: contact@example.com` href. They are now shielded as whole tokens (with the same
+  trailing-punctuation handling as URLs) before the email/domain passes. Mirrored into the PHP
+  engine and covered by 4 golden-corpus fixtures, so the post-process parity contract holds
+  in both engines. Reported in [#41](https://github.com/investblog/spintax-js/issues/41).
+
+### Changed
+
+- Docs: a **Use Cases** section (cold email, notifications, chatbots, A/B copy, programmatic
+  SEO, spinning LLM-drafted templates locally) and the N-variants recipe — call `render` N
+  times with different seeds — with the caveat that distinct seeds are *independent draws, not
+  distinct results*, so a low-cardinality template will repeat. Batching stays a host concern.
+- npm keywords broadened (`text-spinner`, `email-template`, `placeholders`, `variables`,
+  `conditionals`) to match how people actually search for this.
+
 ## 0.1.3 — 2026-07-08
 
 Precise diagnostic positions. Backward-compatible — `validate()` verdicts (pass/fail),
