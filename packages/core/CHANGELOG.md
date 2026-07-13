@@ -3,6 +3,42 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.5 — 2026-07-13
+
+Spanish post-process fix. No API change.
+
+### Fixed
+
+- **`postProcess` no longer strips the capital from every Spanish sentence.** Spanish is the only
+  European language whose punctuation *opens* a sentence, and the capitalization passes upper-cased
+  the first **character** after a sentence boundary — which, for `¿cómo estás?`, is `¿`. An inverted
+  mark has no uppercase form, so the pass was a no-op and the real first letter stayed lowercase.
+  The spacing pass had the mirror-image gap: it knew "no space *before* closing punctuation" but had
+  no rule for an opener, so `¿ qué tal ?` only half-collapsed.
+
+  ```
+  hola. ¿cómo estás? ¡genial!   →  Hola. ¿Cómo estás? ¡Genial!
+  Hola. ¿ qué tal ?             →  Hola. ¿Qué tal?
+  ```
+
+  A new `SENTENCE_OPENERS = '¿¡'` concept drives both: an opener binds to the word it opens (before
+  capitalization, deliberately), and the four capitalization sites — start of text, after `.!?…`,
+  after a block-level tag, and after a newline — allow an optional opener between the boundary and
+  the letter. HTML paragraphs and multi-line templates were broken exactly like the bare `. ¿` case.
+
+  The opener set is deliberately **narrow**: quotes and brackets both open *and* close, so
+  capitalizing after them would mangle list markers (`Elige una. (a) primero`). Golden-corpus
+  fixtures guard both the fix and its narrowness, in **both** engines.
+
+### Notes
+
+- Mirrored into the PHP plugin engine to hold the post-process parity contract. Verified against the
+  shared golden corpus in both engines: TS 230 tests; the conformance runner against the real plugin
+  engine 99 tests / 112 assertions; the plugin's own suite 578 tests, no regressions.
+- The plugin carries the same fix but ships it in a later release, so for a short window a published
+  plugin and this package can differ on Spanish output. The parity *contract* holds — the engines'
+  behavior agrees and the corpus proves it — only the release timing differs.
+
 ## 0.1.4 — 2026-07-13
 
 A post-process bug fix (hit in production) plus docs. No API change.
