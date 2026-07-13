@@ -3,7 +3,12 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/*.map', '**/*.d.ts'] },
+  // `vendor/` is Composer's install dir for the PHP conformance runner. It is gitignored, so CI —
+  // which lints a fresh checkout — never sees it, while any machine that has actually RUN the PHP
+  // parity runner has it on disk, full of PHPUnit's bundled jquery/d3/bootstrap minified bundles.
+  // Without this, `npm run lint` is green in CI and red locally, which is the worst way for a gate
+  // to behave.
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/vendor/**', '**/*.map', '**/*.d.ts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
