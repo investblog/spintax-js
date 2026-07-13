@@ -41,14 +41,38 @@ const MULTI_ABBR_RE = new RegExp(`\\b(?:\\p{L}{1,2}\\.${S}*){2,}`, 'gu');
 const SINGLE_ABBR_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${SINGLE_ABBREVS.join('|')})\\.(?=${S}|$|<)`, 'giu');
 const TRAILING_PUNCT_RE = /([.,;:!]+)$/u;
 
+/**
+ * SENTENCE OPENERS — the inverted marks that OPEN a Spanish question/exclamation.
+ *
+ * Every other European language only ever *closes* with punctuation, which is why the spacing and
+ * capitalization passes below were written as if a sentence always begins with a letter. In Spanish
+ * it does not: `¿cómo estás?` begins with `¿`, and the capitalizer — which upper-cases the first
+ * *character* after a boundary — hits a mark that has no uppercase form and silently leaves the
+ * real first letter lowercase.
+ *
+ * Named explicitly, and deliberately NOT widened to quotes/brackets/«»: those both open and close,
+ * and capitalizing after them would mangle list markers ("Elige. (a) primero" → "(A) primero").
+ * This constant encodes the language semantics of Spanish punctuation, not a general "skip anything
+ * that isn't a letter" rule.
+ */
+const SENTENCE_OPENERS = '¿¡';
+/** An optional opener plus any space it left behind — sits between a boundary and the first letter. */
+const OPEN = `[${SENTENCE_OPENERS}]?${S}*`;
+
 // Spacing + capitalization (all ASCII-whitespace).
 const SPACE_BEFORE_PUNCT_RE = new RegExp(`${S}+([,;:!?.])`, 'gu');
 const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\d)(?!${S}|$|<)`, 'gu');
 const SPACE_AFTER_SENTENCE_RE = new RegExp(`([.!?])(?!\\d)(?!${S}|$|<)`, 'gu');
-const CAP_FIRST_RE = new RegExp(`^(${S}*(?:<[^>]+>${S}*)*)(\\p{Ll})`, 'u');
-const CAP_AFTER_SENTENCE_RE = new RegExp(`([.!?…])(${S}*(?:<\\/?[^>]+>${S}*)*)(\\p{Ll})`, 'gu');
-const CAP_AFTER_BLOCK_RE = new RegExp(`(<\\/?(?:p|h[1-6]|li|blockquote|div|td|th)[^>]*>${S}*)(\\p{Ll})`, 'giu');
-const CAP_AFTER_BREAK_RE = new RegExp(`(\\n${S}*)(\\p{Ll})`, 'gu');
+// An opener binds to the word it opens: "¿ qué tal ?" → "¿qué tal?". MUST run before the
+// capitalization passes, so they see the real first letter instead of a space.
+const SPACE_AFTER_OPENER_RE = new RegExp(`([${SENTENCE_OPENERS}])${S}+`, 'gu');
+const CAP_FIRST_RE = new RegExp(`^(${S}*(?:<[^>]+>${S}*)*${OPEN})(\\p{Ll})`, 'u');
+const CAP_AFTER_SENTENCE_RE = new RegExp(`([.!?…])(${S}*(?:<\\/?[^>]+>${S}*)*${OPEN})(\\p{Ll})`, 'gu');
+const CAP_AFTER_BLOCK_RE = new RegExp(
+  `(<\\/?(?:p|h[1-6]|li|blockquote|div|td|th)[^>]*>${S}*${OPEN})(\\p{Ll})`,
+  'giu',
+);
+const CAP_AFTER_BREAK_RE = new RegExp(`(\\n${S}*${OPEN})(\\p{Ll})`, 'gu');
 
 const up = (ch: string): string => ch.toUpperCase();
 
@@ -92,8 +116,10 @@ export function postProcess(input: string): string {
   text = text.replace(SPACE_BEFORE_PUNCT_RE, '$1');
   text = text.replace(SPACE_AFTER_COMMA_RE, '$1 ');
   text = text.replace(SPACE_AFTER_SENTENCE_RE, '$1 ');
+  // 7a: a Spanish opener binds to the word it opens. Before capitalization, deliberately.
+  text = text.replace(SPACE_AFTER_OPENER_RE, '$1');
 
-  // 8: capitalize the first letter (skipping leading HTML tags).
+  // 8: capitalize the first letter (skipping leading HTML tags and a sentence opener).
   text = text.replace(CAP_FIRST_RE, (_m, lead: string, ch: string) => lead + up(ch));
   // 9: capitalize after sentence punctuation (through HTML tags).
   text = text.replace(CAP_AFTER_SENTENCE_RE, (_m, p: string, gap: string, ch: string) => p + gap + up(ch));

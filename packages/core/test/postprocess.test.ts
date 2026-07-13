@@ -57,6 +57,44 @@ describe('postProcess — shielding', () => {
   });
 });
 
+// Spanish is the only European language whose punctuation OPENS a sentence. The spacing and
+// capitalization passes were written as if a sentence always begins with a letter, so every
+// Spanish question silently lost its capital: the capitalizer upper-cased '¿', which has no
+// uppercase form, and left the real first letter alone.
+describe('sentence openers — ¿ and ¡ (Spanish)', () => {
+  test('capitalizes the letter after an opener at the start of the text', () => {
+    expect(postProcess('¿cómo estás?')).toBe('¿Cómo estás?');
+    expect(postProcess('¡genial!')).toBe('¡Genial!');
+  });
+
+  test('capitalizes after sentence-ending punctuation, through the opener', () => {
+    expect(postProcess('hola. ¿cómo estás? ¡genial!')).toBe('Hola. ¿Cómo estás? ¡Genial!');
+  });
+
+  test('the opener binds to the word it opens', () => {
+    expect(postProcess('Hola. ¿ qué tal ?')).toBe('Hola. ¿Qué tal?');
+    expect(postProcess('¡ genial !')).toBe('¡Genial!');
+  });
+
+  test('a space BEFORE the opener is kept — that one is correct Spanish', () => {
+    expect(postProcess('Hola, ¿qué tal?')).toBe('Hola, ¿qué tal?');
+  });
+
+  test('works after a block tag (the plugin renders HTML paragraphs) and after a newline', () => {
+    expect(postProcess('<p>¿cómo estás?</p><p>¡genial!</p>')).toBe(
+      '<p>¿Cómo estás?</p><p>¡Genial!</p>',
+    );
+    expect(postProcess('Hola.\n¿cómo estás?')).toBe('Hola.\n¿Cómo estás?');
+  });
+
+  // The opener set is deliberately NARROW. Quotes and brackets both open AND close, so treating
+  // them as openers would capitalize list markers. Lock that out.
+  test('quotes and brackets are NOT openers', () => {
+    expect(postProcess('Elige una. (a) primero')).toBe('Elige una. (a) primero');
+    expect(postProcess('Он сказал. "привет"')).toBe('Он сказал. "привет"');
+  });
+});
+
 describe('render — postProcess is on by default, off with postProcess:false', () => {
   test('default capitalizes; false leaves the raw pick', () => {
     expect(render('{a|b|c}', { seed: 1 })).toMatch(/^[ABC]$/); // capitalized
