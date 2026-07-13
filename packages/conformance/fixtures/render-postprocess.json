@@ -5,7 +5,9 @@
     "op": "render",
     "template": "hello world",
     "postProcess": true,
-    "expect": { "output": "Hello world" }
+    "expect": {
+      "output": "Hello world"
+    }
   },
   {
     "id": "postprocess/capitalize-after-period",
@@ -13,7 +15,9 @@
     "op": "render",
     "template": "hello. world",
     "postProcess": true,
-    "expect": { "output": "Hello. World" }
+    "expect": {
+      "output": "Hello. World"
+    }
   },
   {
     "id": "postprocess/capitalize-after-ellipsis",
@@ -22,7 +26,9 @@
     "op": "render",
     "template": "wait… really",
     "postProcess": true,
-    "expect": { "output": "Wait… Really" }
+    "expect": {
+      "output": "Wait… Really"
+    }
   },
   {
     "id": "postprocess/capitalize-after-linebreak",
@@ -30,7 +36,9 @@
     "op": "render",
     "template": "line one\nline two",
     "postProcess": true,
-    "expect": { "output": "Line one\nLine two" }
+    "expect": {
+      "output": "Line one\nLine two"
+    }
   },
   {
     "id": "postprocess/collapse-multiple-spaces",
@@ -39,7 +47,9 @@
     "op": "render",
     "template": "Word  with   spaces",
     "postProcess": true,
-    "expect": { "output": "Word with spaces" }
+    "expect": {
+      "output": "Word with spaces"
+    }
   },
   {
     "id": "postprocess/remove-space-before-comma",
@@ -47,7 +57,9 @@
     "op": "render",
     "template": "Word , next",
     "postProcess": true,
-    "expect": { "output": "Word, next" }
+    "expect": {
+      "output": "Word, next"
+    }
   },
   {
     "id": "postprocess/remove-space-before-exclamation",
@@ -55,7 +67,9 @@
     "op": "render",
     "template": "Hello ! World",
     "postProcess": true,
-    "expect": { "output": "Hello! World" }
+    "expect": {
+      "output": "Hello! World"
+    }
   },
   {
     "id": "postprocess/add-space-after-comma",
@@ -63,7 +77,9 @@
     "op": "render",
     "template": "one,two",
     "postProcess": true,
-    "expect": { "output": "One, two" }
+    "expect": {
+      "output": "One, two"
+    }
   },
   {
     "id": "postprocess/digit-after-comma-not-spaced",
@@ -72,7 +88,9 @@
     "op": "render",
     "template": "Price 3,14 eur",
     "postProcess": true,
-    "expect": { "output": "Price 3,14 eur" }
+    "expect": {
+      "output": "Price 3,14 eur"
+    }
   },
   {
     "id": "postprocess/period-then-letter-spaced-and-capped",
@@ -80,7 +98,9 @@
     "op": "render",
     "template": "a.b",
     "postProcess": true,
-    "expect": { "output": "A. B" }
+    "expect": {
+      "output": "A. B"
+    }
   },
   {
     "id": "postprocess/decimal-shielded",
@@ -89,7 +109,9 @@
     "op": "render",
     "template": "Version 2.5 released",
     "postProcess": true,
-    "expect": { "output": "Version 2.5 released" }
+    "expect": {
+      "output": "Version 2.5 released"
+    }
   },
   {
     "id": "postprocess/url-shielded",
@@ -98,7 +120,9 @@
     "op": "render",
     "template": "visit https://example.com now",
     "postProcess": true,
-    "expect": { "output": "Visit https://example.com now" }
+    "expect": {
+      "output": "Visit https://example.com now"
+    }
   },
   {
     "id": "postprocess/url-trailing-punctuation",
@@ -107,7 +131,9 @@
     "op": "render",
     "template": "see https://example.com.",
     "postProcess": true,
-    "expect": { "output": "See https://example.com." }
+    "expect": {
+      "output": "See https://example.com."
+    }
   },
   {
     "id": "postprocess/email-shielded",
@@ -115,7 +141,9 @@
     "op": "render",
     "template": "mail me@example.com please",
     "postProcess": true,
-    "expect": { "output": "Mail me@example.com please" }
+    "expect": {
+      "output": "Mail me@example.com please"
+    }
   },
   {
     "id": "postprocess/mailto-uri-shielded",
@@ -124,7 +152,9 @@
     "op": "render",
     "template": "email mailto:contact@example.com now",
     "postProcess": true,
-    "expect": { "output": "Email mailto:contact@example.com now" }
+    "expect": {
+      "output": "Email mailto:contact@example.com now"
+    }
   },
   {
     "id": "postprocess/mailto-uri-in-href-shielded",
@@ -133,7 +163,9 @@
     "op": "render",
     "template": "<a href=\"mailto:contact@example.com\">write us</a>",
     "postProcess": true,
-    "expect": { "output": "<a href=\"mailto:contact@example.com\">Write us</a>" }
+    "expect": {
+      "output": "<a href=\"mailto:contact@example.com\">Write us</a>"
+    }
   },
   {
     "id": "postprocess/mailto-uri-trailing-punctuation",
@@ -142,7 +174,9 @@
     "op": "render",
     "template": "see mailto:contact@example.com. next",
     "postProcess": true,
-    "expect": { "output": "See mailto:contact@example.com. Next" }
+    "expect": {
+      "output": "See mailto:contact@example.com. Next"
+    }
   },
   {
     "id": "postprocess/tel-uri-shielded",
@@ -151,7 +185,9 @@
     "op": "render",
     "template": "reach us at tel:+1-800-555-0000 today",
     "postProcess": true,
-    "expect": { "output": "Reach us at tel:+1-800-555-0000 today" }
+    "expect": {
+      "output": "Reach us at tel:+1-800-555-0000 today"
+    }
   },
   {
     "id": "postprocess/bare-domain-shielded-then-sentence",
@@ -160,7 +196,9 @@
     "op": "render",
     "template": "visit example.com. next",
     "postProcess": true,
-    "expect": { "output": "Visit example.com. Next" }
+    "expect": {
+      "output": "Visit example.com. Next"
+    }
   },
   {
     "id": "postprocess/punycode-domain-shielded",
@@ -168,7 +206,9 @@
     "op": "render",
     "template": "open xn--e1afmapc.xn--p1ai today",
     "postProcess": true,
-    "expect": { "output": "Open xn--e1afmapc.xn--p1ai today" }
+    "expect": {
+      "output": "Open xn--e1afmapc.xn--p1ai today"
+    }
   },
   {
     "id": "postprocess/abbrev-whitelist-ru",
@@ -177,7 +217,9 @@
     "op": "render",
     "template": "Текст соц. сети тут",
     "postProcess": true,
-    "expect": { "output": "Текст соц. сети тут" }
+    "expect": {
+      "output": "Текст соц. сети тут"
+    }
   },
   {
     "id": "postprocess/abbrev-whitelist-en",
@@ -186,7 +228,9 @@
     "op": "render",
     "template": "call Mr. smith now",
     "postProcess": true,
-    "expect": { "output": "Call Mr. smith now" }
+    "expect": {
+      "output": "Call Mr. smith now"
+    }
   },
   {
     "id": "postprocess/abbrev-multidot",
@@ -195,7 +239,9 @@
     "op": "render",
     "template": "See e.g. this",
     "postProcess": true,
-    "expect": { "output": "See e.g. this" }
+    "expect": {
+      "output": "See e.g. this"
+    }
   },
   {
     "id": "postprocess/trim-and-collapse",
@@ -204,6 +250,74 @@
     "op": "render",
     "template": "  hello  ",
     "postProcess": true,
-    "expect": { "output": "Hello" }
+    "expect": {
+      "output": "Hello"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-capitalize-start",
+    "note": "Spanish opens a question with an inverted mark. The capitalizer upper-cases the first CHARACTER after a sentence boundary; '¿' has no uppercase form, so without an opener rule the real first letter stays lowercase. SENTENCE_OPENERS = '¿¡' only — quotes/brackets are NOT openers (they also close, and capitalizing after them would mangle list markers).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "¿cómo estás?",
+    "postProcess": true,
+    "expect": {
+      "output": "¿Cómo estás?"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-capitalize-after-sentence",
+    "note": "Opener sits between the sentence-ending punctuation and the first letter. Covers both inverted marks.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "hola. ¿cómo estás? ¡genial!",
+    "postProcess": true,
+    "expect": {
+      "output": "Hola. ¿Cómo estás? ¡Genial!"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-binds-to-word",
+    "note": "An opener binds to the word it opens: '¿ qué' -> '¿qué'. This spacing pass MUST run before capitalization, so the capitalizer sees the real first letter and not a space. The second input ('¿cómo', no space) proves the rule is not merely a whitespace artefact.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hola. ¿ qué tal ? ¡ genial !",
+    "postProcess": true,
+    "expect": {
+      "output": "Hola. ¿Qué tal? ¡Genial!"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-after-block-tag",
+    "note": "The plugin's primary output is HTML paragraphs, so an opener after a block-level tag is the commonest real case of all.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "<p>¿cómo estás?</p><p>¡genial!</p>",
+    "postProcess": true,
+    "expect": {
+      "output": "<p>¿Cómo estás?</p><p>¡Genial!</p>"
+    }
+  },
+  {
+    "id": "postprocess/es-opener-after-line-break",
+    "note": "Multi-line templates hit the newline capitalization rule rather than the sentence-punctuation one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hola.\n¿cómo estás?",
+    "postProcess": true,
+    "expect": {
+      "output": "Hola.\n¿Cómo estás?"
+    }
+  },
+  {
+    "id": "postprocess/opener-set-excludes-quotes-and-brackets",
+    "note": "Guards the deliberate NARROWNESS of SENTENCE_OPENERS. A quote or bracket is not an opener: capitalizing after one would break list markers like '(a) primero'. If this case ever starts capitalizing, the contract was widened by accident.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Elige una. (a) primero",
+    "postProcess": true,
+    "expect": {
+      "output": "Elige una. (a) primero"
+    }
   }
 ]
