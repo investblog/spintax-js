@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, validate } from '@spintax/core';
-import bot, { HELP_EXAMPLES } from '../src/index';
+import bot, { EXAMPLE_POWER, HELP_EXAMPLES, LOCALE } from '../src/index';
 
 interface AiMessages {
   messages: { role: string; content: string }[];
@@ -76,6 +76,17 @@ describe('telegram bot', () => {
     expect(sent[0].text).toContain('%name%');
   });
 
+  // Same locale trap on the paste path, not just /draft: a 3-form plural is perfectly good spintax
+  // in ru, but this bot renders in en. Reporting it beats silently emitting ｛…｝.
+  test('a pasted 3-form plural is reported against the bot locale, never rendered as mush', async () => {
+    await bot.fetch(update('You have 3 {plural 3: товар|товара|товаров} in cart.'), ENV);
+    const text: string = sent[0].text;
+    expect(text).toContain('Not valid');
+    expect(text).toContain('2 plural forms');
+    expect(text).not.toContain('｛');
+    expect(text).not.toContain('<code>'); // plain-text reply — no HTML may leak through
+  });
+
   test('/draft asks the model, then returns the template + variations', async () => {
     await bot.fetch(update('/draft a friendly welcome'), ENV);
     expect(aiRun).toHaveBeenCalledOnce();
@@ -102,15 +113,15 @@ describe('telegram bot', () => {
 // SPACE). Teaching-by-example only works if the examples are run, so run them.
 describe('the help must not teach anything the engine rejects', () => {
   test.each(HELP_EXAMPLES)('example %#: validates clean and renders', (example) => {
-    expect(validate(example).filter((d) => d.severity === 'error')).toEqual([]);
-    const out = render(example, { seed: 1, context: { name: 'Ada' } });
+    expect(validate(example, { locale: LOCALE }).filter((d) => d.severity === 'error')).toEqual([]);
+    const out = render(example, { seed: 1, locale: LOCALE, context: { name: 'Ada' } });
     expect(out).not.toContain('｛'); // fullwidth braces = the engine rejected a block
     expect(out).not.toContain('#set'); // the directive must be consumed, never printed
   });
 
   test('the power example proves #set collapses once — one product name, twice', () => {
     for (let seed = 1; seed <= 6; seed += 1) {
-      const out = render(HELP_EXAMPLES[1], { seed, context: { name: 'Ada' } });
+      const out = render(EXAMPLE_POWER, { seed, locale: LOCALE, context: { name: 'Ada' } });
       const course = (out.match(/course/gu) ?? []).length;
       const training = (out.match(/training/gu) ?? []).length;
       // Both mentions resolve to the SAME word — never one of each.
@@ -120,7 +131,7 @@ describe('the help must not teach anything the engine rejects', () => {
   });
 
   test('the permutation example sets a separator, so clauses do not run together', () => {
-    const out = render(HELP_EXAMPLES[1], { seed: 1, context: { name: 'Ada' } });
+    const out = render(EXAMPLE_POWER, { seed: 1, locale: LOCALE, context: { name: 'Ada' } });
     expect(out).toMatch(/(enrol you today|answer any question|refund within 14 days), /u);
   });
 
@@ -140,6 +151,36 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
     for (const construct of ['#set', '{?VAR?', '{plural', 'DEFAULT SEPARATOR IS A SINGLE SPACE']) {
       expect(system).toContain(construct);
     }
+  });
+
+  // The bug this suite exists for: the prompt was built with locale 'en' but validate()/render()
+  // were called without one. validate() skips plural-arity checks with no locale, render() defaults
+  // to 2-form — so a 3-form English plural was pronounced "valid" and then rendered as ｛…｝ mush.
+  // Locale must be the SAME in the prompt, the validation and the render.
+  test('a wrong-arity plural is never shown as a sample — it is repaired or reported', async () => {
+    aiRun
+      .mockResolvedValueOnce({ response: 'You have 3 {plural 3: item|few|items} in cart.' })
+      .mockResolvedValueOnce({ response: 'You have 3 {plural 3: item|items} in cart.' });
+
+    await bot.fetch(update('/draft cart reminder'), ENV);
+
+    const text: string = sent[0].text;
+    expect(text).not.toContain('｛'); // never hand the user a fullwidth fallback
+    expect(aiRun).toHaveBeenCalledTimes(2); // the arity error was CAUGHT, so a repair was attempted
+    expect(promptOf(1).user).toMatch(/\[plural\.arity\]/u); // …and the model was told exactly that
+    expect(text).toContain('You have 3 items in cart.'); // repaired, then rendered for real
+  });
+
+  test('if the repair also fails, the user is told — not handed fullwidth mush', async () => {
+    aiRun
+      .mockResolvedValueOnce({ response: 'You have 3 {plural 3: item|few|items} in cart.' })
+      .mockResolvedValueOnce({ response: 'You have 3 {plural 3: still|three|forms} in cart.' });
+
+    await bot.fetch(update('/draft cart reminder'), ENV);
+
+    const text: string = sent[0].text;
+    expect(text).toContain("could not fix"); // reported honestly…
+    expect(text).not.toMatch(/^\d+\. .*｛plural/mu); // …and never dressed up as a sample variation
   });
 
   test('an invalid draft is repaired in one extra round-trip, not handed over broken', async () => {

@@ -53,28 +53,63 @@ be said another way. EVERY variant the renderer can produce must read like a hum
 template that can produce one awkward variant is a broken template, no matter how much variety it
 offers.`;
 
+/** Locales whose plural buckets are 3-form. Everything else the engine treats as 2-form. */
+const THREE_FORM_LANGS = new Set(['ru', 'uk', 'be']);
+
+const langOf = (locale: string | undefined): string => (locale ?? 'en').slice(0, 2).toLowerCase();
+
 /**
- * The worked examples the prompt teaches from.
+ * How many buckets `{plural …}` must have for this locale.
+ *
+ * This is NOT cosmetic. The engine validates plural arity against the locale, so a 3-form plural
+ * under `en` is a hard `plural.arity` error and renders as the fullwidth fallback ｛…｝. Teaching
+ * the model the wrong arity produces templates that pass a locale-less `validate()` and then
+ * render as garbage — so the prompt's plural shape MUST follow the locale it is built for.
+ */
+export function pluralArity(locale: string | undefined): 2 | 3 {
+  return THREE_FORM_LANGS.has(langOf(locale)) ? 3 : 2;
+}
+
+export interface PromptExamples {
+  set: string;
+  permutation: string;
+  conditional: string;
+  plural: string;
+}
+
+/**
+ * The worked examples the prompt teaches from, for a given locale.
  *
  * Exported and interpolated into the prompt rather than retyped inside it, so the test suite can
- * `validate()` the exact strings the model is shown. A prompt that teaches invalid syntax poisons
- * everything downstream of it — that must be a test failure, not a surprise in production.
+ * `validate()` the exact strings the model is shown — under the same locale. A prompt that teaches
+ * invalid syntax poisons everything downstream of it; that must be a test failure, not a surprise
+ * in production.
  */
-export const PROMPT_EXAMPLES = {
-  set: [
-    '#set %product% = {course|training}',
-    '#set %offer% = our new %product%',
-    'Get %offer% today — the %product% starts on Monday.',
-  ].join('\n'),
-  permutation: 'We can [<sep=", ">reply within the hour|set up your account|migrate your data].',
-  conditional: '{?discount?Save %discount% today|Get started in minutes}',
-  plural: 'You have %n% {plural %n%: item|items} in your cart.',
-} as const;
+export function promptExamples(locale?: string): PromptExamples {
+  return {
+    set: [
+      '#set %product% = {course|training}',
+      '#set %offer% = our new %product%',
+      'Get %offer% today — the %product% starts on Monday.',
+    ].join('\n'),
+    permutation: 'We can [<sep=", ">reply within the hour|set up your account|migrate your data].',
+    conditional: '{?discount?Save %discount% today|Get started in minutes}',
+    plural:
+      pluralArity(locale) === 3
+        ? 'У вас %n% {plural %n%: товар|товара|товаров} в корзине.'
+        : 'You have %n% {plural %n%: item|items} in your cart.',
+  };
+}
 
 // The permutation note is not pedantry: the default separator is a single SPACE, so a bare
 // [clause|clause] joins into mush ("we reply fast we migrate your data"). Models get this wrong
 // unless told explicitly.
-const SYNTAX = `SYNTAX — this is the COMPLETE list. Nothing else exists.
+function syntaxBlock(locale: string | undefined): string {
+  const ex = promptExamples(locale);
+  const pluralForm =
+    pluralArity(locale) === 3 ? '{plural %n%: one|few|many}' : '{plural %n%: one|many}';
+
+  return `SYNTAX — this is the COMPLETE list. Nothing else exists.
 
 {a|b|c}
     Pick exactly one. Rerolls at EVERY occurrence: two separate {Hi|Hello} may disagree.
@@ -83,7 +118,7 @@ const SYNTAX = `SYNTAX — this is the COMPLETE list. Nothing else exists.
     Define once, reuse. The value is chosen ONCE, and every %v% in the copy is the SAME.
     Use it for anything that must stay consistent across sentences (a product name, a tone).
     A #set value may itself contain {a|b} AND other variables — variables nest:
-${indent(PROMPT_EXAMPLES.set)}
+${indent(ex.set)}
     Here %offer% contains %product%, so the two can never contradict each other. Inline {a|b}
     would reroll and could say "course" in one sentence and "training" in the next.
 
@@ -95,16 +130,19 @@ ${indent(PROMPT_EXAMPLES.set)}
     ALWAYS set sep when the items are clauses — the DEFAULT SEPARATOR IS A SINGLE SPACE, which
     turns clauses into mush. Use permutations only for items of EQUAL weight, where the order
     genuinely does not matter (benefits, features):
-${indent(PROMPT_EXAMPLES.permutation)}
+${indent(ex.permutation)}
 
 {?VAR?then|else}
     Conditional. Emits "then" if VAR has a truthy value, otherwise "else".
     Use it when the copy must adapt to data that may be missing:
-${indent(PROMPT_EXAMPLES.conditional)}
+${indent(ex.conditional)}
 
-{plural %n%: one|few|many}
-    Plural agreement, by count and locale. NEVER hand-roll counts as {item|items}:
-${indent(PROMPT_EXAMPLES.plural)}`;
+${pluralForm}
+    Plural agreement by count. This target language takes EXACTLY ${pluralArity(locale)} forms —
+    writing any other number of forms is a hard error, not a style choice. NEVER hand-roll counts
+    as {item|items}:
+${indent(ex.plural)}`;
+}
 
 const RULES = `HARD RULES
 1. Grammar-safety. Every option inside {…} must fit the surrounding sentence identically — same
@@ -199,7 +237,7 @@ export function buildAuthoringPrompt(opts: AuthoringPromptOptions): BuiltPrompt 
   const systemPrompt = [
     ROLE,
     GOAL,
-    SYNTAX,
+    syntaxBlock(opts.locale),
     grammarBlock(opts.locale),
     levelBlock(level),
     RULES,
@@ -225,14 +263,34 @@ export function buildAuthoringPrompt(opts: AuthoringPromptOptions): BuiltPrompt 
   return { systemPrompt, userPrompt, allowedVariables, promptVersion: PROMPT_VERSION };
 }
 
+export interface RepairPromptOptions {
+  /**
+   * MUST be the same locale the template was authored under and will be rendered with — the
+   * plural arity the model is told to produce depends on it, and a mismatch is the very bug the
+   * repair is supposed to fix.
+   */
+  locale?: string;
+  /** Restated so a repair cannot smuggle in a variable the host does not have. */
+  allowedVariables?: readonly string[];
+}
+
 /**
  * Build a repair prompt from `validate()` output.
  *
  * Without this the authoring loop dead-ends the first time a model returns something invalid —
  * and it will. The precise spans added in core 0.1.3 are what let us point the model at the exact
  * offending token instead of saying "something is wrong".
+ *
+ * It carries the SAME authoring constraints as the draft prompt (locale, allowed variables): a
+ * repair that fixes a bracket while inventing a `%variable%` or the wrong plural arity is not a
+ * repair.
  */
-export function buildRepairPrompt(template: string, diagnostics: readonly Diagnostic[]): BuiltPrompt {
+export function buildRepairPrompt(
+  template: string,
+  diagnostics: readonly Diagnostic[],
+  opts: RepairPromptOptions = {},
+): BuiltPrompt {
+  const allowedVariables = opts.allowedVariables ?? [];
   const errors = diagnostics.filter((d) => d.severity === 'error');
 
   const numbered = template
@@ -248,12 +306,20 @@ export function buildRepairPrompt(template: string, diagnostics: readonly Diagno
     ROLE,
     'You are FIXING an invalid spintax template. Change as little as possible: repair the reported',
     'spans and leave everything else byte-for-byte identical. Do not rewrite the copy.',
-    SYNTAX,
+    syntaxBlock(opts.locale),
+    grammarBlock(opts.locale),
     OUTPUT,
   ].join('\n\n');
 
+  const vars =
+    allowedVariables.length > 0
+      ? allowedVariables.map((v) => `%${v}%`).join(', ')
+      : '(none — the template must not use any %variable%)';
+
   const userPrompt = [
     'This template failed validation.',
+    '',
+    `ALLOWED VARIABLES: ${vars}`,
     '',
     'TEMPLATE (line-numbered):',
     numbered,
@@ -264,7 +330,7 @@ export function buildRepairPrompt(template: string, diagnostics: readonly Diagno
     'Return the corrected template. Output only the template.',
   ].join('\n');
 
-  return { systemPrompt, userPrompt, allowedVariables: [], promptVersion: PROMPT_VERSION };
+  return { systemPrompt, userPrompt, allowedVariables, promptVersion: PROMPT_VERSION };
 }
 
 /**
