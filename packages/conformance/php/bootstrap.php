@@ -33,15 +33,30 @@ if (!is_dir($src)) {
     exit(1);
 }
 
-// PSR-4: Spintax\ -> <src>/  (mirrors the plugin's own autoloader in spintax.php).
+// PSR-4, for either of the two PHP engines this runner can drive:
+//
+//   - the WordPress plugin maps `Spintax\` -> src/, so a class lands at src/Core/Engine/Parser.php
+//     (this mirrors the plugin's own autoloader in spintax.php);
+//   - the `spintax/core` Composer package maps `Spintax\Core\` -> src/, so the same class lands at
+//     src/Engine/Parser.php.
+//
+// Trying both means one runner certifies both engines against the same corpus, which is the whole
+// point of having a corpus.
 spl_autoload_register(static function (string $class) use ($src): void {
-    $prefix = 'Spintax\\';
-    if (strncmp($class, $prefix, strlen($prefix)) !== 0) {
+    if (strncmp($class, 'Spintax\\', 8) !== 0) {
         return;
     }
-    $relative = substr($class, strlen($prefix));
-    $file = $src . '/' . str_replace('\\', '/', $relative) . '.php';
-    if (is_file($file)) {
-        require $file;
+
+    $candidates = [$src . '/' . str_replace('\\', '/', substr($class, 8)) . '.php'];
+
+    if (strncmp($class, 'Spintax\\Core\\', 13) === 0) {
+        $candidates[] = $src . '/' . str_replace('\\', '/', substr($class, 13)) . '.php';
+    }
+
+    foreach ($candidates as $file) {
+        if (is_file($file)) {
+            require $file;
+            return;
+        }
     }
 });

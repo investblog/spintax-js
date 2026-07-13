@@ -13,9 +13,9 @@ assumed. (See the repo `docs/spec-npm-engine.md` §3.1, §7.)
 ## Prerequisites
 
 - PHP **7.4+** and [Composer](https://getcomposer.org/).
-- A local checkout of the **PHP plugin** (this repo's sibling). The runner autoloads the engine
-  from its `src/` directory — no WordPress, wp-env, or MySQL required (the Core engine classes
-  are pure PHP).
+- A local checkout of a **PHP engine** — either the WordPress plugin or the `spintax/core` Composer
+  package. The runner autoloads it straight from `src/`; no WordPress, wp-env or MySQL is required,
+  because the Core engine classes are pure PHP.
 
 ## Run
 
@@ -23,14 +23,30 @@ assumed. (See the repo `docs/spec-npm-engine.md` §3.1, §7.)
 cd packages/conformance/php
 composer install
 
-# Default: expects the plugin at ../../../../spintax/plugin/src (sibling ../spintax checkout).
+# Default: the WordPress plugin at ../../../../spintax/plugin/src (a sibling ../spintax checkout).
 vendor/bin/phpunit
 
-# Or point at the plugin explicitly:
-SPINTAX_PLUGIN_SRC=/path/to/spintax/plugin/src vendor/bin/phpunit
+# Or name the engine explicitly. Both layouts work:
+SPINTAX_PLUGIN_SRC=/path/to/spintax/plugin/src vendor/bin/phpunit   # plugin:  Spintax\      -> src/
+SPINTAX_PLUGIN_SRC=/path/to/spintax-php/src   vendor/bin/phpunit    # package: Spintax\Core\ -> src/
 
 # Fixtures default to ../fixtures; override with SPINTAX_FIXTURES if needed.
 ```
+
+## In CI
+
+Both directions are enforced, so neither side can drift alone:
+
+- **Here** (`php-parity` in this repo's CI) — the corpus *as changed by a PR* is run against both PHP
+  engines. A fixture cannot land unless the engines it binds already satisfy it. The consequence is
+  deliberate: if a fixture describes behaviour the PHP side has not shipped yet, this goes red. Land
+  the PHP change first, then the corpus.
+- **In the plugin** (`conformance` in `investblog/spintax`) — every push runs this runner against
+  `plugin/src`, and the release ZIP is gated on it.
+
+Before both jobs existed, this was a manual gate — which is precisely how three post-process defects
+reached users: a fix shipped in the plugin with no PHP-side test, because its only guard was a
+fixture in *this* repository that nothing over there ever ran.
 
 ## What it checks (and deliberately doesn't)
 

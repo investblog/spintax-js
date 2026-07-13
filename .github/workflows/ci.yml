@@ -57,3 +57,51 @@ jobs:
 
       - name: Tarball smoke (install + ESM/CJS import)
         run: npm run smoke:pack
+
+  # The TS suite proves this corpus is green in TypeScript — which only proves TypeScript agrees
+  # with our own reading of the contract. Running the SAME fixtures, as changed by this very PR,
+  # through the PHP engines closes the loop in the other direction: a fixture cannot land here
+  # unless the engines it is supposed to bind already satisfy it.
+  #
+  # Consequence, and it is deliberate: a fixture describing behaviour the PHP side has not shipped
+  # yet turns this red. Land the PHP change first, then the corpus. The engines move together or
+  # they do not move.
+  php-parity:
+    name: Corpus vs ${{ matrix.engine.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        engine:
+          - name: WordPress plugin
+            repo: investblog/spintax
+            src: plugin/src
+          - name: spintax/core
+            repo: investblog/spintax-php
+            src: src
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the engine under test
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.engine.repo }}
+          path: .engine
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring
+          coverage: none
+          tools: composer
+
+      - name: Install the runner
+        run: composer install --no-progress --prefer-dist
+        working-directory: packages/conformance/php
+
+      - name: Run this corpus against that engine
+        run: vendor/bin/phpunit
+        working-directory: packages/conformance/php
+        env:
+          SPINTAX_PLUGIN_SRC: ${{ github.workspace }}/.engine/${{ matrix.engine.src }}
