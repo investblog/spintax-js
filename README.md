@@ -55,16 +55,21 @@ Full authoring reference lives in the parent project's `docs/gtw-syntax-referenc
 
 ```
 packages/
-  core/           # @spintax/core — the engine (M1+)
+  core/              # @spintax/core — the engine (published)
+  conformance/       # the shared golden corpus — the cross-engine parity gate
+  authoring-prompt/  # the canonical LLM prompt for writing spintax (shared by every surface)
 examples/
-  worker/         # Cloudflare Worker — HTTP API (validate/render/extract/analyze); deployed
-  telegram-bot/   # Telegram bot @spintaxnetbot — validate + preview + AI /draft; deployed
+  worker/            # Cloudflare Worker — HTTP API (validate/render/extract/analyze); deployed
+  telegram-bot/      # Telegram bot @spintaxnetbot — validate + preview + AI /draft; deployed
 docs/spec-npm-engine.md  # governing spec (design source of truth)
-LICENSE           # MIT
+LICENSE              # MIT
 ```
 
-`examples/*` import `@spintax/core` only — consumers dogfood the engine's public API without
-polluting it.
+Consumers **import** the engine and never feed back into it — the purity boundary (spec §8) is
+about *direction*, not import count. The bot, for instance, imports both `@spintax/core` and
+`@spintax/authoring-prompt`, and contributes to neither: a consumer proves the API, it must not
+pollute it. The prompt lives in its own package precisely so that no surface grows a private
+dialect of it.
 
 ## Design & specs
 

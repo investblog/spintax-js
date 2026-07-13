@@ -1,8 +1,16 @@
 # n8n community node — `n8n-nodes-spintax` (spec draft)
 
-Status: **DRAFT / pre-code.** Idea captured 2026-07-13; nothing is scheduled.
+Status: **DRAFT / pre-code — but UNBLOCKED and NEXT UP.** The prerequisite (the canonical authoring
+prompt) shipped in [#46](https://github.com/investblog/spintax-js/pull/46), so this is the agreed
+next product step. Nothing is written yet.
 Owner: 301st
 Tracking issue: [#44](https://github.com/investblog/spintax-js/issues/44).
+
+> **Start here.** `buildAuthoringPrompt()` and `buildRepairPrompt()` already take
+> `{ locale, allowedVariables }`, and `allowedVariables` accepts `{ name, case?, note? }` — which is
+> exactly what this node needs, because its allow-list comes from the current item's fields and (in
+> an inflected language) each field carries a grammatical case. The *rules* live in the system
+> prompt and the *per-item list* in the user prompt, so the stable half stays cacheable across rows.
 
 ## 1. Why this, and why here
 

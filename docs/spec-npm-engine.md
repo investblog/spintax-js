@@ -1,6 +1,6 @@
 # Spintax npm engine — `@spintax/core`
 
-Status: IMPLEMENTED — `@spintax/core` **0.1.4** is published to npm (MIT, provenance via OIDC).
+Status: IMPLEMENTED — `@spintax/core` **0.1.6** is published to npm (MIT, provenance via OIDC).
 M0–M5 are shipped: golden corpus, engine (parse / render / validate / extract / analyze /
 neutralize), the reference Cloudflare Worker, and the Telegram bot. **M6** (browser playground on
 `spintax.net`) is the one open milestone. The spec stays the source of truth for the parity
@@ -619,6 +619,11 @@ rule), after the Worker proves the need — never speculatively.
 ---
 
 ## 11. Suggested milestones (once questions close)
+
+> **HISTORICAL — M0 → M5 are done and shipped.** Kept for the *rationale* (why things are sequenced
+> this way), not as a to-do. Its instructions are spent: "do NOT publish `0.1.0` yet" was satisfied
+> long ago, and the package is on **0.1.6**. The only open milestone is **M6** (browser playground);
+> the agreed next product step is the **n8n node** (`docs/spec-n8n-node.md`, #44).
 
 1. **M0 — corpus extraction.** **First task: lock the §7.1 fixture schema** (incl. the `rng`
    selection-strategy discriminator). Then turn the ~276 parity-relevant PHPUnit cases (§3.1)

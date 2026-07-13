@@ -1,9 +1,28 @@
 # Canonical LLM Spintax Authoring Prompt (spec draft)
 
-Status: **DRAFT / pre-code.** Captured 2026-07-13; nothing scheduled.
+Status: **IMPLEMENTED — v1 shipped.** `packages/authoring-prompt` exists (merged in
+[#46](https://github.com/investblog/spintax-js/pull/46)); the Telegram bot is its first consumer.
+This document is now the **rationale**, not a plan — read it for *why* the prompt is shaped this
+way. The one part still outstanding is §4, the prompt-conformance suite, tracked as
+[#47](https://github.com/investblog/spintax-js/issues/47).
 Owner: 301st
-Tracking issue: [#45](https://github.com/investblog/spintax-js/issues/45).
-Prerequisite for: [`spec-n8n-node.md`](./spec-n8n-node.md) (#44).
+Tracking issue: [#45](https://github.com/investblog/spintax-js/issues/45) — **closed, delivered**.
+Prerequisite for: [`spec-n8n-node.md`](./spec-n8n-node.md) (#44) — **satisfied**.
+
+> **What shipped beyond the original design.** Three rules were forced by running the prompt's own
+> examples through the real engine, and they generalise to every surface:
+>
+> 1. **Locale discipline.** `validate()` skips plural-arity checks when given no locale, while
+>    `render()` defaults to 2-form — so a 3-form plural passes validation and then renders as the
+>    fullwidth fallback `｛…｝`. Validate with the *same* locale you render with.
+> 2. **`lastsep`.** The engine supports it; without it every generated list reads "a, b, c" instead
+>    of "a, b and c". The default permutation separator is a **space**, so clauses without `sep`
+>    come out as mush.
+> 3. **Grammatical case is part of a variable's value.** A variable is substituted verbatim and
+>    cannot be inflected from outside, which in Russian forces one variable per case. Hence
+>    `AllowedVariable = string | { name, case?, note? }` — the case is **declared, never inferred
+>    from the name**. (A real template set had `%CasinoGamesAcc%` holding *instrumental* forms: the
+>    naming convention lied, the declaration could not.)
 
 ## 1. Why — this is extraction, not greenfield
 
