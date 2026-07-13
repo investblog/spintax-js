@@ -31,8 +31,12 @@ jobs:
       - name: Validate golden corpus (schema)
         run: npm run conformance:validate
 
-      # Build first: consumers (examples/worker) resolve @spintax/core via its
-      # published exports (./dist), so typecheck/test need the build to exist.
+      # Build first: consumers (examples/worker, packages/authoring-prompt) resolve
+      # @spintax/core via its published exports (./dist), so typecheck/test need the
+      # build to exist. The root `build` script builds the engine BEFORE sweeping the
+      # workspaces, because `npm run --workspaces` iterates alphabetically, not
+      # topologically — authoring-prompt would otherwise be compiled before the types
+      # it imports exist.
       - name: Build
         run: npm run build
 
