@@ -1,6 +1,11 @@
-# Spintax npm engine — `@spintax/core` (spec draft)
+# Spintax npm engine — `@spintax/core`
 
-Status: DRAFT (spec-first — repo scaffolded at `W:\projects\spintax-js`, engine code pending M1)
+Status: IMPLEMENTED — `@spintax/core` **0.1.4** is published to npm (MIT, provenance via OIDC).
+M0–M5 are shipped: golden corpus, engine (parse / render / validate / extract / analyze /
+neutralize), the reference Cloudflare Worker, and the Telegram bot. **M6** (browser playground on
+`spintax.net`) is the one open milestone. The spec stays the source of truth for the parity
+contract (§3.1), the fixture schema (§7.1), and the public API surface (§9.2) — behavior changes
+are argued against it and the golden corpus, not against the current code.
 Owner: 301st
 Canonical location: this file, `W:\projects\spintax-js\docs\spec-npm-engine.md`.
 
