@@ -65,7 +65,7 @@ describe.each(LOCALES)('the prompt must not teach invalid syntax [locale=%s]', (
 describe('buildAuthoringPrompt', () => {
   test('teaches every construct — including the two the bot used to omit', () => {
     const { systemPrompt } = buildAuthoringPrompt({ brief: 'welcome email' });
-    for (const construct of ['{a|b|c}', '#set', '%name%', '[<sep=', '{?VAR?', '{plural']) {
+    for (const construct of ['{a|b|c}', '#set', '%name%', '[<minsize=', 'lastsep=', '{?VAR?', '{plural']) {
       expect(systemPrompt).toContain(construct);
     }
   });
@@ -84,11 +84,87 @@ describe('buildAuthoringPrompt', () => {
 
   test('allowed variables are listed; an empty list forbids variables outright', () => {
     const withVars = buildAuthoringPrompt({ brief: 'x', allowedVariables: ['first_name', 'company'] });
-    expect(withVars.userPrompt).toContain('%first_name%, %company%');
+    expect(withVars.userPrompt).toContain('%first_name%');
+    expect(withVars.userPrompt).toContain('%company%');
     expect(withVars.allowedVariables).toEqual(['first_name', 'company']);
 
     const none = buildAuthoringPrompt({ brief: 'x' });
     expect(none.userPrompt).toContain('do not use any %variable%');
+  });
+
+  test('teaches lastsep — a list without it reads like a robot', () => {
+    expect(buildAuthoringPrompt({ brief: 'x' }).systemPrompt).toContain('lastsep=" and "');
+    expect(buildAuthoringPrompt({ brief: 'x', locale: 'ru' }).systemPrompt).toContain('lastsep=" и "');
+  });
+
+  test('teaches the empty branch AND its accidental twin, the stray double pipe', () => {
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x' });
+    expect(systemPrompt).toContain('EMPTY branch makes a word optional');
+    expect(systemPrompt).toContain('{a|b||c}');
+  });
+});
+
+// Drawn from a real Russian template set (casino-platform): the author had to declare one variable
+// per grammatical case, because a variable is substituted verbatim and cannot be inflected from the
+// outside. A prompt that says only "use these names" invites the model to write "для %Visitors%".
+describe('variables carry grammatical case (the ru trap)', () => {
+  const CASED = [
+    { name: 'Visitors', case: 'nominative' as const },
+    { name: 'VisitorsGen', case: 'genitive' as const },
+    { name: 'VisitorsDat', case: 'dative' as const },
+    { name: 'VisitorsInstr', case: 'instrumental' as const },
+    { name: 'CasinoName', note: 'brand name — does not decline' },
+  ];
+
+  test('the declared case is shown next to each name, in the per-item user prompt', () => {
+    const { userPrompt, systemPrompt } = buildAuthoringPrompt({
+      brief: 'x',
+      locale: 'ru',
+      allowedVariables: CASED,
+    });
+    expect(userPrompt).toContain('%VisitorsGen% — genitive');
+    expect(userPrompt).toContain('%CasinoName% — brand name — does not decline');
+    // The list is DATA (it changes per item); the system prompt must stay stable and cacheable.
+    expect(systemPrompt).not.toContain('%VisitorsGen% — genitive');
+  });
+
+  test('ru: the case rules are taught — suffix gluing, prepositions, brand names', () => {
+    const { systemPrompt } = buildAuthoringPrompt({
+      brief: 'x',
+      locale: 'ru',
+      allowedVariables: CASED,
+    });
+    expect(systemPrompt).toContain('CASE IS PART OF THE VALUE');
+    expect(systemPrompt).toContain('для %VisitorsGen%');
+    expect(systemPrompt).toContain('NEVER glue an ending onto a variable');
+    expect(systemPrompt).toContain('move TOGETHER');
+    expect(systemPrompt).toContain('never "%CasinoName%а"');
+  });
+
+  test('en: the same principle surfaces as the article trap, not as case', () => {
+    const { systemPrompt } = buildAuthoringPrompt({
+      brief: 'x',
+      locale: 'en',
+      allowedVariables: ['product'],
+    });
+    expect(systemPrompt).toContain('substituted VERBATIM');
+    expect(systemPrompt).toContain('"a %product%" is a coin-flip');
+    expect(systemPrompt).not.toContain('CASE IS PART OF THE VALUE');
+  });
+
+  test('a bare string still works — case is optional, not required', () => {
+    const built = buildAuthoringPrompt({ brief: 'x', allowedVariables: ['name'] });
+    expect(built.allowedVariables).toEqual(['name']);
+    expect(built.userPrompt).toContain('%name%');
+  });
+
+  test('the repair prompt restates the variables, cases and all', () => {
+    const { systemPrompt, userPrompt } = buildRepairPrompt('{a|b', validate('{a|b'), {
+      locale: 'ru',
+      allowedVariables: CASED,
+    });
+    expect(userPrompt).toContain('%VisitorsDat% — dative');
+    expect(systemPrompt).toContain('CASE IS PART OF THE VALUE');
   });
 
   test('variation levels differ, and the prompt is versioned', () => {
@@ -137,13 +213,13 @@ describe('buildRepairPrompt', () => {
     const built = buildRepairPrompt('{a|b', validate('{a|b'), {
       allowedVariables: ['first_name'],
     });
-    expect(built.userPrompt).toContain('ALLOWED VARIABLES: %first_name%');
+    expect(built.userPrompt).toContain('%first_name%');
     expect(built.allowedVariables).toEqual(['first_name']);
   });
 
   test('with no allowed variables, forbids them outright', () => {
     const built = buildRepairPrompt('{a|b', validate('{a|b'));
-    expect(built.userPrompt).toContain('must not use any %variable%');
+    expect(built.userPrompt).toContain('do not use any %variable%');
   });
 });
 

@@ -15,15 +15,111 @@ export const PROMPT_VERSION = '1';
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
 export type Channel = 'email' | 'sms' | 'push' | 'landing' | 'generic';
 
+/**
+ * The grammatical case of a variable's VALUE.
+ *
+ * In an inflected language a variable is not a neutral hole: `%Visitors%` = "посетители" only fits
+ * a nominative slot. Hosts that serve such languages declare one variable per case — the pattern
+ * real Russian template sets converge on (`%Visitors%`, `%VisitorsGen%`, `%VisitorsDat%`,
+ * `%VisitorsLoc%`, `%VisitorsInstr%`). Declaring the case here is what lets the prompt tell the
+ * model WHICH member of the family a given sentence needs.
+ */
+export type GrammaticalCase =
+  | 'nominative'
+  | 'genitive'
+  | 'dative'
+  | 'accusative'
+  | 'instrumental'
+  | 'prepositional';
+
+export interface VariableSpec {
+  name: string;
+  /** Case of the value. Load-bearing in ru/uk/be; ignorable in English. */
+  case?: GrammaticalCase;
+  /** Free-form hint, e.g. "brand name — does not decline". */
+  note?: string;
+}
+
+/** A bare name (case unknown) or a full spec. */
+export type AllowedVariable = string | VariableSpec;
+
 export interface AuthoringPromptOptions {
   /** Plain-language description of the copy to write. */
   brief: string;
   /** BCP-47-ish language tag. Selects the grammar block — it is NOT a translation hint. */
   locale?: string;
-  /** The ONLY variable names the model may use. Anything else is a hallucination. */
-  allowedVariables?: readonly string[];
+  /** The ONLY variables the model may use. Anything else is a hallucination. */
+  allowedVariables?: readonly AllowedVariable[];
   channel?: Channel;
   variationLevel?: VariationLevel;
+}
+
+const asSpec = (v: AllowedVariable): VariableSpec => (typeof v === 'string' ? { name: v } : v);
+
+/**
+ * How to present the allow-list, and the rule the model breaks most often.
+ *
+ * A variable is substituted VERBATIM — the engine never inflects it, and neither can the model by
+ * gluing a suffix on the outside. So the SENTENCE has to be built around the form the value already
+ * has. In English that surfaces as the article trap ("a %product%" is a coin-flip on a/an); in
+ * Slavic languages it surfaces as case, which is far more destructive.
+ */
+function variableRulesBlock(locale: string | undefined): string {
+  const universal = `VARIABLES
+Use ONLY the names given in ALLOWED VARIABLES, exactly as written.
+
+A variable is substituted VERBATIM. The engine does not inflect, pluralize or re-case it, and
+neither can you by bolting text onto the outside of it. Build the SENTENCE around the form the
+value already has.`;
+
+  if (pluralArity(locale) === 3) {
+    // ru/uk/be — the case trap. This is where real template sets get destroyed.
+    return `${universal}
+
+CASE IS PART OF THE VALUE, not a suggestion:
+- Variables that differ only by a suffix (%X%, %XGen%, %XDat%, %XLoc%, %XInstr%) are NOT synonyms.
+  They are the same word in different cases. Choose the one the sentence actually governs:
+      для %VisitorsGen%      (родительный — after "для")
+      к %VisitorsDat%        (дательный — after "к")
+      о %VisitorsLoc%        (предложный — after "о")
+      с %VisitorsInstr%      (творительный — after "с")
+- NEVER glue an ending onto a variable. "%Visitors%ов" is not a genitive; it renders as the literal
+  text "посетителиов".
+- A preposition and the variable after it move TOGETHER. If you swap the preposition, you must swap
+  to the matching variable — or the sentence breaks.
+- If the case you need is NOT in the list, REWRITE THE SENTENCE so it needs a case that is. Never
+  approximate with the wrong one: a wrong case reads as broken Russian, which is worse than plainer
+  copy.
+- A brand or proper name does not decline: write "в %CasinoName%", never "%CasinoName%а".`;
+  }
+
+  return `${universal}
+
+- Do not assume the shape of a value you have not seen. "a %product%" is a coin-flip between "a"
+  and "an"; write "our %product%" or restructure the sentence.
+- Do not pluralize or possessivize a variable by hand — if you need a count, use {plural …}.`;
+}
+
+/**
+ * The per-request allow-list.
+ *
+ * Deliberately NOT part of the system prompt: the rules above are stable and cacheable, while this
+ * list changes with every item a host processes (in n8n it comes from the current row). Mixing them
+ * would defeat prompt caching and blur what is policy versus what is data.
+ */
+function variableListBlock(vars: readonly VariableSpec[]): string {
+  if (vars.length === 0) {
+    return 'ALLOWED VARIABLES: (none — do not use any %variable%)';
+  }
+
+  const lines = vars.map((v) => {
+    const bits = [v.case, v.note].filter(Boolean).join('; ');
+    return bits ? `  %${v.name}% — ${bits}` : `  %${v.name}%`;
+  });
+
+  return ['ALLOWED VARIABLES (the case is part of the value, not a suggestion):', ...lines].join(
+    '\n',
+  );
 }
 
 export interface BuiltPrompt {
@@ -73,6 +169,7 @@ export function pluralArity(locale: string | undefined): 2 | 3 {
 export interface PromptExamples {
   set: string;
   permutation: string;
+  optional: string;
   conditional: string;
   plural: string;
 }
@@ -92,7 +189,11 @@ export function promptExamples(locale?: string): PromptExamples {
       '#set %offer% = our new %product%',
       'Get %offer% today — the %product% starts on Monday.',
     ].join('\n'),
-    permutation: 'We can [<sep=", ">reply within the hour|set up your account|migrate your data].',
+    permutation:
+      pluralArity(locale) === 3
+        ? 'Мы [<minsize=2;maxsize=3;sep=", ";lastsep=" и ">перезвоним за час|подберём тариф|перенесём данные].'
+        : 'We can [<minsize=2;maxsize=3;sep=", ";lastsep=" and ">reply within the hour|set up your account|migrate your data].',
+    optional: 'Get our {|brand new }{course|training} today.',
     conditional: '{?discount?Save %discount% today|Get started in minutes}',
     plural:
       pluralArity(locale) === 3
@@ -113,6 +214,10 @@ function syntaxBlock(locale: string | undefined): string {
 
 {a|b|c}
     Pick exactly one. Rerolls at EVERY occurrence: two separate {Hi|Hello} may disagree.
+    An EMPTY branch makes a word optional — deliberate and useful:
+${indent(ex.optional)}
+    But a stray double pipe is an ACCIDENTAL empty branch: {a|b||c} silently renders nothing one
+    time in four. Re-read every {…} for a doubled "|".
 
 #set %v% = value
     Define once, reuse. The value is chosen ONCE, and every %v% in the copy is the SAME.
@@ -125,11 +230,15 @@ ${indent(ex.set)}
 %name%
     A variable, filled in by the host at render time. Use ONLY names from ALLOWED VARIABLES.
 
-[<sep=", ">a|b|c]
+[<minsize=2;maxsize=3;sep=", ";lastsep=" ${pluralArity(locale) === 3 ? 'и' : 'and'} ">a|b|c]
     Permutation: shuffles the items and joins them.
     ALWAYS set sep when the items are clauses — the DEFAULT SEPARATOR IS A SINGLE SPACE, which
-    turns clauses into mush. Use permutations only for items of EQUAL weight, where the order
-    genuinely does not matter (benefits, features):
+    turns clauses into mush.
+    ALWAYS set lastsep for a human-readable list: "a, b ${pluralArity(locale) === 3 ? 'и' : 'and'} c"
+    instead of the robotic "a, b, c".
+    minsize/maxsize pick a SUBSET, so the list itself varies in length.
+    Use permutations only for items of EQUAL weight, where the order genuinely does not matter
+    (benefits, features, providers):
 ${indent(ex.permutation)}
 
 {?VAR?then|else}
@@ -230,7 +339,7 @@ function channelBlock(channel: Channel): string {
 
 /** Build the canonical authoring prompt: brief → a spintax template. */
 export function buildAuthoringPrompt(opts: AuthoringPromptOptions): BuiltPrompt {
-  const allowedVariables = opts.allowedVariables ?? [];
+  const specs = (opts.allowedVariables ?? []).map(asSpec);
   const level = opts.variationLevel ?? 'balanced';
   const channel = opts.channel ?? 'generic';
 
@@ -239,20 +348,16 @@ export function buildAuthoringPrompt(opts: AuthoringPromptOptions): BuiltPrompt 
     GOAL,
     syntaxBlock(opts.locale),
     grammarBlock(opts.locale),
+    variableRulesBlock(opts.locale),
     levelBlock(level),
     RULES,
     OUTPUT,
     SELF_CHECK,
   ].join('\n\n');
 
-  const vars =
-    allowedVariables.length > 0
-      ? allowedVariables.map((v) => `%${v}%`).join(', ')
-      : '(none — do not use any %variable%)';
-
   const userPrompt = [
     channelBlock(channel),
-    `ALLOWED VARIABLES: ${vars}`,
+    variableListBlock(specs),
     '',
     'BRIEF:',
     opts.brief,
@@ -260,7 +365,12 @@ export function buildAuthoringPrompt(opts: AuthoringPromptOptions): BuiltPrompt 
     'Write the spintax template now. Output only the template.',
   ].join('\n');
 
-  return { systemPrompt, userPrompt, allowedVariables, promptVersion: PROMPT_VERSION };
+  return {
+    systemPrompt,
+    userPrompt,
+    allowedVariables: specs.map((v) => v.name),
+    promptVersion: PROMPT_VERSION,
+  };
 }
 
 export interface RepairPromptOptions {
@@ -271,7 +381,7 @@ export interface RepairPromptOptions {
    */
   locale?: string;
   /** Restated so a repair cannot smuggle in a variable the host does not have. */
-  allowedVariables?: readonly string[];
+  allowedVariables?: readonly AllowedVariable[];
 }
 
 /**
@@ -290,7 +400,7 @@ export function buildRepairPrompt(
   diagnostics: readonly Diagnostic[],
   opts: RepairPromptOptions = {},
 ): BuiltPrompt {
-  const allowedVariables = opts.allowedVariables ?? [];
+  const specs = (opts.allowedVariables ?? []).map(asSpec);
   const errors = diagnostics.filter((d) => d.severity === 'error');
 
   const numbered = template
@@ -308,18 +418,14 @@ export function buildRepairPrompt(
     'spans and leave everything else byte-for-byte identical. Do not rewrite the copy.',
     syntaxBlock(opts.locale),
     grammarBlock(opts.locale),
+    variableRulesBlock(opts.locale),
     OUTPUT,
   ].join('\n\n');
-
-  const vars =
-    allowedVariables.length > 0
-      ? allowedVariables.map((v) => `%${v}%`).join(', ')
-      : '(none — the template must not use any %variable%)';
 
   const userPrompt = [
     'This template failed validation.',
     '',
-    `ALLOWED VARIABLES: ${vars}`,
+    variableListBlock(specs),
     '',
     'TEMPLATE (line-numbered):',
     numbered,
@@ -330,7 +436,12 @@ export function buildRepairPrompt(
     'Return the corrected template. Output only the template.',
   ].join('\n');
 
-  return { systemPrompt, userPrompt, allowedVariables, promptVersion: PROMPT_VERSION };
+  return {
+    systemPrompt,
+    userPrompt,
+    allowedVariables: specs.map((v) => v.name),
+    promptVersion: PROMPT_VERSION,
+  };
 }
 
 /**

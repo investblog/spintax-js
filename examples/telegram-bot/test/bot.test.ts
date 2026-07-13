@@ -186,7 +186,9 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
   test('the prompt is given the demo variables, so the model may actually use them', async () => {
     await bot.fetch(update('/draft a welcome email'), ENV);
     const { user } = promptOf(0);
-    expect(user).toContain('ALLOWED VARIABLES: %name%, %company%, %n%');
+    expect(user).toContain('%name%');
+    expect(user).toContain('%company%');
+    expect(user).toContain('%n% — a count — pair it with {plural …}');
     expect(user).not.toContain('do not use any %variable%');
   });
 

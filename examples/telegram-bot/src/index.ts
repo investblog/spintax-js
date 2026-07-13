@@ -48,6 +48,13 @@ export const LOCALE = 'en';
 const DRAFT_CONTEXT: Record<string, string> = { name: 'Ada', company: 'Acme', n: '3' };
 const DRAFT_VARS = Object.keys(DRAFT_CONTEXT);
 
+/** Notes handed to the model alongside the names. Keys must exist in DRAFT_CONTEXT. */
+const DRAFT_NOTES: Record<string, string> = { n: 'a count — pair it with {plural …}' };
+const DRAFT_SPECS = DRAFT_VARS.map((name) => {
+  const note = DRAFT_NOTES[name];
+  return note === undefined ? { name } : { name, note };
+});
+
 const DRAFT_NOTE =
   '\n\n💡 Heads up: this demo runs a small, low-cost model, so drafts are rough. ' +
   'Modern LLMs write far better spintax when you prompt them with authoring intent, ' +
@@ -65,7 +72,7 @@ const EXAMPLE_BASIC = '{Hi|Hello|Hey} %name%! Our {deal|offer} ends {today|tonig
 export const EXAMPLE_POWER = [
   '#set %product% = {course|training}',
   '#set %offer% = our new %product%',
-  '{Hi|Hello} %name%! Get %offer% — we can [<sep=", ">enrol you today|answer any question|refund within 14 days]. The %product% starts on Monday.',
+  '{Hi|Hello} %name%! Get %offer% — we can [<sep=", ";lastsep=" and ">enrol you today|answer any question|refund within 14 days]. The %product% starts on Monday.',
 ].join('\n');
 
 /**
@@ -80,7 +87,7 @@ const SYNTAX_ROWS: readonly (readonly [code: string, note: string])[] = [
   ['{a|b|c}', 'pick one <i>(rerolls at every occurrence)</i>'],
   ['#set %v% = {a|b}', 'pick <b>once</b>, reuse everywhere'],
   ['%name%', 'variable <i>(can nest inside a #set)</i>'],
-  ['[<sep=", ">a|b|c]', 'shuffle &amp; join equal-weight parts'],
+  ['[<sep=", ";lastsep=" and ">a|b|c]', 'shuffle &amp; join equal-weight parts — <i>lastsep gives “a, b and c”</i>'],
   ['{?flag?yes|no}', 'conditional'],
   ['{plural %n%: item|items}', `plural agreement <i>(${LOCALE} takes 2 forms; ru/uk/be take 3)</i>`],
 ];
@@ -194,7 +201,7 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
     const prompt = buildAuthoringPrompt({
       brief,
       locale: LOCALE,
-      allowedVariables: DRAFT_VARS,
+      allowedVariables: DRAFT_SPECS,
       variationLevel: 'balanced',
     });
     template = await askModel(env, prompt.systemPrompt, prompt.userPrompt);
@@ -207,7 +214,7 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
       if (bad.some((d) => d.severity === 'error')) {
         const repair = buildRepairPrompt(template, bad, {
           locale: LOCALE,
-          allowedVariables: DRAFT_VARS,
+          allowedVariables: DRAFT_SPECS,
         });
         const fixed = await askModel(env, repair.systemPrompt, repair.userPrompt);
         const stillBad = validate(fixed, { locale: LOCALE, knownVariables: DRAFT_VARS });
