@@ -7,7 +7,7 @@
  * Order: strip stray sentinels → collapse-once #set + tree-walk (+ #include) →
  * cosmetic post-process (if on) → mandatory neutralize safety-restore (always).
  */
-import { renderAst, type RenderCtx } from './render';
+import { renderAst, type PluralIssue, type RenderCtx } from './render';
 import { postProcess } from './postprocess';
 import { safetyRestore, stripSentinels } from './neutralize';
 import { parseTemplate } from './parser';
@@ -24,6 +24,7 @@ export interface PipelineOptions {
   includeResolver?: (ref: string) => string | null;
   postProcess?: boolean;
   maxDepth?: number;
+  onPluralError?: (issue: PluralIssue) => void;
 }
 
 export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions = {}): string {
@@ -34,6 +35,7 @@ export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions 
     resolver: opts.includeResolver,
     maxDepth: opts.maxDepth ?? DEFAULT_MAX_DEPTH,
     includeStack: [],
+    onPluralError: opts.onPluralError,
   };
   // Strip stray engine sentinels from author markup so only neutralize() introduces them.
   const ast = resolveAst(typeof input === 'string' ? stripSentinels(input) : input);

@@ -3,6 +3,26 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **`RenderOptions.onPluralError` — an observer for unresolvable `{plural …}` blocks.**
+  The port of the plugin's `on_error` callable, and the missing half of its error model:
+  this engine already behaved exactly like the plugin's *lenient* mode (arity mismatch and
+  nested-bracket errors degrade to fullwidth-brace verbatim, an unresolved count erases the
+  block), but there was no way to learn that it had happened.
+
+  Observation only. Output is byte-identical with and without the callback, and `render()`
+  still never throws on template content (§9.3) — the host decides whether a report is
+  fatal. A report carries the diagnostic `code`, the construct **as the renderer saw it**
+  (after variable expansion), the normalized `locale`, and `expected`/`got` for arity.
+
+  The `plural.count` code has no `validate()` counterpart on purpose: an unresolved count is
+  a runtime-value fact that static analysis cannot see. It is also the case that most needs
+  the seam — erasing leaves no trace, so a host persisting a render otherwise cannot tell an
+  unsubstituted `%Var%` from copy that was meant to be empty.
+
 ## 0.2.0 — 2026-07-18
 
 Serbian, Croatian and Bosnian join the 3-form plural family. Minor, not patch: this

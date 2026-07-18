@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { parseTemplate } from '../src/internal/parser';
-import { buildVars, renderNodes } from '../src/internal/render';
+import { buildVars, renderNodes, type PluralIssue } from '../src/internal/render';
 import { rngFromStrategy, type RngStrategy } from './corpus-harness';
 
 /** White-box render with an injected RNG strategy (like the corpus harness). */
@@ -9,11 +9,23 @@ function render(
   rng: RngStrategy = 'first',
   context: Record<string, string> = {},
   locale = '',
+  onPluralError?: (issue: PluralIssue) => void,
 ): string {
   const ast = parseTemplate(src);
   const rngFn = rngFromStrategy(rng);
   const vars = buildVars(ast.setDefs, context, rngFn);
-  return renderNodes(ast.nodes, { vars, rng: rngFn, locale, depth: 0 });
+  return renderNodes(ast.nodes, { vars, rng: rngFn, locale, depth: 0, onPluralError });
+}
+
+/** Render while collecting plural reports — the observer seam, not a render mode. */
+function renderCollecting(
+  src: string,
+  locale = '',
+  context: Record<string, string> = {},
+): { output: string; issues: PluralIssue[] } {
+  const issues: PluralIssue[] = [];
+  const output = render(src, 'first', context, locale, (i) => issues.push(i));
+  return { output, issues };
 }
 
 describe('render — literals & variables', () => {
@@ -133,5 +145,73 @@ describe('render — staged-semantics parity', () => {
   test('#set enum collapse-once is stable across repeated references', () => {
     // %v% used twice must be the SAME collapsed value (not two independent picks).
     expect(render('#set %v% = {a|b|c}\n%v%-%v%', { sequence: [1] })).toBe('\nb-b');
+  });
+});
+
+describe('render — onPluralError observer', () => {
+  test('silent by default: no observer, no behaviour change', () => {
+    // The three failure paths still degrade exactly as before.
+    expect(render('{plural 5: a|b|c}', 'first', {}, 'en')).toBe('｛plural 5: a|b|c｝');
+    expect(render('{plural %n%: a|b}', 'first', {}, 'en')).toBe('');
+    expect(render('{plural 5: {a|b}|c}', 'first', {}, 'en')).toBe('｛plural 5: ｛a|b｝|c｝');
+  });
+
+  test('observing does not change the output', () => {
+    const plain = render('X {plural 5: a|b|c} Y', 'first', {}, 'en');
+    expect(renderCollecting('X {plural 5: a|b|c} Y', 'en').output).toBe(plain);
+  });
+
+  test('arity mismatch reports expected/got against the locale', () => {
+    const { issues } = renderCollecting('{plural 5: a|b}', 'ru');
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({
+      code: 'plural.arity',
+      locale: 'ru',
+      expected: 3,
+      got: 2,
+      construct: '{plural 5: a|b}',
+    });
+  });
+
+  test('sr/hr/bs report against the 3-form arity', () => {
+    for (const locale of ['sr', 'sr-Latn', 'hr', 'bs']) {
+      const { issues } = renderCollecting('{plural 5: sat|sati}', locale);
+      expect(issues[0]).toMatchObject({ code: 'plural.arity', expected: 3, got: 2 });
+      // The report carries the BASE language, not the tag it was given.
+      expect(issues[0]?.locale).toBe(locale === 'sr-Latn' ? 'sr' : locale);
+    }
+  });
+
+  test('unresolved count is reported — the erase leaves no other trace', () => {
+    // This is the whole point of the seam: output is '' either way, so a host
+    // persisting the render cannot otherwise tell this from intentional silence.
+    const { output, issues } = renderCollecting('{plural %n%: item|items}', 'en');
+    expect(output).toBe('');
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: 'plural.count', construct: '{plural %n%: item|items}' });
+  });
+
+  test('nested brackets in a form slot are reported', () => {
+    const { issues } = renderCollecting('{plural 2: {a|b}|c}', 'en');
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.code).toBe('plural.nested-brackets');
+  });
+
+  test('a healthy template reports nothing', () => {
+    const { output, issues } = renderCollecting('{plural 2: sat|sata|sati}', 'sr');
+    expect(output).toBe('sata');
+    expect(issues).toEqual([]);
+  });
+
+  test('every failing block reports, not just the first', () => {
+    const { issues } = renderCollecting('{plural 5: a|b} and {plural %n%: c|d} and {plural 1: e|f}', 'ru');
+    expect(issues.map((i) => i.code)).toEqual(['plural.arity', 'plural.count', 'plural.arity']);
+  });
+
+  test('the construct is reported AFTER variable expansion', () => {
+    // What the renderer judged, not what the author typed — otherwise a report
+    // cannot be matched against the value that actually broke it.
+    const { issues } = renderCollecting('{plural 2: item|%v%}', 'en', { v: 'a|b' });
+    expect(issues[0]?.construct).toBe('{plural 2: item|a|b}');
   });
 });

@@ -33,6 +33,29 @@ const MAX_VARIABLE_DEPTH = 50;
 const INCLUDE_LINE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu;
 
 /** Document-level render context (threads through nested #include resolution). */
+/**
+ * A `{plural …}` block the renderer could not resolve, reported through
+ * {@link RenderCtx.onPluralError}. Observation only — the render still degrades
+ * exactly as it always has (§0.1 lenient contract); the host decides whether a
+ * report is fatal. Mirrors the plugin's `on_error` callable.
+ */
+export interface PluralIssue {
+  /**
+   * `plural.nested-brackets` and `plural.arity` are the same codes `validate()`
+   * emits. `plural.count` has no validate counterpart on purpose — an unresolved
+   * count is a runtime-value fact, invisible to static analysis.
+   */
+  readonly code: 'plural.nested-brackets' | 'plural.arity' | 'plural.count';
+  readonly message: string;
+  /** The construct as the renderer saw it, AFTER variable expansion. */
+  readonly construct: string;
+  /** Normalized base language the arity was judged against. */
+  readonly locale: string;
+  /** Arity verdicts only. */
+  readonly expected?: number;
+  readonly got?: number;
+}
+
 export interface RenderCtx {
   /** Runtime/host variable map — inherited by child #includes (NOT parent #set). */
   readonly runtimeContext: Readonly<Record<string, string>>;
@@ -42,6 +65,8 @@ export interface RenderCtx {
   readonly maxDepth: number;
   /** #include ref chain for circular-reference detection. */
   readonly includeStack: readonly string[];
+  /** Optional observer for unresolvable plural blocks; never affects output. */
+  readonly onPluralError: ((issue: PluralIssue) => void) | undefined;
 }
 
 /**
@@ -51,7 +76,13 @@ export interface RenderCtx {
  */
 export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
   const vars = buildVars(ast.setDefs, ctx.runtimeContext, ctx.rng);
-  const text = renderNodes(ast.nodes, { vars, rng: ctx.rng, locale: ctx.locale, depth: 0 });
+  const text = renderNodes(ast.nodes, {
+    vars,
+    rng: ctx.rng,
+    locale: ctx.locale,
+    depth: 0,
+    onPluralError: ctx.onPluralError,
+  });
   return ctx.resolver ? resolveIncludes(text, ctx) : text;
 }
 
@@ -94,6 +125,8 @@ export interface RenderInternalOptions {
   readonly locale: string;
   /** Variable re-processing depth (guards runaway/circular expansion). */
   readonly depth: number;
+  /** Optional observer for unresolvable plural blocks; never affects output. */
+  readonly onPluralError: ((issue: PluralIssue) => void) | undefined;
 }
 
 /**
@@ -215,24 +248,58 @@ function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): 
 function renderPlural(node: PluralNode, opts: RenderInternalOptions): string {
   const countRaw = expandVarsOnly(node.countRaw, opts);
   const formsRaw = expandVarsOnly(node.formsRaw, opts);
+  const base = normalizeBaseLang(opts.locale);
+  const report = (issue: PluralIssue): void => opts.onPluralError?.(issue);
 
-  if (/[{}[\]]/u.test(formsRaw)) return fullwidthVerbatim(countRaw, formsRaw);
+  if (/[{}[\]]/u.test(formsRaw)) {
+    report({
+      code: 'plural.nested-brackets',
+      message: 'Plural form slot contains nested spintax brackets; extract via #set first.',
+      construct: rawConstruct(countRaw, formsRaw),
+      locale: base,
+    });
+    return fullwidthVerbatim(countRaw, formsRaw);
+  }
 
   const count = phpTrim(countRaw);
-  if (!/^-?\d+$/u.test(count)) return ''; // empty / non-numeric ⇒ erase the block
+  if (!/^-?\d+$/u.test(count)) {
+    // Erasing leaves no trace in the output, so this report is the ONLY way a
+    // host can tell an intentionally-empty sentence from an unsubstituted %Var%.
+    report({
+      code: 'plural.count',
+      message: `Plural count slot is empty or non-numeric (${JSON.stringify(count)}); block erased.`,
+      construct: rawConstruct(countRaw, formsRaw),
+      locale: base,
+    });
+    return '';
+  }
 
-  const base = normalizeBaseLang(opts.locale);
   const forms = formsRaw.split('|').map((f) => phpTrim(f));
-  if (forms.length !== pluralArity(base)) return fullwidthVerbatim(countRaw, formsRaw);
+  if (forms.length !== pluralArity(base)) {
+    report({
+      code: 'plural.arity',
+      message: `Plural has ${forms.length} form(s); locale "${base}" takes ${pluralArity(base)}.`,
+      construct: rawConstruct(countRaw, formsRaw),
+      locale: base,
+      expected: pluralArity(base),
+      got: forms.length,
+    });
+    return fullwidthVerbatim(countRaw, formsRaw);
+  }
 
   // The picked form re-enters the pipeline (its enums/perms resolve after plurals).
   const picked = pluralFor(base, Number.parseInt(count, 10), forms);
   return renderNodes(parseSequence(picked), opts);
 }
 
+/** The construct as the renderer saw it — ASCII braces, for reports and logs. */
+function rawConstruct(countRaw: string, formsRaw: string): string {
+  return `{plural ${countRaw}:${formsRaw}}`;
+}
+
 /** Emit the plural construct verbatim with fullwidth braces so later passes leave it alone. */
 function fullwidthVerbatim(countRaw: string, formsRaw: string): string {
-  return `{plural ${countRaw}:${formsRaw}}`.replace(/\{/gu, '｛').replace(/\}/gu, '｝');
+  return rawConstruct(countRaw, formsRaw).replace(/\{/gu, '｛').replace(/\}/gu, '｝');
 }
 
 /** Pick one option (outer-first) and render it. */

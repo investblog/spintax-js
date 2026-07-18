@@ -14,6 +14,7 @@ import { neutralize as neutralizeValue } from './internal/neutralize';
 import { makeRng } from './internal/rng';
 import { AstVersionError } from './internal/errors';
 import { isParsedAst, walk, type Ast, type ParsedAst } from './internal/ast';
+import type { PluralIssue } from './internal/render';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
@@ -24,6 +25,9 @@ import { isParsedAst, walk, type Ast, type ParsedAst } from './internal/ast';
  * engine versions).
  */
 export type { Ast };
+
+/** Reported through {@link RenderOptions.onPluralError}; never thrown. */
+export type { PluralIssue };
 
 export interface RenderOptions {
   /** Variable map (T1, author-controlled by default — §6). */
@@ -38,6 +42,17 @@ export interface RenderOptions {
   postProcess?: boolean;
   /** #include + parse-nesting guard; defaults to {@link DEFAULT_MAX_DEPTH}. */
   maxDepth?: number;
+  /**
+   * Observer for `{plural …}` blocks the renderer could not resolve — the port of
+   * the plugin's `on_error` callable. Observation ONLY: output degrades exactly as
+   * it does without it (§0.1 lenient contract — `render()` never throws on template
+   * content), and the host decides whether a report is fatal.
+   *
+   * Worth wiring when a render is PERSISTED rather than shown: an unresolved count
+   * erases its block, which is indistinguishable in the output from copy that was
+   * meant to be empty.
+   */
+  onPluralError?: (issue: PluralIssue) => void;
 }
 
 export interface ValidateOptions {
