@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'vitest';
-import { render, validate } from '@spintax/core';
+// pluralArity comes from the ENGINE, never from the package under test — importing
+// it from '../src' made the arity assertion below compare the prompt against its
+// own table, so it could not fail on the divergence it exists to catch.
+import { pluralArity, render, validate } from '@spintax/core';
 import {
   PROMPT_VERSION,
   buildAuthoringPrompt,
   buildRepairPrompt,
   cleanModelTemplate,
-  pluralArity,
   promptExamples,
 } from '../src/index.js';
 
@@ -15,7 +17,16 @@ const errorsIn = (src: string, locale: string) =>
 // Every locale the prompt claims to support. `en` stands for the 2-form world, `ru` for the 3-form
 // one — and the plural arity the prompt teaches has to follow, or it teaches templates the engine
 // rejects at render time.
-const LOCALES = ['en', 'ru'] as const;
+//
+// The tags after those two are here because a bare `en`/`ru` table never exercises a locale whose
+// SHAPE can be read two ways, which is how the prompt drifted from the engine unnoticed:
+//   sr-Latn / sr_RS — script and region subtags must not change the arity
+//   srp             — a 3-letter tag. NOT a support claim: the engine does not know ISO-639-3, so
+//                     it answers 2-form, and this asserts the prompt does not silently claim 3
+//                     (which `locale.slice(0, 2)` did, reading `srp` as `sr`).
+//   hr / bs         — same profile and arity as sr, so they should behave identically. Asserted
+//                     rather than assumed: this loop is what validates each locale's own examples.
+const LOCALES = ['en', 'ru', 'sr', 'sr-Latn', 'sr_RS', 'srp', 'hr', 'bs'] as const;
 
 describe.each(LOCALES)('the prompt must not teach invalid syntax [locale=%s]', (locale) => {
   const examples = Object.entries(promptExamples(locale));
@@ -238,5 +249,66 @@ describe('cleanModelTemplate — the output contract is stated, never trusted', 
   test('leaves a clean template untouched', () => {
     const clean = promptExamples('en').permutation;
     expect(cleanModelTemplate(clean)).toBe(clean);
+  });
+});
+
+// Arity and teaching language are different questions. They were the same expression once —
+// `pluralArity(locale) === 3` decided which language to write examples in, whether to show the
+// Russian case block, and which conjunction to use — so adding sr/hr/bs to the 3-form family
+// silently handed Croatian a Russian prompt. These assert the two stay separated.
+describe('teaching language follows the language, not the plural arity', () => {
+  const promptFor = (locale: string): string =>
+    buildAuthoringPrompt({ brief: 'x', locale }).systemPrompt;
+
+  test.each(['sr', 'sr-Latn', 'hr', 'bs'])(
+    '%s is 3-form but must NOT be taught as Russian',
+    (locale) => {
+      const p = promptFor(locale);
+      // Russian-specific content: case NAMES, worked examples, the Cyrillic conjunction.
+      expect(p).not.toContain('родительный');
+      expect(p).not.toContain('товар');
+      expect(p).not.toContain('перезвоним');
+      expect(p).not.toContain('lastsep=" и "');
+      // It must still get ITS OWN advice, not just the generic block.
+      expect(p).toContain('Write the WHOLE template in ONE script');
+    },
+  );
+
+  // The rules are language-neutral, so dropping them for BCS traded Russian-worded guidance for
+  // NO guidance plus an English a/an rule — a worse trade for a 7-case language.
+  test.each(['ru', 'uk', 'be', 'sr', 'hr', 'bs'])(
+    '%s is a case language and must get the case rules',
+    (locale) => {
+      expect(promptFor(locale)).toContain('CASE IS PART OF THE VALUE');
+    },
+  );
+
+  test('ru keeps the Russian worked examples', () => {
+    const p = promptFor('ru');
+    expect(p).toContain('родительный');
+    expect(p).toContain('товар');
+    expect(p).toContain('lastsep=" и "');
+  });
+
+  // KNOWN GAP, asserted as a gap and not as intent: uk/be currently share the east-slavic profile,
+  // so they are taught with RUSSIAN examples (Ukrainian genitive plural is товарів, not товаров).
+  // Fixing it means giving them their own profile; until then this documents the debt. Do not read
+  // it as "Russian examples are correct for Ukrainian".
+  test.each(['uk', 'be'])('%s currently borrows the Russian examples (known gap)', (locale) => {
+    expect(promptFor(locale)).toContain('товар');
+  });
+
+  test('en gets neither the Russian nor the BCS block', () => {
+    const p = promptFor('en');
+    expect(p).not.toContain('CASE IS PART OF THE VALUE');
+    expect(p).not.toContain('Write the WHOLE template in ONE script');
+    expect(p).toContain('lastsep=" and "');
+  });
+
+  test('arity still comes from the engine for the shape it teaches', () => {
+    // The one thing that IS arity: sr is 3-form even though it is taught in English.
+    expect(pluralArity('sr')).toBe(3);
+    expect(promptFor('sr')).toContain('{plural %n%: one|few|many}');
+    expect(promptFor('en')).toContain('{plural %n%: one|many}');
   });
 });

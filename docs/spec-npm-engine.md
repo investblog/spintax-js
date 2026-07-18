@@ -529,6 +529,14 @@ interface Diagnostic {
 // Additional committed value exports (kept minimal per §9.3):
 export const DEFAULT_MAX_DEPTH = 20         // RenderOptions.maxDepth default
 
+// Locale helpers — so a consumer that must AGREE with the engine about plurals asks it
+// rather than keeping a copy of the table (a copy drifted twice in this repo's own
+// authoring prompt). Both take a RAW locale and accept an absent one, like the `locale?`
+// on RenderOptions/ValidateOptions. NOT exported: findPluralBlocks — it returns byte
+// offsets, i.e. parser internals, for the same reason `Ast` is opaque.
+function pluralArity(locale?: string | null): number        // 3 for ru/uk/be + sr/hr/bs, else 2
+function normalizeBaseLang(locale?: string | null): string  // 'pt-BR'→'pt'; no ISO-639-3
+
 class SpintaxError extends Error {}         // base for render() programmer-error throws
 class IncludeResolverError extends SpintaxError {}   // a host includeResolver threw
 class AstVersionError extends SpintaxError {}        // an incompatible Ast was passed back

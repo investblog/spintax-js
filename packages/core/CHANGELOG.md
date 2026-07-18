@@ -3,9 +3,37 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.2.0 — 2026-07-18
+
+Serbian, Croatian and Bosnian join the 3-form plural family; the plural error model and the
+locale helpers that go with it land in the same release. Minor, not patch: the BCS change
+below alters a **validation verdict**, which §0.1 classes as breaking.
+
+Nothing here shipped separately — 0.2.0 was never published, so these additions fold into it
+rather than minting a version between them. That matters for `@spintax/authoring-prompt`,
+whose peer range `>=0.2.0` would otherwise be satisfiable by a 0.2.0 without the exports it
+now imports at runtime.
 
 ### Added
+
+- **`pluralArity(locale?)` and `normalizeBaseLang(locale?)` are public.** Exported so a
+  consumer that must AGREE with the engine about plurals can ask it instead of keeping a copy
+  of the table. The copy is not hypothetical: this repo's own authoring prompt kept one and it
+  drifted twice — once in content (a locale added here and not there) and once in shape
+  (`locale.slice(0, 2)`, which disagrees with this normalization on any 3-letter tag).
+
+  `pluralArity` takes a RAW locale and normalizes internally, unlike the internal helper of the
+  same name — a public function answering 2 for `sr-Latn` would be a trap. Both accept an absent
+  locale, matching `RenderOptions.locale?` / `ValidateOptions.locale?`, so the same optional
+  value can be threaded straight through.
+
+  Note one asymmetry: an absent locale makes `validate()` skip the arity check entirely, while
+  `pluralArity` answers the 2-form default `render()` would apply. It tells you what render will
+  do, not what validate will enforce.
+
+  `findPluralBlocks` is deliberately NOT exported alongside them — it returns byte offsets into
+  the source, and publishing it would freeze a parser internal and invite consumers onto the
+  parse layer, the same reason `Ast` is opaque.
 
 - **`RenderOptions.onPluralError` — an observer for unresolvable `{plural …}` blocks.**
   The port of the plugin's `on_error` callable, and the missing half of its error model:
@@ -22,13 +50,6 @@ All notable changes to `@spintax/core` are documented here. This project adheres
   a runtime-value fact that static analysis cannot see. It is also the case that most needs
   the seam — erasing leaves no trace, so a host persisting a render otherwise cannot tell an
   unsubstituted `%Var%` from copy that was meant to be empty.
-
-## 0.2.0 — 2026-07-18
-
-Serbian, Croatian and Bosnian join the 3-form plural family. Minor, not patch: this
-changes a **validation verdict**, which §0.1 classes as breaking.
-
-### Added
 
 - **BCS plural buckets — `sr`, `hr`, `bs`.** On integers, BCS shares the East-Slavic rule
   character for character (`mod10===1 && mod100!==11` → one; `mod10∈[2,4] && mod100∉[12,14]`

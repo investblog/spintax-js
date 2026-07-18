@@ -15,6 +15,10 @@ import { makeRng } from './internal/rng';
 import { AstVersionError } from './internal/errors';
 import { isParsedAst, walk, type Ast, type ParsedAst } from './internal/ast';
 import type { PluralIssue } from './internal/render';
+import {
+  normalizeBaseLang as normalizeBaseLangInternal,
+  pluralArity as pluralArityForBase,
+} from './internal/plurals';
 
 // ─── Public types (§9.2) ─────────────────────────────────────────────────────
 
@@ -97,6 +101,49 @@ export interface Analysis extends ExtractResult {
 
 /** Default value for {@link RenderOptions.maxDepth}. */
 export { DEFAULT_MAX_DEPTH } from './internal/pipeline';
+
+// ─── Locale helpers ──────────────────────────────────────────────────────────
+//
+// Exported so a consumer that must AGREE with the engine about plurals can ask
+// it, instead of keeping a copy of the table. A copy is not hypothetical: this
+// repo's own authoring prompt kept one, and it drifted twice — once on content
+// (a new locale added in one place) and once on shape (`locale.slice(0, 2)`
+// instead of this normalization, which disagrees on any 3-letter tag).
+//
+// `findPluralBlocks` is deliberately NOT exported alongside these: it returns
+// byte offsets into the source, i.e. parser internals, and publishing it would
+// freeze that shape and invite consumers to build on the parse layer — the same
+// reason `Ast` is opaque (see its doc above).
+
+/**
+ * A locale's base language tag: `pt-BR`→`pt`, `uk_UA`→`uk`, `RU`→`ru`. Absent or
+ * empty gives `''`.
+ *
+ * Knows nothing of ISO-639-3, so a 3-letter tag is returned whole (`srp`→`srp`)
+ * and is NOT recognized as its 2-letter language.
+ */
+export function normalizeBaseLang(locale?: string | null): string {
+  return normalizeBaseLangInternal(locale ?? '');
+}
+
+/**
+ * How many `{plural …}` forms this locale takes — 3 for the Slavic one/few/other
+ * family (ru/uk/be + sr/hr/bs), 2 for everything else.
+ *
+ * Takes a RAW locale and normalizes internally, unlike the internal helper of the
+ * same name: a public function that silently answered 2 for `sr-Latn` would be a
+ * trap. Accepts an absent locale, and unknown tags fall back to 2 rather than
+ * throwing (§3.1), so the same optional value `RenderOptions.locale` carries can be
+ * passed straight through.
+ *
+ * NOTE the asymmetry with {@link validate}: an absent or empty locale makes the
+ * validator skip the arity check ENTIRELY (structural verdicts only), whereas this
+ * answers the 2-form default that {@link render} would then apply. Ask this what
+ * render will do; do not read it as "what validate will enforce".
+ */
+export function pluralArity(locale?: string | null): number {
+  return pluralArityForBase(normalizeBaseLang(locale));
+}
 
 // ─── Errors (§9.3 — minimal, not a taxonomy) ─────────────────────────────────
 

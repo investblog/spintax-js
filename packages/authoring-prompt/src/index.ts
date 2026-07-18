@@ -5,9 +5,14 @@
  * template drafted anywhere is drafted the same way. Product content, deliberately NOT part of
  * `@spintax/core` — the engine must not grow authoring opinions (spec §2.2).
  *
- * The engine's `Diagnostic` is used as a type only, so this package ships no runtime dependency.
+ * The engine is a RUNTIME dependency for exactly one thing: plural arity. This package used to keep
+ * its own copy of the 3-form language table to stay dependency-free, and the copy drifted twice —
+ * once in content (a locale added to the engine and not here) and once in shape (`slice(0, 2)`
+ * instead of the engine's normalization, which disagrees on any 3-letter tag). A prompt that
+ * disagrees with the engine about arity teaches templates the engine then rejects, which is the one
+ * failure this package exists to prevent. Weightlessness lost to correctness, deliberately.
  */
-import type { Diagnostic } from '@spintax/core';
+import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 
 /** Bump when the prompt text changes in a way that can change model output. */
 export const PROMPT_VERSION = '1';
@@ -72,25 +77,38 @@ A variable is substituted VERBATIM. The engine does not inflect, pluralize or re
 neither can you by bolting text onto the outside of it. Build the SENTENCE around the form the
 value already has.`;
 
-  if (pluralArity(locale) === 3) {
-    // ru/uk/be — the case trap. This is where real template sets get destroyed.
-    return `${universal}
+  const profile = teachingProfile(locale);
+
+  // EVERY case language gets the case rules — they are language-neutral, and a 7-case language
+  // handed only the English a/an rule is worse off than one handed them in the wrong prose.
+  // (Gating this on 'east-slavic' alone is what silently stripped them from sr/hr/bs.) Only the
+  // WORKED EXAMPLES below are language-specific, so only they are profile-gated.
+  if (profile === 'east-slavic' || profile === 'bcs') {
+    const caseRules = `${universal}
 
 CASE IS PART OF THE VALUE, not a suggestion:
 - Variables that differ only by a suffix (%X%, %XGen%, %XDat%, %XLoc%, %XInstr%) are NOT synonyms.
-  They are the same word in different cases. Choose the one the sentence actually governs:
+  They are the same word in different cases. Choose the one the sentence actually governs.
+- NEVER glue an ending onto a variable. A suffix bolted onto the outside of %X% renders as literal
+  text, not as an inflected word.
+- A preposition and the variable after it move TOGETHER. If you swap the preposition, you must swap
+  to the matching variable — or the sentence breaks.
+- If the case you need is NOT in the list, REWRITE THE SENTENCE so it needs a case that is. Never
+  approximate with the wrong one: a wrong case reads as broken copy, which is worse than plainer
+  copy.
+- A brand or proper name does not decline.`;
+
+    if (profile !== 'east-slavic') return caseRules;
+
+    return `${caseRules}
+
+Worked examples (Russian):
       для %VisitorsGen%      (родительный — after "для")
       к %VisitorsDat%        (дательный — after "к")
       о %VisitorsLoc%        (предложный — after "о")
       с %VisitorsInstr%      (творительный — after "с")
-- NEVER glue an ending onto a variable. "%Visitors%ов" is not a genitive; it renders as the literal
-  text "посетителиов".
-- A preposition and the variable after it move TOGETHER. If you swap the preposition, you must swap
-  to the matching variable — or the sentence breaks.
-- If the case you need is NOT in the list, REWRITE THE SENTENCE so it needs a case that is. Never
-  approximate with the wrong one: a wrong case reads as broken Russian, which is worse than plainer
-  copy.
-- A brand or proper name does not decline: write "в %CasinoName%", never "%CasinoName%а".`;
+- "%Visitors%ов" is not a genitive; it renders as the literal text "посетителиов".
+- Write "в %CasinoName%", never "%CasinoName%а".`;
   }
 
   return `${universal}
@@ -149,21 +167,35 @@ be said another way. EVERY variant the renderer can produce must read like a hum
 template that can produce one awkward variant is a broken template, no matter how much variety it
 offers.`;
 
-/** Locales whose plural buckets are 3-form. Everything else the engine treats as 2-form. */
-const THREE_FORM_LANGS = new Set(['ru', 'uk', 'be', 'sr', 'hr', 'bs']);
-
-const langOf = (locale: string | undefined): string => (locale ?? 'en').slice(0, 2).toLowerCase();
+/**
+ * Which language the prompt TEACHES IN for a locale — the examples, and the language-specific
+ * advice that goes with them.
+ *
+ * This is a separate question from plural arity, and conflating the two was a real bug: arity was
+ * used as a stand-in for "is this Russian-ish", so adding sr/hr/bs to the 3-form family silently
+ * handed Croatian a Russian case block and Cyrillic examples. Arity says how many forms a
+ * `{plural}` takes; it says nothing about which language to write an example in.
+ *
+ * Ask the ENGINE for arity (`pluralArity` from `@spintax/core`). Ask this for anything else.
+ */
+type TeachingProfile = 'east-slavic' | 'bcs' | 'default';
 
 /**
- * How many buckets `{plural …}` must have for this locale.
- *
- * This is NOT cosmetic. The engine validates plural arity against the locale, so a 3-form plural
- * under `en` is a hard `plural.arity` error and renders as the fullwidth fallback ｛…｝. Teaching
- * the model the wrong arity produces templates that pass a locale-less `validate()` and then
- * render as garbage — so the prompt's plural shape MUST follow the locale it is built for.
+ * Base tags → profile. Explicit, because every implicit rule tried here has been wrong: the tags
+ * that share a plural rule do NOT share a script, an alphabet, or a case system worth teaching the
+ * same way.
  */
-export function pluralArity(locale: string | undefined): 2 | 3 {
-  return THREE_FORM_LANGS.has(langOf(locale)) ? 3 : 2;
+const PROFILE_BY_LANG: Readonly<Record<string, TeachingProfile>> = {
+  ru: 'east-slavic',
+  uk: 'east-slavic',
+  be: 'east-slavic',
+  sr: 'bcs',
+  hr: 'bcs',
+  bs: 'bcs',
+};
+
+function teachingProfile(locale: string | undefined): TeachingProfile {
+  return PROFILE_BY_LANG[normalizeBaseLang(locale)] ?? 'default';
 }
 
 export interface PromptExamples {
@@ -181,23 +213,40 @@ export interface PromptExamples {
  * `validate()` the exact strings the model is shown — under the same locale. A prompt that teaches
  * invalid syntax poisons everything downstream of it; that must be a test failure, not a surprise
  * in production.
+ *
+ * Examples are written IN a language, so they follow the teaching profile, never the arity. The
+ * conjunction inside a permutation (`lastsep=" и "`) is baked into the example text rather than
+ * interpolated, so it cannot drift out of agreement with the sentence around it. {@link syntaxBlock}
+ * derives the same word for its abstract `a|b|c` illustration from the same profile.
+ *
+ * `bcs` deliberately teaches from the English set: there are no BCS examples yet, and Croatian
+ * copy invented to fill the slot would be worse than neutral English. The BCS-specific advice
+ * lives in {@link grammarBlock}, which does carry BCS words.
+ *
+ * The plural example is the one that cannot ride on the example language alone: every example is
+ * validated UNDER THE TARGET LOCALE, so a 2-form `item|items` fails arity for a 3-form locale
+ * taught in English. Its forms therefore follow the engine's arity while the carrier sentence
+ * follows the profile. `sat|sata|sati` is used because all three BCS buckets differ there and the
+ * shared corpus already pins it — no invented copy.
  */
 export function promptExamples(locale?: string): PromptExamples {
+  const russian = teachingProfile(locale) === 'east-slavic';
+  const threeForm = pluralArity(locale) === 3;
   return {
     set: [
       '#set %product% = {course|training}',
       '#set %offer% = our new %product%',
       'Get %offer% today — the %product% starts on Monday.',
     ].join('\n'),
-    permutation:
-      pluralArity(locale) === 3
-        ? 'Мы [<minsize=2;maxsize=3;sep=", ";lastsep=" и ">перезвоним за час|подберём тариф|перенесём данные].'
-        : 'We can [<minsize=2;maxsize=3;sep=", ";lastsep=" and ">reply within the hour|set up your account|migrate your data].',
+    permutation: russian
+      ? 'Мы [<minsize=2;maxsize=3;sep=", ";lastsep=" и ">перезвоним за час|подберём тариф|перенесём данные].'
+      : 'We can [<minsize=2;maxsize=3;sep=", ";lastsep=" and ">reply within the hour|set up your account|migrate your data].',
     optional: 'Get our {|brand new }{course|training} today.',
     conditional: '{?discount?Save %discount% today|Get started in minutes}',
-    plural:
-      pluralArity(locale) === 3
-        ? 'У вас %n% {plural %n%: товар|товара|товаров} в корзине.'
+    plural: russian
+      ? 'У вас %n% {plural %n%: товар|товара|товаров} в корзине.'
+      : threeForm
+        ? 'The sale ends in %n% {plural %n%: sat|sata|sati}.'
         : 'You have %n% {plural %n%: item|items} in your cart.',
   };
 }
@@ -207,8 +256,13 @@ export function promptExamples(locale?: string): PromptExamples {
 // unless told explicitly.
 function syntaxBlock(locale: string | undefined): string {
   const ex = promptExamples(locale);
-  const pluralForm =
-    pluralArity(locale) === 3 ? '{plural %n%: one|few|many}' : '{plural %n%: one|many}';
+  // Genuinely arity — the SHAPE the engine will accept. Straight from the engine, so it cannot
+  // disagree with the validator the drafted template is about to meet.
+  const forms = pluralArity(locale);
+  const pluralForm = forms === 3 ? '{plural %n%: one|few|many}' : '{plural %n%: one|many}';
+  // The conjunction belongs to the example LANGUAGE, not the arity: a Cyrillic "и" inside an
+  // English sentence is what keying this on arity produced for Latin-script hr/bs.
+  const and = teachingProfile(locale) === 'east-slavic' ? 'и' : 'and';
 
   return `SYNTAX — this is the COMPLETE list. Nothing else exists.
 
@@ -230,11 +284,11 @@ ${indent(ex.set)}
 %name%
     A variable, filled in by the host at render time. Use ONLY names from ALLOWED VARIABLES.
 
-[<minsize=2;maxsize=3;sep=", ";lastsep=" ${pluralArity(locale) === 3 ? 'и' : 'and'} ">a|b|c]
+[<minsize=2;maxsize=3;sep=", ";lastsep=" ${and} ">a|b|c]
     Permutation: shuffles the items and joins them.
     ALWAYS set sep when the items are clauses — the DEFAULT SEPARATOR IS A SINGLE SPACE, which
     turns clauses into mush.
-    ALWAYS set lastsep for a human-readable list: "a, b ${pluralArity(locale) === 3 ? 'и' : 'and'} c"
+    ALWAYS set lastsep for a human-readable list: "a, b ${and} c"
     instead of the robotic "a, b, c".
     minsize/maxsize pick a SUBSET, so the list itself varies in length.
     Use permutations only for items of EQUAL weight, where the order genuinely does not matter
@@ -247,7 +301,7 @@ ${indent(ex.permutation)}
 ${indent(ex.conditional)}
 
 ${pluralForm}
-    Plural agreement by count. This target language takes EXACTLY ${pluralArity(locale)} forms —
+    Plural agreement by count. This target language takes EXACTLY ${forms} forms —
     writing any other number of forms is a hard error, not a style choice. NEVER hand-roll counts
     as {item|items}:
 ${indent(ex.plural)}`;
@@ -280,9 +334,10 @@ const SELF_CHECK = `SELF-CHECK — do this before you answer
  * engine's locale-aware plural is the whole point — the prompt has to push the model into it.
  */
 function grammarBlock(locale: string | undefined): string {
-  const lang = (locale ?? 'en').slice(0, 2).toLowerCase();
+  const lang = normalizeBaseLang(locale);
+  const profile = teachingProfile(locale);
 
-  if (lang === 'ru' || lang === 'uk' || lang === 'be') {
+  if (profile === 'east-slavic') {
     return `LANGUAGE: ${lang} — agreement is strict and unforgiving. This is the hard part; slow down here.
 - Every option inside {…} must preserve GENDER, CASE and NUMBER agreement with the words around it.
     WRONG: {хороший|отличная} курс     ← gender breaks in the second branch
@@ -296,7 +351,7 @@ function grammarBlock(locale: string | undefined): string {
   on the count.`;
   }
 
-  if (lang === 'sr' || lang === 'hr' || lang === 'bs') {
+  if (profile === 'bcs') {
     return `LANGUAGE: ${lang} — agreement is strict and unforgiving. This is the hard part; slow down here.
 - Every option inside {…} must preserve GENDER, CASE and NUMBER agreement with the words around it.
     WRONG: {dobar|odlična} kurs      ← gender breaks in the second branch
@@ -308,7 +363,10 @@ function grammarBlock(locale: string | undefined): string {
 - Counts take THREE buckets, same boundaries as Russian. NEVER hand-roll them:
   {bonus|bonusa|bonusa} is WRONG. Write {plural %n%: bonus|bonusa|bonusa} and let the engine pick.
 - Write the WHOLE template in ONE script. Do not mix Latin and Cyrillic inside a template or, worse,
-  inside a single {…} — every branch must be the same script as the text around it.`;
+  inside a single {…} — every branch must be the same script as the text around it.
+- The worked examples below are in ENGLISH, and only the plural forms are in yours. Write YOUR
+  language throughout, including the words inside a permutation's sep/lastsep: the examples show
+  lastsep=" and ", and yours is "i" in Latin script or "и" in Cyrillic — never the English word.`;
   }
 
   return `LANGUAGE: ${lang}
