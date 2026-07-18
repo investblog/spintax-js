@@ -145,7 +145,8 @@ the line explicitly:
   *exists*, and only when the host passes a slug list; `Validator.php:43-45,401-417`). Cycle
   protection is a **render-time guard** (§4.1, `maxDepth`), not a `validate()` error.
 - **Plural grammar buckets.** Given the same locale + count, both engines pick the same
-  form slot (RU/UK/BE 3-form one|few|many; EN-style 2-form). Deterministic math, not RNG —
+  form slot (RU/UK/BE + SR/HR/BS 3-form one|few|many; EN-style 2-form; script subtags carry no
+  plural grammar, so `sr-Latn` and `sr-Cyrl` both normalise to `sr`). Deterministic math, not RNG —
   must match exactly. Includes the edge rules: empty/non-numeric count **erases the block →
   `''`**, negative counts are `abs()`-normalized (`Plurals.php:224-228,271`). The `locale`
   identifier format is the **same vocabulary the golden corpus uses** (§7.1); an

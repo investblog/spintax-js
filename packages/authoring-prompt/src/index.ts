@@ -150,7 +150,7 @@ template that can produce one awkward variant is a broken template, no matter ho
 offers.`;
 
 /** Locales whose plural buckets are 3-form. Everything else the engine treats as 2-form. */
-const THREE_FORM_LANGS = new Set(['ru', 'uk', 'be']);
+const THREE_FORM_LANGS = new Set(['ru', 'uk', 'be', 'sr', 'hr', 'bs']);
 
 const langOf = (locale: string | undefined): string => (locale ?? 'en').slice(0, 2).toLowerCase();
 
@@ -294,6 +294,21 @@ function grammarBlock(locale: string | undefined): string {
 - NEVER hand-roll count forms: {товар|товара|товаров} is WRONG. Write {plural %n%: товар|товара|товаров}
   and let the engine choose the bucket for the actual number — you cannot do it correctly, it depends
   on the count.`;
+  }
+
+  if (lang === 'sr' || lang === 'hr' || lang === 'bs') {
+    return `LANGUAGE: ${lang} — agreement is strict and unforgiving. This is the hard part; slow down here.
+- Every option inside {…} must preserve GENDER, CASE and NUMBER agreement with the words around it.
+    WRONG: {dobar|odlična} kurs      ← gender breaks in the second branch
+    RIGHT: {dobar|odličan} kurs
+- If a branch changes the noun, any adjective or preposition that governs it may have to change too.
+  In that case move them INSIDE the branch:
+    WRONG: u {gradu|selo}
+    RIGHT: {u gradu|u selo}
+- Counts take THREE buckets, same boundaries as Russian. NEVER hand-roll them:
+  {bonus|bonusa|bonusa} is WRONG. Write {plural %n%: bonus|bonusa|bonusa} and let the engine pick.
+- Write the WHOLE template in ONE script. Do not mix Latin and Cyrillic inside a template or, worse,
+  inside a single {…} — every branch must be the same script as the text around it.`;
   }
 
   return `LANGUAGE: ${lang}

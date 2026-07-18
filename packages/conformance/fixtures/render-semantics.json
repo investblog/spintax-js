@@ -104,6 +104,304 @@
     }
   },
   {
+    "id": "plural/sr-one-1",
+    "note": "sr: BCS shares the East-Slavic integer rule. Forms one|few|other; `sat` is used because all three buckets differ (1 sat / 2 sata / 5 sati).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/sr-one-21",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 21: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/sr-other-11",
+    "note": "mod100=11 is the exception to \"one\" ⇒ other.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 11: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/sr-few-2",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/sr-few-22",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 22: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/sr-other-12",
+    "note": "mod100=12 is the exception to \"few\" ⇒ other.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 12: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/sr-other-5",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 5: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/sr-other-0",
+    "note": "0 ⇒ other, as in East Slavic.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 0: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/sr-negative-one",
+    "note": "Negative counts are abs()-normalized: -1 ⇒ one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural -1: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/sr-latn-script-subtag",
+    "note": "Script subtag is not part of plural grammar: sr-Latn normalises to sr.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: sat|sata|sati}",
+    "locale": "sr-Latn",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/sr-cyrl-script-subtag",
+    "note": "Same rule, Cyrillic script. sr-Cyrl normalises to sr — the script lives only in the author's form text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: сат|сата|сати}",
+    "locale": "sr-Cyrl",
+    "postProcess": false,
+    "expect": {
+      "output": "сата"
+    }
+  },
+  {
+    "id": "plural/sr-cyrl-other-5",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 5: сат|сата|сати}",
+    "locale": "sr-Cyrl",
+    "postProcess": false,
+    "expect": {
+      "output": "сати"
+    }
+  },
+  {
+    "id": "plural/hr-few-2",
+    "note": "hr shares the BCS rule.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/hr-other-5",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 5: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/bs-few-2",
+    "note": "bs shares the BCS rule.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: sat|sata|sati}",
+    "locale": "bs",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/bs-other-5",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 5: sat|sata|sati}",
+    "locale": "bs",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/sr-one-101",
+    "note": "101: mod10=1, mod100=1 ⇒ one. Guards the rule past two digits.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 101: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/sr-other-111",
+    "note": "111: mod10=1 but mod100=11 ⇒ other. The 11-trap survives past 100.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 111: sat|sata|sati}",
+    "locale": "sr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/sr-region-subtag",
+    "note": "Region suffix with an underscore also normalises to sr.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: sat|sata|sati}",
+    "locale": "sr_RS",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/hr-one-1",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/hr-other-11",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 11: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
+    "id": "plural/hr-one-21",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 21: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/hr-few-22",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 22: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sata"
+    }
+  },
+  {
+    "id": "plural/hr-one-101",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 101: sat|sata|sati}",
+    "locale": "hr",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/bs-one-1",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: sat|sata|sati}",
+    "locale": "bs",
+    "postProcess": false,
+    "expect": {
+      "output": "sat"
+    }
+  },
+  {
+    "id": "plural/bs-other-11",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 11: sat|sata|sati}",
+    "locale": "bs",
+    "postProcess": false,
+    "expect": {
+      "output": "sati"
+    }
+  },
+  {
     "id": "plural/en-one-1",
     "note": "Explicit EN locale (2-form). n=1 ⇒ one. (Omitted-locale defaulting to EN is a TS-only contract, unit-tested, not cross-engine corpus.)",
     "kind": "deterministic",

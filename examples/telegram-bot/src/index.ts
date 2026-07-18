@@ -89,7 +89,7 @@ const SYNTAX_ROWS: readonly (readonly [code: string, note: string])[] = [
   ['%name%', 'variable <i>(can nest inside a #set)</i>'],
   ['[<sep=", ";lastsep=" and ">a|b|c]', 'shuffle &amp; join equal-weight parts — <i>lastsep gives “a, b and c”</i>'],
   ['{?flag?yes|no}', 'conditional'],
-  ['{plural %n%: item|items}', `plural agreement <i>(${LOCALE} takes 2 forms; ru/uk/be take 3)</i>`],
+  ['{plural %n%: item|items}', `plural agreement <i>(${LOCALE} takes 2 forms; ru/uk/be and sr/hr/bs take 3)</i>`],
 ];
 
 /** Every spintax snippet the help shows. The test suite runs each one through the engine. */
@@ -145,7 +145,7 @@ function handleTemplate(src: string): string {
     if (errors.some((e) => e.code === 'plural.arity')) {
       reply +=
         `\n\nℹ️ This bot renders with locale “${LOCALE}”, which takes 2 plural forms — ` +
-        '{plural %n%: item|items}. Languages like ru/uk/be take 3.';
+        '{plural %n%: item|items}. Languages like ru/uk/be and sr/hr/bs take 3.';
     }
     return reply;
   }

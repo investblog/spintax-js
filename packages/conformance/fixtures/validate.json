@@ -161,6 +161,61 @@
     }
   },
   {
+    "id": "validate/plural-arity-sr-invalid",
+    "note": "Same verdict for sr — BCS is 3-form, so a 2-form template is an arity error.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "locale": "sr",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/plural-arity-sr-latn-invalid",
+    "note": "Arity follows the base language, so a script subtag does not rescue a 2-form template.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "locale": "sr-Latn",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/plural-arity-sr-valid",
+    "note": "Three forms satisfy sr arity.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: sat|sata|sati}",
+    "locale": "sr",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/plural-arity-hr-invalid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "locale": "hr",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/plural-arity-bs-invalid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "locale": "bs",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+    }
+  },
+  {
     "id": "validate/variable-self-reference",
     "kind": "deterministic",
     "op": "validate",

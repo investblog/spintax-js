@@ -3,6 +3,44 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 — 2026-07-18
+
+Serbian, Croatian and Bosnian join the 3-form plural family. Minor, not patch: this
+changes a **validation verdict**, which §0.1 classes as breaking.
+
+### Added
+
+- **BCS plural buckets — `sr`, `hr`, `bs`.** On integers, BCS shares the East-Slavic rule
+  character for character (`mod10===1 && mod100!==11` → one; `mod10∈[2,4] && mod100∉[12,14]`
+  → few; else → many), so it reuses that branch rather than getting its own. CLDR names the
+  third bucket `other` rather than `many` — positionally the same slot. The genuine
+  BCS/East-Slavic divergence is fractional-only and unreachable here, since a non-numeric
+  count slot is erased to `''` before the bucket math (§3.1).
+
+  **Script and region subtags carry no plural grammar.** `sr-Latn`, `sr-Cyrl` and `sr_RS` all
+  normalise to `sr` and pick identical buckets; the script lives only in the author's form text.
+  Corpus fixtures pin each form, and the arity fixtures pin that a script subtag does not rescue
+  a 2-form template. The ladder runs past two digits, where `mod100` has to beat `mod10`: 101 is
+  `one`, 111 is not.
+
+  Render fixtures probe with `sat` (1 sat / 2 sata / 5 sati) because all three buckets differ
+  there. The tempting `bonus|bonusa|bonusa` collapses few and other, so it would pass against a
+  broken rule.
+
+  Landed in all three engines at once — `@spintax/core`, the WordPress plugin 2.5.0, and
+  `spintax/core` 0.2.0 — because plural buckets are a parity-required item and the golden
+  corpus gates every engine.
+
+### Changed
+
+- **BREAKING (verdict): `{plural 2: one|many}` under `sr`/`hr`/`bs` is now `plural.arity`.**
+  Previously these locales fell through to the EN-style 2-form default, so a 2-form BCS
+  template validated clean and rendered from the wrong bucket set. Any existing BCS template
+  must grow a third form. No other locale changes behaviour.
+- The LLM authoring prompt (`@spintax/authoring-prompt`) now emits a BCS grammar block —
+  agreement rules, the 3-bucket warning, and a "do not mix Latin and Cyrillic inside one
+  template" rule. Without it a model writes 2-form BCS that the validator then rejects.
+
 ## 0.1.6 — 2026-07-13
 
 Two post-process fixes. **Supersedes 0.1.5** — upgrade straight past it. No API change.

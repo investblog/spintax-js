@@ -74,8 +74,8 @@ Sections, in order:
 
 ### Language is not a cosmetic knob
 
-Grammar-safety is **language-specific, and Russian is the hard case** (gender / case / number
-agreement). For `ru`/`uk`/`be` the prompt must:
+Grammar-safety is **language-specific, and the Slavic languages are the hard case** (gender /
+case / number agreement). For `ru`/`uk`/`be` and `sr`/`hr`/`bs` the prompt must:
 
 - carry the agreement rules, and
 - **push the model into `{plural %n%: …}` instead of a hand-rolled `{товар|товара|товаров}`** —

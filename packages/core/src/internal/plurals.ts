@@ -61,12 +61,21 @@ export function normalizeBaseLang(locale: string): string {
   return first ?? '';
 }
 
-/** Expected number of plural forms: 3 for East Slavic (ru/uk/be), else 2 (EN-style). */
+/**
+ * Expected number of plural forms: 3 for the Slavic one/few/other family
+ * (East Slavic ru/uk/be + BCS sr/hr/bs), else 2 (EN-style).
+ *
+ * BCS shares the East-Slavic integer rule exactly, so it reuses that bucket; CLDR
+ * names the third slot "other" rather than "many", positionally the same.
+ */
 export function pluralArity(baseLang: string): number {
   switch (baseLang) {
     case 'ru':
     case 'uk':
     case 'be':
+    case 'sr':
+    case 'hr':
+    case 'bs':
       return 3;
     default:
       return 2;
@@ -75,8 +84,12 @@ export function pluralArity(baseLang: string): number {
 
 /**
  * Pick the plural form for a count by the locale's grammar.
- * - East Slavic: one (1,21,31… not 11), few (2-4,22-24… not 12-14), many (rest, incl. 0).
+ * - Slavic 3-form (ru/uk/be + sr/hr/bs): one (1,21,31… not 11), few (2-4,22-24…
+ *   not 12-14), many (rest, incl. 0).
  * - EN-style: one (n=1), many (rest). Negative counts use abs().
+ *
+ * Counts are integers here (§3.1 erases a non-numeric slot), so the BCS/East-Slavic
+ * split on fractions — CLDR gives BCS a fraction-digit rule — cannot be reached.
  */
 export function pluralFor(baseLang: string, n: number, forms: readonly string[]): string {
   const abs = Math.abs(n);
@@ -87,6 +100,9 @@ export function pluralFor(baseLang: string, n: number, forms: readonly string[])
     case 'ru':
     case 'uk':
     case 'be':
+    case 'sr':
+    case 'hr':
+    case 'bs':
       if (mod10 === 1 && mod100 !== 11) return forms[0] ?? '';
       if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1] ?? '';
       return forms[2] ?? '';
