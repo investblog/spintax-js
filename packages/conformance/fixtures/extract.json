@@ -6,9 +6,40 @@
     "op": "extract",
     "template": "#set %greeting% = Hello\n%greeting% %name%!\n#include \"hero\"",
     "expect": {
-      "refs": ["greeting", "name"],
-      "sets": ["greeting"],
-      "includes": ["hero"]
+      "refs": [
+        "greeting",
+        "name"
+      ],
+      "sets": [
+        "greeting"
+      ],
+      "includes": [
+        "hero"
+      ]
+    }
+  },
+  {
+    "id": "extract/defs-alongside-sets",
+    "note": "#def names are their own bucket, never folded into `sets` — the two directives differ in semantics, so a consumer that lints one must be able to tell them apart. Arrays are order-normalized. Tagged ts+py because the PHP runner does not assert `defs` yet; it can drop the tag once it does (its Parser already returns them).",
+    "kind": "deterministic",
+    "engines": [
+      "ts",
+      "py"
+    ],
+    "op": "extract",
+    "template": "#set %a% = {x|y}\n#def %b% = {x|y}\n%a% %b% %c%",
+    "expect": {
+      "refs": [
+        "a",
+        "b",
+        "c"
+      ],
+      "sets": [
+        "a"
+      ],
+      "defs": [
+        "b"
+      ]
     }
   }
 ]

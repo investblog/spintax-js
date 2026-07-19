@@ -24,6 +24,7 @@ export interface ExpectValidate {
 export interface ExpectExtract {
   refs?: string[];
   sets?: string[];
+  defs?: string[];
   includes?: string[];
 }
 export interface ExpectRng {

@@ -45,10 +45,10 @@
         },
         "engines": {
           "type": "array",
-          "items": { "enum": ["ts", "php"] },
+          "items": { "enum": ["ts", "php", "py"] },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Which engines assert this case. Absent = BOTH (the default cross-engine gate). Use [\"ts\"] for a deliberate TS-only divergence the PHP plugin does not provide — e.g. neutralize()'s glyph-restore (the plugin entity-encodes and never decodes; §6). A PHP runner skips cases whose engines omit \"php\"."
+          "description": "Which engines assert this case. Absent = BOTH (the default cross-engine gate). Use [\"ts\"] for a deliberate TS-only divergence the PHP plugin does not provide — e.g. neutralize()'s glyph-restore (the plugin entity-encodes and never decodes; §6). A runner skips cases whose engines omit its own id."
         },
         "seed": {
           "oneOf": [{ "type": "integer" }, { "type": "string" }],
@@ -130,6 +130,7 @@
       "properties": {
         "refs": { "type": "array", "items": { "type": "string" } },
         "sets": { "type": "array", "items": { "type": "string" } },
+        "defs": { "type": "array", "items": { "type": "string" } },
         "includes": { "type": "array", "items": { "type": "string" } }
       },
       "description": "Arrays are order-normalized before comparison. At least one key required (no vacuous expect)."

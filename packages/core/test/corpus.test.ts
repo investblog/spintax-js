@@ -93,6 +93,7 @@ function runExtract(c: Case): void {
   const sorted = (a: readonly string[] | undefined): string[] => [...(a ?? [])].sort();
   if (expected.refs !== undefined) expect(sorted(result.refs), `${c.id} refs`).toEqual(sorted(expected.refs));
   if (expected.sets !== undefined) expect(sorted(result.sets), `${c.id} sets`).toEqual(sorted(expected.sets));
+  if (expected.defs !== undefined) expect(sorted(result.defs), `${c.id} defs`).toEqual(sorted(expected.defs));
   if (expected.includes !== undefined) {
     expect(sorted(result.includes), `${c.id} includes`).toEqual(sorted(expected.includes));
   }
