@@ -23,7 +23,7 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 | field | meaning |
 |---|---|
 | `id` | stable unique slug, e.g. `plural/ru-few` |
-| `kind` | `deterministic` (exact output asserted in BOTH engines) or `rng` (within-engine reproducibility + §7.2 invariants only) |
+| `kind` | `deterministic` (exact output asserted in every engine that asserts the case) or `rng` (within-engine reproducibility + §7.2 invariants only) |
 | `op` | `render` \| `validate` \| `extract` \| `neutralize` |
 | `template` | the spintax source |
 | `context` | optional variable map (string→string, T1) |
@@ -40,7 +40,9 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 > entity-encodes (`{`→`&#123;`) and never decodes — its literal glyph only appears in an HTML
 > browser. `@spintax/core` and the Python engine restore literal glyphs in any sink (§6), so the
 > `neutralize/roundtrip-*` cases are tagged `"engines": ["ts","py"]` and the PHP runner skips
-> them. Only `neutralize/identity-plain` (no structural chars) is asserted by every engine.
+> them. `neutralize/identity-plain` (no structural chars) carries no tag, but the PHP runner
+> skips the whole `op: neutralize` — the plugin has no standalone neutralize to call — so in
+> practice it too is asserted by TS and Python only.
 >
 > Worth knowing before trusting a green: `identity-plain` alone is passed by a `neutralize()`
 > that returns its input unchanged. The round-trips are what actually gate the shielding, so an

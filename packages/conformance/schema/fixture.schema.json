@@ -20,7 +20,7 @@
         "note": { "type": "string", "description": "Human note; never asserted." },
         "kind": {
           "enum": ["deterministic", "rng"],
-          "description": "deterministic ⇒ exact output asserted in BOTH engines. rng ⇒ within-engine reproducibility + §7.2 invariants only, never a cross-engine exact gate."
+          "description": "deterministic ⇒ exact output asserted in every engine that asserts the case. rng ⇒ within-engine reproducibility + §7.2 invariants only, never a cross-engine exact gate."
         },
         "op": { "enum": ["render", "validate", "extract", "neutralize"] },
         "template": { "type": "string" },

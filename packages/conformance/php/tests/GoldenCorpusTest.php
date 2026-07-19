@@ -6,7 +6,7 @@
  * the SAME files the TS `@spintax/core` suite consumes) through the PHP Spintax
  * plugin's WP-free Core engine, and asserts the fixtures' expected values. Green
  * here + green in TS = the deterministic parity contract is machine-verified in
- * BOTH engines, not just assumed from source-reading.
+ * each asserting engine, not just assumed from source-reading.
  *
  * The render path replicates the plugin `Renderer::process_template` stage order
  * (Renderer.php:240-331) using the WP-free primitives directly, so it can run
@@ -41,7 +41,7 @@ final class GoldenCorpusTest extends TestCase
                 continue;
             }
             foreach ($data as $case) {
-                // `engines` absent => both engines; otherwise run only if 'php' is listed.
+                // `engines` absent => every engine; otherwise run only if 'php' is listed.
                 $engines = $case['engines'] ?? null;
                 if (is_array($engines) && !in_array('php', $engines, true)) {
                     continue;
@@ -69,9 +69,12 @@ final class GoldenCorpusTest extends TestCase
                 $this->runRender($c);
                 break;
             case 'neutralize':
-                // TS-specific: @spintax/core restores literal glyphs; the plugin
-                // entity-encodes and never decodes (§6). Such fixtures are engines:["ts"].
-                $this->markTestSkipped('neutralize is a TS-only divergence (entity vs glyph)');
+                // The glyph-restore is a divergence this engine does not implement:
+                // @spintax/core and the Python engine restore literal glyphs, the plugin
+                // entity-encodes and never decodes (§6). Those fixtures are ["ts","py"].
+                // Skipping by OP also drops neutralize/identity-plain, which carries no
+                // engines tag - so that case is asserted by TS and Python, not here.
+                $this->markTestSkipped('neutralize: the plugin entity-encodes, it does not restore glyphs');
                 break;
             default:
                 $this->markTestSkipped("unknown op: {$c['op']}");
