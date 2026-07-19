@@ -89,7 +89,10 @@ export interface Diagnostic {
 
 export interface ExtractResult {
   refs: string[];
+  /** Names defined by `#set` — macros, re-picked at every reference. */
   sets: string[];
+  /** Names defined by `#def` — rolled once per render and held. */
+  defs: string[];
   includes: string[];
 }
 

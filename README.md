@@ -58,7 +58,7 @@ land here unless the engines it binds already satisfy it.
 
 - `{a|b|c}` — enumeration (pick one), nestable `{a|{b|c}}`
 - `[a|b|c]` — permutation (pick N, shuffle, join), configurable separators
-- `%var%` — variable reference · `#set %v% = value` — local variable
+- `%var%` — variable reference · `#set %v% = value` — local macro · `#def %v% = value` — local value, picked once per render
 - `{?VAR?then|else}` — conditional · `{plural <count>: one|few|many}` — plural agreement
 - `#include "slug-or-id"` — embed another template · `/# … #/` — comments
 

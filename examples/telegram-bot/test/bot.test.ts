@@ -119,12 +119,13 @@ describe('the help must not teach anything the engine rejects', () => {
     expect(out).not.toContain('#set'); // the directive must be consumed, never printed
   });
 
-  test('the power example proves #set collapses once — one product name, twice', () => {
+  test('the power example proves #def picks once — one product name, twice', () => {
     for (let seed = 1; seed <= 6; seed += 1) {
       const out = render(EXAMPLE_POWER, { seed, locale: LOCALE, context: { name: 'Ada' } });
       const course = (out.match(/course/gu) ?? []).length;
       const training = (out.match(/training/gu) ?? []).length;
-      // Both mentions resolve to the SAME word — never one of each.
+      // Both mentions resolve to the SAME word — never one of each. Under #set they would be
+      // two independent picks, which is exactly the contradiction this example warns against.
       expect(course === 2 || training === 2).toBe(true);
       expect(course === 1 && training === 1).toBe(false);
     }

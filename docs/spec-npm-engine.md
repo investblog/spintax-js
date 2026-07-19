@@ -154,13 +154,22 @@ the line explicitly:
   (Reference: `plugin/src/Core/Engine/Plurals.php`.)
 - **Conditional truthiness.** `{?VAR?…}` "set + non-whitespace" truthiness, inverted
   `{?!VAR?…}`, resolution before AND after `%var%` expansion — identical rules.
-- **`#set` collapse-once semantics.** An enumeration in a `#set` value collapses once at
-  set-time to a single stable value (plugin Renderer Stage 4b, `Renderer.php:246-262`) so
-  `{plural %n%: …}` sees a numeric count. The **parity gate is the *semantic* rule** (one
-  stable value per render; a numeric count reaches `{plural}`), **NOT which value the RNG
-  picks** — that diverges cross-engine (§3.2). So deterministic collapse fixtures MUST use
-  RNG-free values (`#set %n% = 5`, or all-identical alternatives); an enumeration-valued
-  `#set` is a within-engine/structural case, never a cross-engine exact-output gate.
+- **`#set` macro / `#def` roll-once semantics.** A `#set` value is substituted at every `%var%`
+  reference and its brackets re-roll each time; a `#def` value is rendered once per render and the
+  result is held. The roll happens **after** the merged context exists, so a definition can read
+  globals and runtime variables, and a runtime variable of the same name outranks it. Dependency
+  order follows aliases **through** macro values, since a `#def` can reach another `#def` by way of
+  a `#set` that is expanded only at reference time.
+
+  Until 0.3.0 an enumeration-valued `#set` collapsed once at set-time instead; that behaviour moved
+  to `#def`. Note what the old rule got wrong about fixtures: it declared that collapse could only
+  be pinned with RNG-free values, and consequently **nothing pinned it at all** — the semantics
+  flipped in the plugin without a single corpus fixture noticing. The difference between the two
+  directives is a difference in **how many RNG draws a render consumes**, so a *seeded sequence*
+  distinguishes them exactly and cross-engine (`set/macro-re-rolls-at-every-reference` and
+  `def/rolled-once-and-held` share a template and a sequence and differ only in the second draw).
+  All-identical alternatives are NOT sufficient: they render the same under either semantics and
+  would pass against an engine implementing `#def` as an alias of `#set`.
 - **Other deterministic, author-visible behaviors** (not RNG, not wording — each earns
   corpus coverage): **enumeration preserves inner whitespace, permutation trims each
   element** (`{ a | b }` keeps the spaces, `[ a | b ]` does not); `%var%` expansion is
@@ -205,7 +214,8 @@ the full surface. Enumerated here so the port has a checklist, not prose.
 | Permutation configured | `[<minsize=2;maxsize=3;sep=", ";lastsep=" and "> …]` | syntax + minsize/maxsize default **and clamp** rules; `<config>` vs HTML-start-tag disambiguation (`[<li>…]` is HTML, not config) |
 | Per-element separator | `[<, > a\|b < and >\|c]` | syntax; sep travels with element on shuffle |
 | Variable ref | `%var%` (case-insensitive) | syntax |
-| Local set | `#set %v% = value` | syntax + collapse-once (§3.1) |
+| Local set | `#set %v% = value` | syntax + macro semantics (§3.1) |
+| Local def | `#def %v% = value` | syntax + roll-once semantics (§3.1) |
 | Conditional | `{?VAR?then\|else}`, `{?!VAR?…}` | syntax + truthiness (§3.1) |
 | Plural | `{plural <count>: one\|few\|many}` | syntax + bucket math (§3.1); prefix is literal `{plural ` **with trailing space** + mandatory `:` (no colon ⇒ left as literal text); brace-depth-aware scan; rejects nested brackets in form slots; empty/non-numeric count ⇒ `''` |
 | Block comment | `/#...#/` | syntax (stripped) |

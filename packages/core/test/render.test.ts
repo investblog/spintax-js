@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { parseTemplate } from '../src/internal/parser';
-import { buildVars, renderNodes, type PluralIssue } from '../src/internal/render';
+import { buildVars, renderNodes, rollDefinitions, type PluralIssue } from '../src/internal/render';
 import { rngFromStrategy, type RngStrategy } from './corpus-harness';
 
 /** White-box render with an injected RNG strategy (like the corpus harness). */
@@ -13,8 +13,10 @@ function render(
 ): string {
   const ast = parseTemplate(src);
   const rngFn = rngFromStrategy(rng);
-  const vars = buildVars(ast.setDefs, context, rngFn);
-  return renderNodes(ast.nodes, { vars, rng: rngFn, locale, depth: 0, onPluralError });
+  const base = buildVars(ast.setDefs, context);
+  const walkOpts = { rng: rngFn, locale, depth: 0, onPluralError };
+  const vars = { ...base, ...rollDefinitions(ast.defDefs, base, context, walkOpts) };
+  return renderNodes(ast.nodes, { ...walkOpts, vars });
 }
 
 /** Render while collecting plural reports — the observer seam, not a render mode. */
@@ -114,12 +116,19 @@ describe('render — plurals', () => {
 
 // The stage-order group the reviewer asked for: where parity snaps if a pass is off by one.
 describe('render — staged-semantics parity', () => {
-  test('Stage 4b: #set enum value collapses ONCE, then the plural sees a number', () => {
-    // #set %n% = {1|4|9} → collapse (last ⇒ 9) → {plural 9: …} ru ⇒ many.
-    expect(render('#set %n% = {1|4|9}\n{plural %n%: товар|товара|товаров}', 'last', {}, 'ru')).toBe('\nтоваров');
+  test('a #def count is frozen before the plural runs, so the plural sees a number', () => {
+    // #def %n% = {1|4|9} → rolled (last ⇒ 9) → {plural 9: …} ru ⇒ many.
+    expect(render('#def %n% = {1|4|9}\n{plural %n%: товар|товара|товаров}', 'last', {}, 'ru')).toBe('\nтоваров');
   });
 
-  test('Stage 4b: a #set value carrying {?…} is NOT pre-collapsed — resolved later as a conditional', () => {
+  test('a #set count is still spintax when the plural runs, so the block is erased', () => {
+    // The accepted counterpart: a macro is substituted verbatim, the count slot is non-numeric at
+    // the plural boundary, and the construct resolves to nothing. Pinned as a decision on record,
+    // and the reason `plural.count-macro` exists.
+    expect(render('#set %n% = {1|4|9}\n{plural %n%: товар|товара|товаров}', 'last', {}, 'ru')).toBe('\n');
+  });
+
+  test('a #set value carrying {?…} resolves later, as a conditional', () => {
     expect(render('#set %bonus% = 1\n#set %cta% = {?bonus?Claim|Deposit}\n%cta%')).toBe('\n\nClaim');
   });
 
@@ -142,9 +151,34 @@ describe('render — staged-semantics parity', () => {
     expect(render('{plural 2: item|%v%}', 'first', { v: 'a|b' }, 'en')).toBe('｛plural 2: item|a|b｝');
   });
 
-  test('#set enum collapse-once is stable across repeated references', () => {
-    // %v% used twice must be the SAME collapsed value (not two independent picks).
-    expect(render('#set %v% = {a|b|c}\n%v%-%v%', { sequence: [1] })).toBe('\nb-b');
+  test('a #def is rolled once and holds across repeated references', () => {
+    // One draw, reused. The sequence has a second value the roll never reaches.
+    expect(render('#def %v% = {a|b|c}\n%v%-%v%', { sequence: [1, 2] })).toBe('\nb-b');
+  });
+
+  test('a #set re-rolls at every reference', () => {
+    // Same sequence, two draws consumed. That difference in draw count IS the semantic difference,
+    // which is why a first-option RNG cannot tell the two directives apart.
+    expect(render('#set %v% = {a|b|c}\n%v%-%v%', { sequence: [1, 2] })).toBe('\nb-c');
+  });
+
+  test('a #def resolves against runtime context, not a bare map', () => {
+    // The roll runs after the context is merged; rolling earlier would freeze the literal `%who%`.
+    expect(render('#def %g% = Hello %who%\n%g% / %g%', 'first', { who: 'Bob' })).toBe('\nHello Bob / Hello Bob');
+  });
+
+  test('a runtime variable outranks a #def of the same name', () => {
+    expect(render('#def %x% = {a|b}\n%x%', 'first', { x: 'RUNTIME' })).toBe('\nRUNTIME');
+  });
+
+  test('a #def dependency hidden behind a #set alias is still ordered', () => {
+    // %b% never mentions %a%: it reaches it through the macro %s%, which is expanded at reference
+    // time. Ordering on direct references alone froze %b% with %a% unexpanded and the plural block
+    // vanished for want of a numeric count.
+    expect(
+      render('#def %b% = %s% {plural %s%: item|items}\n#set %s% = %a%\n#def %a% = {1|4}\n%b%', 'first', {}, 'en'),
+      // Three stripped directive lines leave `\n\n` — the extractor collapses `\n{3,}`.
+    ).toBe('\n\n1 item');
   });
 });
 

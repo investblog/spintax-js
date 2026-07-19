@@ -16,8 +16,14 @@
  * Permutation's `<config>` + per-element separators are fully parsed (PR-11b).
  */
 
-/** Bumped only on a breaking change to the node shape (independent of syntax v1). */
-export const AST_VERSION = 1;
+/**
+ * Bumped only on a breaking change to the node shape (independent of syntax v1).
+ *
+ * 2 — `ParsedAst` gained `defDefs`. An `Ast` cached by an older version carries no `#def` map, so
+ * rendering it would silently drop every definition; the version guard turns that into an
+ * `AstVersionError` instead.
+ */
+export const AST_VERSION = 2;
 
 /** Opaque public handle (re-exported as `Ast` from the package index). */
 export interface Ast {
@@ -26,10 +32,16 @@ export interface Ast {
 
 /** Internal parsed tree. Carries the original source so validate(Ast) can do
  *  the raw-text checks (bracket balance etc.) and future offset diagnostics, and
- *  the globally-extracted `#set` definitions (name → raw value, name lowercased). */
+ *  the globally-extracted directive definitions (name → raw value, name lowercased).
+ *
+ *  The two maps are separate because the directives have opposite semantics: a `#set` value is a
+ *  macro, substituted at every reference so its brackets re-roll each time, while a `#def` value
+ *  is rendered once per render and frozen. Neither is a tree node — both are line-anchored
+ *  pre-passes over the raw text. */
 export interface ParsedAst extends Ast {
   readonly source: string;
   readonly setDefs: Readonly<Record<string, string>>;
+  readonly defDefs: Readonly<Record<string, string>>;
   readonly nodes: readonly Node[];
 }
 

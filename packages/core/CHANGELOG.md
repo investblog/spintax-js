@@ -3,6 +3,75 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+`#set` goes back to being a macro and a new `#def` carries roll-once. Breaking: it changes what
+existing templates mean. Ships in lockstep with the WordPress plugin 3.0.0, `spintax/core` and the
+OpenCart port; the corpus lands last, after both PHP engines.
+
+### Changed
+
+- **`#set` is a macro.** The value is substituted at every `%var%` reference and whatever brackets
+  it holds resolve independently each time. Until now an enumeration-valued `#set` collapsed once at
+  set-time; that behaviour moved to `#def`.
+
+  Worth recording *why* the revert, because the reasoning is not recoverable from the diff:
+  collapse-once was the newcomer. It shipped in the plugin on 2026-07-04, was announced in one
+  changelog line, and contradicted the project's published documentation from the day it landed.
+  Macro expansion is what the engine did before that and what consumers written against those docs
+  assume.
+
+- **`AST_VERSION` 1 → 2.** `ParsedAst` gained `defDefs`. An `Ast` cached by an older version carries
+  no definition map, so rendering it would silently drop every `#def`; the version guard turns that
+  into an `AstVersionError` instead.
+
+- **`extract()` reports `defs`** alongside `sets`. Additive for readers, but a consumer building a
+  variable list from `sets` alone will now miss `#def` names.
+
+- **`plural.nested-brackets` advice.** "Extract via `#set` first" was correct under collapse-once and
+  is wrong under a macro — the value is substituted verbatim and puts the brackets straight back into
+  the form slot, raising the very error it was meant to avoid. It now says `#def`.
+
+### Added
+
+- **`#def %var% = value` — roll-once.** The value is rendered once per render, as if it were a
+  miniature body, and the result is held for every reference. It covers enumerations *and*
+  permutations, resolves **after** the merged context exists (so it can read globals and runtime
+  variables; a runtime variable of the same name outranks it), and resolves in dependency order —
+  an order that follows aliases **through** macro values, since a `#def` can reach another `#def` by
+  way of a `#set` expanded only at reference time.
+
+  This is where a plural counter now lives: `#def %n% = {1|4|9}` then `{plural %n%: …}` prints and
+  agrees the same number. Under `#set` the two disagree and the block is dropped.
+
+- **Four diagnostics**: `def.malformed`, `definition.duplicate-name` (a name belongs to one
+  directive, once — this also closes silently-last-wins duplicate `#set`s), `def.include-in-value`
+  (includes resolve after a value is frozen; legal inside a `#set`), and `plural.count-macro`.
+
+  `plural.count-macro` is decided by **stage order, not bracket type**: conditionals resolve before
+  plurals and are exempt, enumerations and permutations resolve after and are not, and a nested
+  `{plural …}` resolves in the *same* pass so it is not exempt either. Taint propagates through
+  `#set` → `#set` references to a fixpoint.
+
+### Corpus
+
+The difference between the directives is a difference in how many RNG draws a render consumes, so
+seeded-sequence fixtures pin it exactly and cross-engine — `set/macro-re-rolls-at-every-reference`
+and `def/rolled-once-and-held` share a template and a sequence and differ only in whether the second
+draw is reached. The corpus grew 138 → 160 cases, green against this engine, the WordPress plugin
+and `spintax/core`.
+
+The previous rule here said collapse could only be pinned with RNG-free values, and the consequence
+was that **nothing pinned it at all**: the semantics flipped in the plugin without a single fixture
+noticing. All-identical alternatives are not sufficient either — they render the same under both
+semantics and would pass against an engine implementing `#def` as an alias of `#set`.
+
+### Migration
+
+A `#set` whose value is an enumeration or permutation *and* which is referenced more than once for
+consistency — a plural counter, a brand name that must not vary mid-sentence — becomes `#def`. One
+line per definition; references are untouched.
+
 ## 0.2.0 — 2026-07-18
 
 Serbian, Croatian and Bosnian join the 3-form plural family; the plural error model and the

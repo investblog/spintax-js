@@ -607,5 +607,120 @@
     "expect": {
       "output": "A"
     }
+  },
+  {
+    "id": "set/macro-re-rolls-at-every-reference",
+    "note": "A #set is a macro: the value is substituted at each %x% and its enumeration re-rolls. Two draws are consumed — seq[0]=0 then seq[1]=1 — which is the observable difference from #def below. A first-option RNG could NOT tell the two apart.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = {a|b}\n%x%-%x%",
+    "rng": {
+      "sequence": [
+        0,
+        1
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "\na-b"
+    }
+  },
+  {
+    "id": "def/rolled-once-and-held",
+    "note": "Same template and the SAME rng sequence as set/macro-re-rolls-at-every-reference. A #def is rendered once and frozen, so one draw is consumed and seq[1] is never reached.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %x% = {a|b}\n%x%-%x%",
+    "rng": {
+      "sequence": [
+        0,
+        1
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "\na-a"
+    }
+  },
+  {
+    "id": "def/rolled-once-covers-permutations",
+    "note": "Roll-once is not bracket-specific: a permutation freezes too, so both references shuffle identically. Its #set twin below shares the template and the rng sequence and shuffles twice — the pair is the pin, neither half means much alone.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %x% = [<sep=\", \"> a|b]\n%x% / %x%",
+    "rng": {
+      "sequence": [
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "\na, b / a, b"
+    }
+  },
+  {
+    "id": "def/resolves-against-runtime-context",
+    "note": "The roll runs AFTER the context is merged, so a definition can read a runtime variable. Rolling it earlier (where collapse-once sat) would freeze the literal text %who%.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %x% = %who%-{a|b}\n%x% %x%",
+    "context": {
+      "who": "Acme"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "\nAcme-a Acme-a"
+    }
+  },
+  {
+    "id": "def/runtime-outranks-a-definition",
+    "note": "Runtime beats every local, #def included; the definition is then never rolled at all.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %x% = {a|b}\n%x%",
+    "context": {
+      "x": "RUNTIME"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "\nRUNTIME"
+    }
+  },
+  {
+    "id": "def/dependency-through-a-set-alias",
+    "note": "%b% never mentions %a%: it reaches it through the macro %s%, expanded at reference time and therefore invisible in %b%'s own text. Ordering on direct references alone froze %b% with %a% unexpanded and the plural block vanished for want of a numeric count. Declaration order is deliberately reversed.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %b% = %s% {plural %s%: item|items}\n#set %s% = %a%\n#def %a% = {1|4}\n%b%",
+    "locale": "en",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\n1 item"
+    }
+  },
+  {
+    "id": "set/macro-re-shuffles-a-permutation",
+    "note": "Same template and rng sequence as def/rolled-once-covers-permutations; a macro re-shuffles at the second reference.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = [<sep=\", \"> a|b]\n%x% / %x%",
+    "rng": {
+      "sequence": [
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "\na, b / b, a"
+    }
   }
 ]

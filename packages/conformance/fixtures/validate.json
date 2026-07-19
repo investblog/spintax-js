@@ -5,28 +5,36 @@
     "kind": "deterministic",
     "op": "validate",
     "template": "{a|b|c}",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/nested-enumeration-valid",
     "kind": "deterministic",
     "op": "validate",
     "template": "{a|{b|c}}",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/permutation-config-valid",
     "kind": "deterministic",
     "op": "validate",
     "template": "[<minsize=2;maxsize=3;sep=\", \";lastsep=\" and \"> a|b|c]",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/set-valid",
     "kind": "deterministic",
     "op": "validate",
     "template": "#set %greeting% = hello\n%greeting% world",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/plural-no-locale-structural-only-valid",
@@ -34,7 +42,9 @@
     "kind": "deterministic",
     "op": "validate",
     "template": "{plural 2: one|many}",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/undefined-variable-is-warning-not-error",
@@ -44,7 +54,12 @@
     "template": "Hello %runtime_name%!",
     "expect": {
       "verdict": "valid",
-      "diagnostics": [{ "code": "variable.undefined", "severity": "warning" }]
+      "diagnostics": [
+        {
+          "code": "variable.undefined",
+          "severity": "warning"
+        }
+      ]
     }
   },
   {
@@ -53,7 +68,9 @@
     "kind": "deterministic",
     "op": "validate",
     "template": "#include \"anything\"",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/circular-include-is-not-a-static-verdict",
@@ -61,10 +78,13 @@
     "kind": "deterministic",
     "op": "validate",
     "template": "#include \"loop\"",
-    "knownIncludes": ["loop"],
-    "expect": { "verdict": "valid" }
+    "knownIncludes": [
+      "loop"
+    ],
+    "expect": {
+      "verdict": "valid"
+    }
   },
-
   {
     "id": "validate/bracket-unclosed",
     "kind": "deterministic",
@@ -72,7 +92,12 @@
     "template": "{a|b",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "bracket.unclosed", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "bracket.unclosed",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -82,7 +107,12 @@
     "template": "a}",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "bracket.unexpected-closing", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "bracket.unexpected-closing",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -93,7 +123,12 @@
     "template": "{a|b]",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "bracket.mismatched", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "bracket.mismatched",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -104,7 +139,12 @@
     "template": "#set %v% hello",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "set.malformed", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "set.malformed",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -114,7 +154,12 @@
     "template": "[<foo=1> a|b]",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "permutation.unknown-key", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "permutation.unknown-key",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -124,7 +169,12 @@
     "template": "[<minsize=x> a|b]",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "permutation.minsize-not-integer", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "permutation.minsize-not-integer",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -134,7 +184,12 @@
     "template": "[<maxsize=y> a|b]",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "permutation.maxsize-not-integer", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "permutation.maxsize-not-integer",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -145,7 +200,12 @@
     "template": "{plural 2: {a|b}|many}",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "plural.nested-brackets", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "plural.nested-brackets",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -157,7 +217,12 @@
     "locale": "ru",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -169,7 +234,12 @@
     "locale": "sr",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -181,7 +251,12 @@
     "locale": "sr-Latn",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -191,7 +266,9 @@
     "op": "validate",
     "template": "{plural 2: sat|sata|sati}",
     "locale": "sr",
-    "expect": { "verdict": "valid" }
+    "expect": {
+      "verdict": "valid"
+    }
   },
   {
     "id": "validate/plural-arity-hr-invalid",
@@ -201,7 +278,12 @@
     "locale": "hr",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -212,7 +294,12 @@
     "locale": "bs",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "plural.arity", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -222,7 +309,12 @@
     "template": "#set %a% = x %a% y",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "variable.self-reference", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "variable.self-reference",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -233,7 +325,12 @@
     "template": "#set %a% = %b%\n#set %b% = %a%",
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "variable.circular-reference", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "variable.circular-reference",
+          "severity": "error"
+        }
+      ]
     }
   },
   {
@@ -242,10 +339,216 @@
     "kind": "deterministic",
     "op": "validate",
     "template": "#include \"missing-slug\"",
-    "knownIncludes": ["hero", "footer"],
+    "knownIncludes": [
+      "hero",
+      "footer"
+    ],
     "expect": {
       "verdict": "invalid",
-      "diagnostics": [{ "code": "include.unknown-target", "severity": "error" }]
+      "diagnostics": [
+        {
+          "code": "include.unknown-target",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/def-malformed",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %v% hello",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "def.malformed"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/set-empty-value-is-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% =\n%x%",
+    "note": "An empty value is legal and the parser accepts it. The validator used to disagree and call it malformed unless a trailing space happened to be present.",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/def-empty-value-is-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %y% =\n%y%",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/definition-duplicate-name",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = a\n#def %x% = b",
+    "note": "A name belongs to one directive, once. The set/def maps flatten a collision to last-wins before anyone can see it, which is why occurrences are tracked. Two #set lines sharing a name are the same error.",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "definition.duplicate-name"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/definition-duplicate-name-same-kind",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = a\n#set %x% = b",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "definition.duplicate-name"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/include-in-def-value",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %x% = #include \"y\"\n%x%",
+    "note": "Includes resolve after a definition is frozen, so one cannot be rolled into a value.",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "def.include-in-value"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/include-in-set-value-is-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = #include \"y\"\n%x%",
+    "note": "A macro is substituted verbatim, so its #include reaches the include stage in the body, where it works.",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-count-macro",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %n% = {1|4|9}\n{plural %n%: item|items}",
+    "note": "The count is still unresolved spintax when the plural is decided, so the block renders empty. #def is the fix.",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.count-macro"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-count-macro-permutation",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %n% = [1|2]\n{plural %n%: item|items}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.count-macro"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-count-macro-chained",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %m% = {1|4|9}\n#set %n% = %m%\n{plural %n%: item|items}",
+    "note": "%n% carries no bracket at all: taint propagates through #set references to a fixpoint.",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.count-macro"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-count-macro-nested-plural",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %n% = {plural 1:1|2}\n{plural %n%: item|items}",
+    "note": "A nested plural resolves in the SAME pass as the outer block, not before it, so the outer count is still spintax when read. Exempting it alongside conditionals was a regression.",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.count-macro"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-count-macro-enum-inside-conditional",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %flag% = 1\n#set %n% = {?flag?{1|4}|2}\n{plural %n%: item|items}",
+    "note": "The conditional resolves in time; the enumeration it uncovers does not.",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.count-macro"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-count-conditional-is-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %flag% = 1\n#set %n% = {?flag?1|2}\n{plural %n%: item|items}",
+    "note": "Conditionals resolve BEFORE plurals, so this count IS a literal when it is read. This template renders correctly and must not be flagged.",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-count-def-is-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %n% = {1|4|9}\n{plural %n%: item|items}",
+    "note": "A #def is frozen to literal text before the walk begins, which is what makes it the fix the diagnostic points at.",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-count-literal-set-is-valid",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %n% = 5\n{plural %n%: item|items}",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
     }
   }
 ]

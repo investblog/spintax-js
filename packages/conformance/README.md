@@ -69,13 +69,17 @@ is the source of truth for these stable codes; both engines map their diagnostic
 | `bracket.unexpected-closing` | error | a `}`/`]` with no matching opener |
 | `bracket.mismatched` | error | `{` closed by `]` (or `[` by `}`) |
 | `set.malformed` | error | `#set` not matching `#set %name% = value` |
+| `def.malformed` | error | `#def` not matching `#def %name% = value` |
+| `definition.duplicate-name` | error | a name defined more than once, by either directive in any combination |
+| `def.include-in-value` | error | `#include` inside a `#def` value — includes resolve after the value is frozen (legal inside a `#set`) |
 | `permutation.unknown-key` | error | config key not in {minsize,maxsize,sep,lastsep} |
 | `permutation.minsize-not-integer` | error | `minsize=` value is not a run of ASCII digits (note: `0` passes `ctype_digit`, so it does NOT flag) |
 | `permutation.maxsize-not-integer` | error | `maxsize=` value is not a run of ASCII digits |
 | `plural.nested-brackets` | error | `{plural …}` forms slot contains `{}`/`[]` |
 | `plural.arity` | error | form count ≠ locale arity (only when `locale` given) |
-| `variable.self-reference` | error | a `#set` value references its own name |
-| `variable.circular-reference` | error | a cycle among `#set` definitions (A→B→A) |
+| `plural.count-macro` | error | the count slot resolves — transitively — to a `#set` macro still carrying `[` or `{` that does not open a conditional. Conditionals resolve *before* plurals and are exempt; a nested `{plural …}` resolves in the *same* pass and is not |
+| `variable.self-reference` | error | a definition value references its own name |
+| `variable.circular-reference` | error | a cycle among definitions (A→B→A), either directive |
 | `variable.undefined` | **warning** | a `%var%`/conditional ref not defined locally or globally — may be runtime; does NOT invalidate |
 | `include.unknown-target` | error | `#include` slug not in `knownIncludes` (only when supplied) |
 

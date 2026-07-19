@@ -15,7 +15,7 @@
 import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 
 /** Bump when the prompt text changes in a way that can change model output. */
-export const PROMPT_VERSION = '1';
+export const PROMPT_VERSION = '2';
 
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
 export type Channel = 'email' | 'sms' | 'push' | 'landing' | 'generic';
@@ -199,6 +199,7 @@ function teachingProfile(locale: string | undefined): TeachingProfile {
 }
 
 export interface PromptExamples {
+  def: string;
   set: string;
   permutation: string;
   optional: string;
@@ -233,10 +234,14 @@ export function promptExamples(locale?: string): PromptExamples {
   const russian = teachingProfile(locale) === 'east-slavic';
   const threeForm = pluralArity(locale) === 3;
   return {
-    set: [
-      '#set %product% = {course|training}',
+    def: [
+      '#def %product% = {course|training}',
       '#set %offer% = our new %product%',
       'Get %offer% today — the %product% starts on Monday.',
+    ].join('\n'),
+    set: [
+      '#set %greeting% = {Hi|Hello|Hey}',
+      '%greeting% there. And later, %greeting% again — which may well read differently.',
     ].join('\n'),
     permutation: russian
       ? 'Мы [<minsize=2;maxsize=3;sep=", ";lastsep=" и ">перезвоним за час|подберём тариф|перенесём данные].'
@@ -273,13 +278,21 @@ ${indent(ex.optional)}
     But a stray double pipe is an ACCIDENTAL empty branch: {a|b||c} silently renders nothing one
     time in four. Re-read every {…} for a doubled "|".
 
-#set %v% = value
-    Define once, reuse. The value is chosen ONCE, and every %v% in the copy is the SAME.
-    Use it for anything that must stay consistent across sentences (a product name, a tone).
-    A #set value may itself contain {a|b} AND other variables — variables nest:
-${indent(ex.set)}
+#def %v% = value
+    Define once, reuse. The value is chosen ONCE per message, and every %v% in the copy is the
+    SAME. Use it for anything that must stay consistent across sentences (a product name, a
+    tone), and for any number you both print and agree grammatically.
+    A #def value may itself contain {a|b} AND other variables — variables nest:
+${indent(ex.def)}
     Here %offer% contains %product%, so the two can never contradict each other. Inline {a|b}
     would reroll and could say "course" in one sentence and "training" in the next.
+
+#set %v% = value
+    A macro: the value is re-picked at EVERY use, so one name can read differently across the
+    copy. Use it when variety is the point, or for text you mention only once:
+${indent(ex.set)}
+    Choose between them by asking whether two mentions disagreeing would read as a mistake.
+    A product name, a price, a count: #def. A greeting repeated down the page: #set.
 
 %name%
     A variable, filled in by the host at render time. Use ONLY names from ALLOWED VARIABLES.

@@ -65,12 +65,15 @@ const TG_LIMIT = 4000; // Telegram hard-caps messages at 4096 chars.
 
 const EXAMPLE_BASIC = '{Hi|Hello|Hey} %name%! Our {deal|offer} ends {today|tonight}.';
 
-// Shows the three things the old help never did: #set picks ONCE (so the copy can't contradict
+// Shows the three things the old help never did: #def picks ONCE (so the copy can't contradict
 // itself), variables nest inside other variables, and a permutation shuffles clauses of EQUAL
 // weight — with an explicit sep, because the default separator is a space and would run the
 // clauses together.
+//
+// %product% must be #def, not #set: it is mentioned twice, and a #set is re-picked at every
+// mention, so the copy could offer a "course" in one sentence and start a "training" in the next.
 export const EXAMPLE_POWER = [
-  '#set %product% = {course|training}',
+  '#def %product% = {course|training}',
   '#set %offer% = our new %product%',
   '{Hi|Hello} %name%! Get %offer% — we can [<sep=", ";lastsep=" and ">enrol you today|answer any question|refund within 14 days]. The %product% starts on Monday.',
 ].join('\n');
@@ -85,8 +88,9 @@ export const EXAMPLE_POWER = [
  */
 const SYNTAX_ROWS: readonly (readonly [code: string, note: string])[] = [
   ['{a|b|c}', 'pick one <i>(rerolls at every occurrence)</i>'],
-  ['#set %v% = {a|b}', 'pick <b>once</b>, reuse everywhere'],
-  ['%name%', 'variable <i>(can nest inside a #set)</i>'],
+  ['#set %v% = {a|b}', 'a macro — re-picked at <b>every</b> use'],
+  ['#def %v% = {a|b}', 'pick <b>once</b> per message, reuse everywhere'],
+  ['%name%', 'variable <i>(can nest inside another variable)</i>'],
   ['[<sep=", ";lastsep=" and ">a|b|c]', 'shuffle &amp; join equal-weight parts — <i>lastsep gives “a, b and c”</i>'],
   ['{?flag?yes|no}', 'conditional'],
   ['{plural %n%: item|items}', `plural agreement <i>(${LOCALE} takes 2 forms; ru/uk/be and sr/hr/bs take 3)</i>`],

@@ -49,4 +49,23 @@ describe('extract — refs / sets / includes', () => {
     expect(r.sets).toEqual([]);
     expect(r.refs).toEqual(['a', 'b']);
   });
+
+  test('the two directives are reported separately — they have opposite semantics', () => {
+    const r = extract('#set %macro% = {a|b}\n#def %frozen% = {c|d}\n%macro% %frozen%');
+    expect(r.sets).toEqual(['macro']);
+    expect(r.defs).toEqual(['frozen']);
+  });
+
+  test('a #def target is a definition, not a phantom reference', () => {
+    // Missing the #def half of the LHS strip would report every definition name as a ref.
+    const r = extract('#def %x% = hello\nplain text');
+    expect(r.defs).toEqual(['x']);
+    expect(r.refs).toEqual([]);
+  });
+
+  test('a %var% inside a #def value is still a ref', () => {
+    const r = extract('#def %greeting% = Hello %name%');
+    expect(r.defs).toEqual(['greeting']);
+    expect(r.refs).toEqual(['name']);
+  });
 });

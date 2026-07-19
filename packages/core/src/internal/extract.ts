@@ -22,13 +22,15 @@ import { stripComments } from './parser';
 export interface ExtractResult {
   refs: string[];
   sets: string[];
+  defs: string[];
   includes: string[];
 }
 
-// `#set` uses [ \t] (single-line), matching the parser / extract_set_directives —
-// NOT \s, which would let a malformed multi-line `#set` be read as a definition.
+// Directives use [ \t] (single-line), matching the parser's DIRECTIVE_RE — NOT \s, which would
+// let a malformed multi-line directive be read as a definition.
 const SET_DEF_RE = /^[ \t]*#set[ \t]+%(\w+)%[ \t]*=/gmu;
-const SET_LHS_RE = /^[ \t]*#set[ \t]+%\w+%[ \t]*=/gmu;
+const DEF_DEF_RE = /^[ \t]*#def[ \t]+%(\w+)%[ \t]*=/gmu;
+const DEFINITION_LHS_RE = /^[ \t]*#(?:set|def)[ \t]+%\w+%[ \t]*=/gmu;
 const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu; // ASCII \s (PHP parity)
 const VARIABLE_RE = /%(\w+)%/gu;
 const CONDITIONAL_REF_RE = /\{\?!?([A-Za-z_]\w*)\?/gu;
@@ -37,15 +39,17 @@ export function extractFromSource(src: string): ExtractResult {
   const text = stripComments(src);
 
   const sets = collect(text, SET_DEF_RE, true);
+  const defs = collect(text, DEF_DEF_RE, true);
   const includes = collect(text, INCLUDE_RE, false);
 
-  // Drop the `#set … =` LHS (keep the value) so a definition target is not a ref.
-  const body = text.replace(SET_LHS_RE, '');
+  // Drop each `#set`/`#def … =` LHS (keep the value) so a definition target is not a ref. Missing
+  // the `#def` half here would report every definition name as a phantom reference.
+  const body = text.replace(DEFINITION_LHS_RE, '');
   const refs = new Set<string>();
   addAll(refs, body, VARIABLE_RE, true);
   addAll(refs, body, CONDITIONAL_REF_RE, true);
 
-  return { refs: [...refs], sets, includes };
+  return { refs: [...refs], sets, defs, includes };
 }
 
 function collect(text: string, re: RegExp, fold: boolean): string[] {

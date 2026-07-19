@@ -66,17 +66,20 @@ describe.each(LOCALES)('the prompt must not teach invalid syntax [locale=%s]', (
     );
   });
 
-  test('#set collapses once, which is the whole reason the prompt teaches it', () => {
-    const out = render(promptExamples(locale).set, { seed: 1, locale });
-    // Exactly one of the two words, never a mix — that is the collapse-once promise.
-    expect(out.includes('course')).not.toBe(out.includes('training'));
+  test('#def picks once, which is the whole reason the prompt teaches it', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      const out = render(promptExamples(locale).def, { seed, locale });
+      // Exactly one of the two words, never a mix — that is the roll-once promise. Repeated over
+      // seeds because a single seed can agree by chance even under macro semantics.
+      expect(out.includes('course')).not.toBe(out.includes('training'));
+    }
   });
 });
 
 describe('buildAuthoringPrompt', () => {
   test('teaches every construct — including the two the bot used to omit', () => {
     const { systemPrompt } = buildAuthoringPrompt({ brief: 'welcome email' });
-    for (const construct of ['{a|b|c}', '#set', '%name%', '[<minsize=', 'lastsep=', '{?VAR?', '{plural']) {
+    for (const construct of ['{a|b|c}', '#set', '#def', '%name%', '[<minsize=', 'lastsep=', '{?VAR?', '{plural']) {
       expect(systemPrompt).toContain(construct);
     }
   });

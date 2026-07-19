@@ -70,19 +70,25 @@ export interface RenderCtx {
 }
 
 /**
- * Render a parsed template: collapse-once #set → tree-walk → resolve #includes
+ * Render a parsed template: build vars → roll `#def` → tree-walk → resolve `#includes`
  * (post-tree string pass, like the plugin's Stage 9 resolve_nested, AFTER
  * enum/perm). Post-process (Stage 10) is layered on by the public render().
  */
 export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
-  const vars = buildVars(ast.setDefs, ctx.runtimeContext, ctx.rng);
-  const text = renderNodes(ast.nodes, {
-    vars,
+  const base = buildVars(ast.setDefs, ctx.runtimeContext);
+  const walkOpts = {
     rng: ctx.rng,
     locale: ctx.locale,
     depth: 0,
     onPluralError: ctx.onPluralError,
-  });
+  };
+  // The roll happens here and not inside buildVars: a definition is rendered against the FULL
+  // context, globals and runtime included, so it must wait until that context exists.
+  const vars =
+    Object.keys(ast.defDefs).length > 0
+      ? { ...base, ...rollDefinitions(ast.defDefs, base, ctx.runtimeContext, walkOpts) }
+      : base;
+  const text = renderNodes(ast.nodes, { ...walkOpts, vars });
   return ctx.resolver ? resolveIncludes(text, ctx) : text;
 }
 
@@ -130,17 +136,20 @@ export interface RenderInternalOptions {
 }
 
 /**
- * Build the merged variable map: collapse-once each `#set` value (Stage 4b) then
- * overlay the runtime context (which wins). Context keys are lowercased.
+ * Build the merged variable map: `#set` values go in RAW, then the runtime context overlays them
+ * (and wins). Context keys are lowercased.
+ *
+ * A `#set` is a macro — its value is re-parsed and re-rendered at every `%var%` reference, so any
+ * brackets it holds re-roll each time. Nothing is resolved here. (Until 0.3.0 this collapsed
+ * enumeration-valued `#set`s once at set-time; that behaviour moved to `#def`.)
  */
 export function buildVars(
   setDefs: Readonly<Record<string, string>>,
   context: Readonly<Record<string, string>>,
-  rng: Rng,
 ): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const [name, value] of Object.entries(setDefs)) {
-    vars[name] = collapseSetValue(value, rng);
+    vars[name] = value;
   }
   for (const [name, value] of Object.entries(context)) {
     vars[name.toLowerCase()] = value;
@@ -148,26 +157,94 @@ export function buildVars(
   return vars;
 }
 
-/** Stage 4b: resolve ONLY enumerations in a #set value once; skip {? / {plural values. */
-function collapseSetValue(value: string, rng: Rng): string {
-  if (!value.includes('{')) return value;
-  if (value.includes('{?') || value.includes('{plural ')) return value;
-  return resolveEnumerationsString(value, rng);
+/**
+ * Render each `#def` value ONCE and return the frozen results, to be merged over `vars`.
+ *
+ * A definition value is rendered as if it were a miniature body — the same tree walk the document
+ * gets — and the result is held for every reference. This runs only after the merged context
+ * exists, so a definition can read globals and runtime variables; a runtime variable of the same
+ * name outranks it and the definition is then never rolled at all.
+ *
+ * Values are rendered in dependency order, and that order follows aliases: a `#def` can reach
+ * another `#def` through a `#set`, which is expanded at reference time and therefore invisible in
+ * the first definition's own text.
+ */
+export function rollDefinitions(
+  defDefs: Readonly<Record<string, string>>,
+  vars: Readonly<Record<string, string>>,
+  context: Readonly<Record<string, string>>,
+  opts: Omit<RenderInternalOptions, 'vars'>,
+): Record<string, string> {
+  const outranked = new Set(Object.keys(context).map((key) => key.toLowerCase()));
+  const rolled: Record<string, string> = {};
+
+  // The alias map is every macro value a definition can see, minus the definitions that will
+  // actually be rolled — a `#def` shadows a same-named global, and hopping through the shadowed
+  // value computes the wrong graph. A definition the runtime outranks is NOT removed: it is never
+  // rolled, so the runtime value is what really gets substituted and the graph must follow it.
+  const aliases: Record<string, string> = {};
+  for (const [name, value] of Object.entries(vars)) {
+    if (name in defDefs && !outranked.has(name)) continue;
+    aliases[name] = value;
+  }
+
+  for (const name of orderDefinitions(defDefs, aliases)) {
+    if (outranked.has(name)) continue;
+    const value = defDefs[name] ?? '';
+    rolled[name] = renderNodes(parseSequence(value), { ...opts, vars: { ...vars, ...rolled } });
+  }
+
+  return rolled;
 }
 
-/** Innermost-out `{a|b}` resolution over a raw string (perms / %vars% untouched). */
-function resolveEnumerationsString(text: string, rng: Rng): string {
-  let out = text;
-  for (let guard = 0; guard < 1000; guard += 1) {
-    let changed = false;
-    out = out.replace(/\{([^{}]*)\}/gu, (_m, inner: string): string => {
-      changed = true;
-      const options = splitTopLevelPipes(inner);
-      return options.length === 0 ? '' : (options[randomInt(rng, 0, options.length - 1)] ?? '');
-    });
-    if (!changed) break;
+/** Definition names, dependencies first. A cycle cannot be ordered, so its members come last. */
+function orderDefinitions(
+  defDefs: Readonly<Record<string, string>>,
+  aliases: Readonly<Record<string, string>>,
+): string[] {
+  const names = Object.keys(defDefs);
+  const blocked = new Map<string, Set<string>>();
+
+  for (const name of names) {
+    const reached = referencedNames(defDefs[name] ?? '', aliases);
+    blocked.set(name, new Set(names.filter((candidate) => reached.has(candidate))));
   }
-  return out;
+
+  const ordered: string[] = [];
+  let pending = names;
+
+  while (pending.length > 0) {
+    const ready = pending.filter((name) => {
+      const deps = blocked.get(name);
+      return !deps || ![...deps].some((dep) => dep !== name && pending.includes(dep));
+    });
+    if (ready.length === 0) return [...ordered, ...pending];
+    ordered.push(...ready);
+    pending = pending.filter((name) => !ready.includes(name));
+  }
+
+  return ordered;
+}
+
+/** Every variable name a value reaches, hopping through macro (alias) values to a fixpoint. */
+function referencedNames(value: string, aliases: Readonly<Record<string, string>>): Set<string> {
+  const seen = new Set<string>();
+  const queue = directReferences(value);
+
+  while (queue.length > 0) {
+    const name = queue.shift() as string;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const alias = aliases[name];
+    if (alias !== undefined) queue.push(...directReferences(alias));
+  }
+
+  return seen;
+}
+
+/** The `%var%` names written literally in a string, lowercased. */
+function directReferences(text: string): string[] {
+  return [...text.matchAll(/%(\w+)%/gu)].map((match) => (match[1] ?? '').toLowerCase());
 }
 
 export function renderNodes(nodes: readonly Node[], opts: RenderInternalOptions): string {
@@ -378,28 +455,6 @@ function padSeparator(sep: string): string {
   if (trimmed === '') return sep;
   if (/^\p{L}+$/u.test(trimmed)) return ` ${trimmed} `;
   return sep;
-}
-
-/** Split on top-level `|` (brace/bracket-depth aware) — for the collapse-once enum resolver. */
-function splitTopLevelPipes(inner: string): string[] {
-  const parts: string[] = [];
-  let brace = 0;
-  let bracket = 0;
-  let cur = '';
-  for (const ch of inner) {
-    if (ch === '{') brace += 1;
-    else if (ch === '}') brace -= 1;
-    else if (ch === '[') bracket += 1;
-    else if (ch === ']') bracket -= 1;
-    if (ch === '|' && brace === 0 && bracket === 0) {
-      parts.push(cur);
-      cur = '';
-    } else {
-      cur += ch;
-    }
-  }
-  parts.push(cur);
-  return parts;
 }
 
 const PHP_LTRIM_RE = /^[ \t\n\r\0\x0B]+/u;

@@ -207,20 +207,10 @@ final class GoldenCorpusTest extends TestCase
         // Stage 3: strip comments (:240)
         $text = $parser->strip_comments($template);
 
-        // Stage 4: extract #set directives (:243)
-        $extracted = $parser->extract_set_directives($text);
+        // Stage 4: extract #set and #def directives.
+        $extracted = $parser->extract_directives($text);
         $text = $extracted['body'];
-        $setVars = $extracted['variables']; // names already lowercased
-
-        // Stage 4b: collapse enumerations inside #set values — but NOT values that
-        // reference vars via {? or {plural (:254-262).
-        foreach ($setVars as $k => $v) {
-            if (strpos($v, '{') !== false
-                && strpos($v, '{?') === false
-                && strpos($v, '{plural ') === false) {
-                $setVars[$k] = $parser->resolve_enumerations($v);
-            }
-        }
+        $setVars = $extracted['set']; // names already lowercased
 
         // Stage 4c: merge — runtime context overlays local #set (runtime wins), keys lowercased.
         $runtime = [];
@@ -228,6 +218,15 @@ final class GoldenCorpusTest extends TestCase
             $runtime[strtolower((string) $k)] = $v;
         }
         $vars = array_merge($setVars, $runtime);
+
+        // Stage 5b: roll #def values ONCE, against the merged context. A #set value is left raw —
+        // it is a macro, substituted at every reference, and its brackets re-roll each time.
+        //
+        // This is a REIMPLEMENTATION, not a call: the engines' roll lives in a private method of a
+        // host-bound class (the plugin's Renderer needs get_locale/wp_kses_post), which is exactly
+        // why this file drives the WP-free primitives. That makes it a third place the stage order
+        // is written down — keep it in step with both engines when the order changes.
+        $vars = array_merge($vars, $this->rollDefinitions($extracted, $vars, $runtime, $locale, $parser, $conditionals, $plurals));
 
         // Stage 6a: conditionals, pre variable-expansion (:291)
         $text = $conditionals->apply($text, $vars);
@@ -249,6 +248,54 @@ final class GoldenCorpusTest extends TestCase
         }
         // Stage 11: wp_kses_post (:334) — a WP sink concern (§2.2), deliberately NOT applied.
         return $text;
+    }
+
+    /**
+     * Render each `#def` value once, in dependency order, and return the frozen results.
+     *
+     * Mirrors `Renderer::roll_definitions()` / `render_definition_value()`. Ordering comes from
+     * the engine's own `Parser::order_definitions()` rather than a fourth copy of that logic —
+     * the alias map is every macro value a definition can see, minus the definitions that will
+     * actually be rolled (a runtime-outranked one is left in, because the runtime value is what
+     * really gets substituted).
+     *
+     * @param array<string,mixed>  $extracted `extract_directives()` output.
+     * @param array<string,string> $vars      Merged context.
+     * @param array<string,string> $runtime   Runtime context, which outranks every local.
+     * @return array<string,string>
+     */
+    private function rollDefinitions(
+        array $extracted,
+        array $vars,
+        array $runtime,
+        string $locale,
+        Parser $parser,
+        Conditionals $conditionals,
+        Plurals $plurals
+    ): array {
+        $definitions = $extracted['def'];
+        if ($definitions === []) {
+            return [];
+        }
+
+        $aliases = array_diff_key($vars, array_diff_key($definitions, $runtime));
+        $rolled = [];
+
+        foreach ($parser->order_definitions($definitions, $aliases) as $name) {
+            if (array_key_exists($name, $runtime)) {
+                continue;
+            }
+
+            $visible = array_merge($vars, $rolled);
+            $value = $conditionals->apply($definitions[$name], $visible);
+            $value = $parser->expand_variables($value, $visible);
+            $value = $conditionals->apply($value, $visible);
+            $value = $plurals->apply($value, $locale, ['lenient' => true]);
+            $value = $parser->resolve_enumerations($value);
+            $rolled[$name] = $parser->resolve_permutations($value);
+        }
+
+        return $rolled;
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@
  * (the plugin's validator never resolves includes).
  */
 import type { Diagnostic, ValidateOptions } from '../index';
-import { stripComments } from './parser';
+import { DIRECTIVE_RE, extractDirectives, stripComments } from './parser';
 import { findPluralBlocks, normalizeBaseLang, pluralArity } from './plurals';
 
 const KNOWN_CONFIG_KEYS = new Set(['minsize', 'maxsize', 'sep', 'lastsep']);
@@ -27,7 +27,7 @@ export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagn
   const text = stripComments(src);
 
   checkBrackets(text, diagnostics);
-  checkSetDirectives(text, diagnostics);
+  checkDirectives(text, diagnostics);
   checkPermutationConfigs(text, diagnostics);
   checkPlurals(text, opts.locale, diagnostics);
   checkVariableReferences(text, opts.knownVariables, diagnostics);
@@ -97,18 +97,62 @@ function checkBrackets(text: string, out: Diagnostic[]): void {
   }
 }
 
-/** `#set` lines must match `#set %name% = value`. */
-function checkSetDirectives(text: string, out: Diagnostic[]): void {
+/**
+ * Directive lines must match the shared grammar, each name may be defined once, and `#include`
+ * may not appear in a `#def` value.
+ *
+ * The shape test uses `DIRECTIVE_RE` rather than a private copy. The old copy differed from the
+ * parser's in two ways — `\s` for whitespace and `(.+)` for the value — and the second was a live
+ * defect: an empty value is legal and the parser accepts it, but this reported `#set %x% =` as
+ * malformed unless a trailing space happened to be present.
+ */
+function checkDirectives(text: string, out: Diagnostic[]): void {
   const lines = text.split('\n');
   lines.forEach((lineText, idx) => {
     const trimmed = lineText.replace(/^[ \t]+/, '');
-    if (!trimmed.startsWith('#set ') && !trimmed.startsWith('#set\t')) return;
-    if (!/^#set\s+%(\w+)%\s*=\s*(.+)$/u.test(trimmed)) {
+    const kind = (['#set', '#def'] as const).find(
+      (candidate) => trimmed.startsWith(`${candidate} `) || trimmed.startsWith(`${candidate}\t`),
+    );
+    if (!kind) return;
+
+    DIRECTIVE_RE.lastIndex = 0;
+    if (!DIRECTIVE_RE.test(trimmed)) {
       const column = lineText.length - trimmed.length + 1; // first non-space char
       const line = idx + 1;
-      out.push(err('set.malformed', 'Malformed #set. Expected: #set %name% = value', { line, column, endLine: line, endColumn: lineText.length + 1 }));
+      const code = kind === '#def' ? 'def.malformed' : 'set.malformed';
+      out.push(err(code, `Malformed ${kind}. Expected: ${kind} %name% = value`, { line, column, endLine: line, endColumn: lineText.length + 1 }));
     }
   });
+
+  const { occurrences } = extractDirectives(text);
+  const seen = new Map<string, number>();
+
+  for (const occurrence of occurrences) {
+    // A name defined twice is an error whichever directives are involved. The two maps flatten a
+    // collision to last-wins before anyone can see it, which is why `occurrences` exists — and a
+    // `#set`/`#def` pair sharing a name would be worse still, the two carrying opposite semantics.
+    const first = seen.get(occurrence.name);
+    if (first !== undefined) {
+      out.push(err(
+        'definition.duplicate-name',
+        `Variable '${occurrence.name}' is defined more than once (first on line ${first}). A name belongs to one directive, once.`,
+        { line: occurrence.line, column: 1 },
+      ));
+    } else {
+      seen.set(occurrence.name, occurrence.line);
+    }
+
+    // Includes resolve after a definition is frozen, so one cannot be rolled into a value — it
+    // would survive as literal text. Inside a `#set` it is fine: the macro is substituted verbatim
+    // and its `#include` reaches the include stage in the body.
+    if (occurrence.kind === 'def' && /#include\b/u.test(occurrence.value)) {
+      out.push(err(
+        'def.include-in-value',
+        `#include cannot appear in a #def value ('${occurrence.name}'): includes resolve after the value is frozen. Use #set, or put the #include in the body.`,
+        { line: occurrence.line, column: 1 },
+      ));
+    }
+  }
 }
 
 /** `[<config>]` prefixes: known keys only, minsize/maxsize must be digit runs. */
@@ -145,10 +189,26 @@ function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[
   const base = locale && locale !== '' ? normalizeBaseLang(locale) : '';
   const arity = base !== '' ? pluralArity(base) : 0;
 
+  const tainted = macroTaintedNames(text);
+
   for (const block of findPluralBlocks(text)) {
     const at = span(text, block.start, block.end - block.start);
+
+    // A macro in the count slot: the count is still unresolved spintax when the plural is decided,
+    // so the block resolves to nothing. `#def` is the fix — it freezes to a literal before the
+    // body is walked — which is why this points at the directive, not at the plural block.
+    for (const m of block.countSlot.matchAll(/%(\w+)%/gu)) {
+      const name = (m[1] ?? '').toLowerCase();
+      if (!tainted.has(name)) continue;
+      out.push(err(
+        'plural.count-macro',
+        `{plural ...}: the count '${m[1]}' is a #set macro, so it is still unresolved spintax when the plural is decided and the block renders empty. Define it with #def instead.`,
+        at,
+      ));
+    }
+
     if (/[{}[\]]/.test(block.formsRaw)) {
-      out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets.', at));
+      out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets. Extract via #def first — a #set is substituted verbatim and would put the brackets straight back.', at));
       continue;
     }
     if (arity > 0) {
@@ -161,14 +221,55 @@ function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[
   }
 }
 
-/** Self-reference + circular `#set` (errors) and undefined `%var%`/conditional refs (warnings). */
+/**
+ * Spintax still unresolved when plural agreement runs: `[`, or `{` that does not open a
+ * conditional.
+ *
+ * Stage order decides this, not bracket type. Conditionals resolve BEFORE plurals, so a `{?…}` in
+ * a count value is already a literal when the count is read — flagging it would be a false
+ * positive on a template that renders correctly. Enumerations and permutations resolve AFTER
+ * plurals and are the real hazard. A nested `{plural …}` is NOT exempt either: it resolves in the
+ * same pass as the outer block, not before it.
+ *
+ * Only `#set` names can be tainted; a `#def` is frozen to literal text before the walk begins.
+ * Taint propagates through `#set` → `#set` references to a fixpoint, because the chain can be
+ * arbitrarily long and carry no bracket at its final link.
+ */
+const UNRESOLVED_AT_PLURAL_TIME = /\[|\{(?!\?)/u;
+
+function macroTaintedNames(text: string): Set<string> {
+  const macros = extractDirectives(text).setDefs;
+  const tainted = new Set<string>();
+
+  for (const [name, value] of Object.entries(macros)) {
+    if (UNRESOLVED_AT_PLURAL_TIME.test(value)) tainted.add(name);
+  }
+
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [name, value] of Object.entries(macros)) {
+      if (tainted.has(name)) continue;
+      for (const m of value.matchAll(/%(\w+)%/gu)) {
+        if (!tainted.has((m[1] ?? '').toLowerCase())) continue;
+        tainted.add(name);
+        grew = true;
+        break;
+      }
+    }
+  }
+
+  return tainted;
+}
+
+/** Self-reference + circular definitions (errors) and undefined `%var%`/conditional refs (warnings). */
 function checkVariableReferences(text: string, known: readonly string[] | undefined, out: Diagnostic[]): void {
   const knownSet = new Set((known ?? []).map((n) => n.toLowerCase()));
   // `[ \t]` (single-line), uniform with the parser's extract_set_directives and
   // extract.ts — so a malformed cross-line `#set` isn't treated as a definition.
   const defs = new Map<string, string>();
   const defPos = new Map<string, Pos>(); // %name% token span in its #set line
-  for (const m of text.matchAll(/^[ \t]*#set[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)$/gmu)) {
+  for (const m of text.matchAll(/^[ \t]*#(?:set|def)[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)$/gmu)) {
     const name = (m[1] ?? '').toLowerCase();
     defs.set(name, m[2] ?? '');
     const nameOffset = (m.index ?? 0) + m[0].indexOf('%');
@@ -187,7 +288,7 @@ function checkVariableReferences(text: string, known: readonly string[] | undefi
 
   // Blank #set lines to same-length whitespace so ref offsets still map to `text`
   // (a bare removal would shift every later column).
-  const body = text.replace(/^[ \t]*#set[ \t]+%\w+%[ \t]*=[ \t]*.*?$/gmu, (m) => m.replace(/[^\n]/g, ' '));
+  const body = text.replace(/^[ \t]*#(?:set|def)[ \t]+%\w+%[ \t]*=[ \t]*.*?$/gmu, (m) => m.replace(/[^\n]/g, ' '));
   const seen = new Set<string>();
   const undefinedAt = (name: string, offset: number, length: number): void => {
     const key = name.toLowerCase();

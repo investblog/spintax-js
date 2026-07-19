@@ -18,31 +18,72 @@ import { AST_VERSION, type Node, type ParsedAst, type PermConfig, type PermOptio
 
 const VARIABLE_RE = /^%(\w+)%/;
 // `\r?` before the multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
-const SET_DIRECTIVE_RE = /^[ \t]*#set[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \t]*\r?$/gmu;
+/**
+ * The one grammar for `#set` and `#def`. Whitespace is `[ \t]` (not `\s`) so a directive is a
+ * single line, and the value group is `(.*?)` so an empty value is legal. `\r?` before the
+ * multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
+ */
+export const DIRECTIVE_RE = /^[ \t]*#(set|def)[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \t]*\r?$/gmu;
 const CONDITIONAL_NAME_RE = /^[A-Za-z_]\w*/;
 const PLURAL_PREFIX = 'plural ';
 
-/** Parse a full template into an AST (comments stripped + `#set` extracted first). */
+/** Parse a full template into an AST (comments stripped + directives extracted first). */
 export function parseTemplate(src: string): ParsedAst {
-  const { body, setDefs } = extractSetDirectives(stripComments(src));
-  return { astVersion: AST_VERSION, source: src, setDefs, nodes: parseSequence(body) };
+  const { body, setDefs, defDefs } = extractDirectives(stripComments(src));
+  return { astVersion: AST_VERSION, source: src, setDefs, defDefs, nodes: parseSequence(body) };
+}
+
+/** One directive occurrence, in source order, with the line it was written on. */
+export interface DirectiveOccurrence {
+  readonly kind: 'set' | 'def';
+  readonly name: string;
+  readonly value: string;
+  readonly line: number;
 }
 
 /**
- * Global `#set` extraction (parity with `extract_set_directives`): pull every
- * line-anchored `#set %name% = value` out of the text — regardless of brace
- * nesting — collecting name→value (name lowercased), strip the lines, then
- * collapse `\n{3,}`→`\n\n`. Whitespace is `[ \t]` (not `\s`) so a directive is a
- * single line.
+ * Global directive extraction (parity with `extract_directives`): pull every line-anchored
+ * `#set`/`#def` out of the text — regardless of brace nesting — collecting name→value (name
+ * lowercased), strip the lines, then collapse `\n{3,}`→`\n\n`.
+ *
+ * `occurrences` preserves every directive line including duplicates that the two maps flatten
+ * away: a validator cannot report a collision it can no longer see.
  */
-export function extractSetDirectives(text: string): { body: string; setDefs: Record<string, string> } {
+export function extractDirectives(text: string): {
+  body: string;
+  setDefs: Record<string, string>;
+  defDefs: Record<string, string>;
+  occurrences: DirectiveOccurrence[];
+} {
   const setDefs: Record<string, string> = {};
-  SET_DIRECTIVE_RE.lastIndex = 0;
-  const stripped = text.replace(SET_DIRECTIVE_RE, (_full: string, name: string, value: string): string => {
-    setDefs[name.toLowerCase()] = value;
-    return '';
-  });
-  return { body: stripped.replace(/\n{3,}/gu, '\n\n'), setDefs };
+  const defDefs: Record<string, string> = {};
+  const occurrences: DirectiveOccurrence[] = [];
+
+  DIRECTIVE_RE.lastIndex = 0;
+  const stripped = text.replace(
+    DIRECTIVE_RE,
+    (full: string, kind: string, rawName: string, value: string, offset: number): string => {
+      const name = rawName.toLowerCase();
+      occurrences.push({
+        kind: kind as 'set' | 'def',
+        name,
+        value,
+        line: countLines(text, offset),
+      });
+      if (kind === 'def') defDefs[name] = value;
+      else setDefs[name] = value;
+      return '';
+    },
+  );
+
+  return { body: stripped.replace(/\n{3,}/gu, '\n\n'), setDefs, defDefs, occurrences };
+}
+
+/** 1-based line number of `offset` within `text`. */
+function countLines(text: string, offset: number): number {
+  let line = 1;
+  for (let i = 0; i < offset; i += 1) if (text[i] === '\n') line += 1;
+  return line;
 }
 
 /** Remove `/# … #/` block comments (non-greedy, spans newlines). */

@@ -17,8 +17,8 @@ parse, render, validate, extract, analyze, and neutralize spintax templates.
 - **Parity-verified against the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/).**
   An *independent* TypeScript implementation (not a line-by-line port) held to the plugin's behavior
   contract by a shared golden corpus — the **same** fixtures pass against both this engine and the
-  PHP plugin (deterministic verdicts, plural buckets, conditionals, `#set` collapse, post-process),
-  with no divergence.
+  PHP plugin (deterministic verdicts, plural buckets, conditionals, `#set`/`#def` semantics,
+  post-process), with no divergence.
 - **MIT** licensed.
 
 > **Status: released & stable.** Feature-complete — parse / render / validate / extract / analyze /
@@ -77,7 +77,8 @@ dedupe in the host and cap the retries: a template may simply not have N combina
 | Enumeration | `{a\|b\|c}` | pick one (nestable: `{a\|{b\|c}}`) |
 | Permutation | `[a\|b\|c]` | pick N, shuffle, join — `[<minsize=1;maxsize=2;sep=", ">a\|b\|c]` |
 | Variable | `%var%` | substitute a context value |
-| Local set | `#set %v% = value` | define a variable (one line) |
+| Local set | `#set %v% = value` | define a macro — re-picked at every use |
+| Local def | `#def %v% = value` | define a value — picked once per render, held at every use |
 | Conditional | `{?VAR?then\|else}` | `then` if `VAR` is truthy, else `else` |
 | Plural | `{plural %n%: one\|few\|many}` | grammatical agreement by locale |
 | Include | `#include "slug-or-id"` | embed another template (host-resolved) |
