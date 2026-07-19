@@ -3,11 +3,11 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.3.0 — 2026-07-19
 
 `#set` goes back to being a macro and a new `#def` carries roll-once. Breaking: it changes what
 existing templates mean. Ships in lockstep with the WordPress plugin 3.0.0, `spintax/core` and the
-OpenCart port; the corpus lands last, after both PHP engines.
+OpenCart port; the corpus landed last, after both PHP engines.
 
 ### Changed
 
