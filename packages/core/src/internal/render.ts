@@ -331,7 +331,9 @@ function renderPlural(node: PluralNode, opts: RenderInternalOptions): string {
   if (/[{}[\]]/u.test(formsRaw)) {
     report({
       code: 'plural.nested-brackets',
-      message: 'Plural form slot contains nested spintax brackets; extract via #set first.',
+      message:
+        'Plural form slot contains nested spintax brackets; extract via #def first — a #set is '
+        + 'substituted verbatim and would put the brackets straight back.',
       construct: rawConstruct(countRaw, formsRaw),
       locale: base,
     });

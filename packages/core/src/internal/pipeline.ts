@@ -4,7 +4,7 @@
  * (which injects a fixture's `rng` strategy). Keeping the rng a parameter is what
  * lets the deterministic parity fixtures assert exact output.
  *
- * Order: strip stray sentinels → collapse-once #set + tree-walk (+ #include) →
+ * Order: strip stray sentinels → build vars, roll #def, tree-walk (+ #include) →
  * cosmetic post-process (if on) → mandatory neutralize safety-restore (always).
  */
 import { renderAst, type PluralIssue, type RenderCtx } from './render';

@@ -327,7 +327,7 @@ cases, consumed by BOTH the PHP suite and the TS suite.
 - Format: JSON fixtures (there's already a stray `tests/fixtures/rendered-output.txt` in the
   plugin working tree — formalize this into a versioned corpus).
 - **Deterministic cases** (validation verdicts, plural buckets, conditional truthiness,
-  `#set` collapse, post-process pipeline) assert exact output in both engines → these are
+  `#set`/`#def` semantics, post-process pipeline) assert exact output in both engines → these are
   the §3.1 parity gates, machine-checked.
 - **RNG cases** run in seeded mode and assert *within-engine* reproducibility only, plus
   structural invariants (e.g. permutation output is a valid shuffle of a valid subset).

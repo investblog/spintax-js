@@ -153,7 +153,7 @@ render('%bio%', { context: { bio: neutralize('Save {50|60}% today') }, postProce
 
 With a `seed`, `render` is reproducible within this engine. Cross-engine RNG-sequence parity
 with the PHP plugin is a **non-goal** — only the *deterministic* behavior (validation verdicts,
-plural buckets, conditional truthiness, `#set` collapse, post-process output) is parity-gated.
+plural buckets, conditional truthiness, `#set`/`#def` semantics, post-process output) is parity-gated.
 
 ## Links
 
