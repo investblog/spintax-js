@@ -33,14 +33,18 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 | `postProcess` | optional bool, **default `true`** (mirrors `render()`); set `false` to assert raw pre-cosmetic output. render/analyze only |
 | `neutralizeContext` | optional string[]; render only — harness `neutralize()`s these context keys before rendering (tests the neutralize→render round-trip; asserts the final literal output, mechanism-independent) |
 | `rng` | injected selection strategy, **orthogonal to `seed`** (see below) |
-| `engines` | optional `("ts"\|"php")[]`; absent = **both**. `["ts"]` marks a deliberate TS-only divergence the PHP plugin doesn't provide. A PHP runner skips cases whose `engines` omit `"php"` |
+| `engines` | optional `("ts"\|"php"\|"py")[]`; absent = **all engines**. An explicit list marks a deliberate divergence — e.g. `["ts","py"]` for behaviour the PHP plugin does not provide. A runner skips cases whose `engines` omit its own id |
 | `expect` | shape **discriminated by `op`** (see below) |
 
-> **`neutralize()` is TS-only for glyph-restore.** The plugin's `SpintaxShield` entity-encodes
-> (`{`→`&#123;`) and never decodes — its literal glyph only appears in an HTML browser. This
-> engine restores literal glyphs in any sink (§6), a deliberate divergence — so the
-> `neutralize/roundtrip-*` cases are tagged `"engines": ["ts"]`. Only `neutralize/identity-plain`
-> (no structural chars) is a cross-engine gate.
+> **`neutralize()`'s glyph-restore is not universal.** The plugin's `SpintaxShield`
+> entity-encodes (`{`→`&#123;`) and never decodes — its literal glyph only appears in an HTML
+> browser. `@spintax/core` and the Python engine restore literal glyphs in any sink (§6), so the
+> `neutralize/roundtrip-*` cases are tagged `"engines": ["ts","py"]` and the PHP runner skips
+> them. Only `neutralize/identity-plain` (no structural chars) is asserted by every engine.
+>
+> Worth knowing before trusting a green: `identity-plain` alone is passed by a `neutralize()`
+> that returns its input unchanged. The round-trips are what actually gate the shielding, so an
+> engine that omits itself from them is not testing `neutralize` at all.
 
 > **Post-process gotcha.** `render()` defaults `postProcess: true`, and the pipeline
 > capitalizes the first letter — so a raw pick `a` renders as `A`, `товара` as `Товара`.
@@ -48,9 +52,11 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 
 ### `expect` by `op`
 
-- `render` / `neutralize` (deterministic) → `{ "output": "…" }` — exact in both engines.
+- `render` / `neutralize` (deterministic) → `{ "output": "…" }` — exact in every asserting engine.
 - `render` (`kind:rng`) → structural invariants: `{ reproducible, oneOf?, subsetOf?, sizeRange?, separator?, lastSeparator? }`.
-- `extract` → `{ refs?, sets?, includes? }` — arrays order-normalized before comparison.
+- `extract` → `{ refs?, sets?, defs?, includes? }` — arrays order-normalized before comparison.
+  `sets` and `defs` are separate buckets: the two directives differ in semantics (`#set` is a
+  macro, `#def` rolls once), so a consumer that lints one must be able to tell them apart.
 - `validate` → `{ verdict: "valid"|"invalid", diagnostics?: [{ code, severity?, line?, column? }] }`.
   **`verdict` is asserted exactly; `diagnostics` is a SUBSET assertion** — every listed
   `{code[, severity]}` must be present in the engine's output, but extras are allowed (a
@@ -61,7 +67,7 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 
 `validate` cases assert the `code` (+ `severity`), **not** `line`/`column` — positions are not
 parity-gated (§3.1); the plugin hardcodes many, the TS engine may be more precise. The corpus
-is the source of truth for these stable codes; both engines map their diagnostics onto them.
+is the source of truth for these stable codes; every engine maps its diagnostics onto them.
 
 | code | severity | condition |
 |---|---|---|
@@ -105,8 +111,10 @@ assert invariants only.
 > engines consume enum RNG in different orders (and the TS tree-walk skips unpicked branches,
 > so even the call count differs) — cross-engine RNG-sequence parity is a non-goal (§3.2). So
 > a `{sequence}` on a nested enum only stays a valid cross-engine gate when every ordering
-> yields the same output (e.g. `{a|{b|c}}` with `[1,1]`). Permutation is exact (both engines
-> follow the same pick→Fisher-Yates), so its rng-strategy cases are unrestricted.
+> yields the same output (e.g. `{a|{b|c}}` with `[1,1]`). Permutation is exact **as long as every
+> engine follows the same pick→Fisher-Yates** — TS and PHP do, which is why its rng-strategy cases
+> are unrestricted. That is an obligation on a new engine, not an observation: implement a
+> different shuffle and those fixtures break, correctly.
 
 ## Validating fixtures against the schema
 

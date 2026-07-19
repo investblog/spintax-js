@@ -11,7 +11,7 @@
   },
   {
     "id": "neutralize/roundtrip-enumeration",
-    "note": "Canonical §6 case: neutralize('a {x|y}') into %v% then render ⇒ literal braces, NOT a resolved pick. TS-only: the PHP plugin entity-encodes and never decodes, so this glyph-restore is a deliberate @spintax/core divergence (§6).",
+    "note": "Canonical §6 case: neutralize('a {x|y}') into %v% then render ⇒ literal braces, NOT a resolved pick. Asserted by the engines that restore literal glyphs; the PHP plugin entity-encodes and never decodes, so it is excluded rather than failing (§6).",
     "kind": "deterministic",
     "engines": [
       "ts",

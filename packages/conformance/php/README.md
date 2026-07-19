@@ -7,8 +7,8 @@ plugin's** WP-free Core engine, and asserts the fixtures' expected values.
 **Why:** the corpus's `expected` values encode the plugin's behavior contract. The TS suite is
 green against them, but that only proves TS is self-consistent with our *reading* of the PHP
 engine. Running the same fixtures against the *actual* PHP engine closes the loop — green here
-**and** green in TS = the deterministic parity contract is machine-verified in both engines, not
-assumed. (See the repo `docs/spec-npm-engine.md` §3.1, §7.)
+**and** green in TS = the deterministic parity contract is machine-verified in each engine that
+asserts it, not assumed. (See the repo `docs/spec-npm-engine.md` §3.1, §7.)
 
 ## Prerequisites
 
@@ -61,9 +61,13 @@ fixture in *this* repository that nothing over there ever ran.
     cross-engine RNG-sequence parity is a non-goal.
 - **`op: extract`** — `sets` + `includes` via the engine's public methods; `refs` via the
   Validator regexes over the `#set`-stripped body.
-- **`op: neutralize`** and any `engines: ["ts"]` fixture — **skipped**: neutralize is a deliberate
-  TS-only divergence (the plugin entity-encodes and never decodes; `@spintax/core` restores literal
-  glyphs).
+- **`op: neutralize`** and any fixture whose `engines` omits `"php"` — **skipped**: the
+  glyph-restore is a deliberate divergence (the plugin entity-encodes and never decodes, while
+  `@spintax/core` and the Python engine restore literal glyphs). Those cases are tagged
+  `["ts","py"]`.
+- **`defs`** in an `op: extract` expectation is **not asserted here yet**, so such fixtures are
+  tagged to exclude PHP. `Parser::extract_directives()` already returns them — wiring it up and
+  dropping the tag is a small, self-contained follow-up.
 
 ## Note
 

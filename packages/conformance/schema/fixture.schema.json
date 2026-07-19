@@ -48,7 +48,7 @@
           "items": { "enum": ["ts", "php", "py"] },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Which engines assert this case. Absent = BOTH (the default cross-engine gate). Use [\"ts\"] for a deliberate TS-only divergence the PHP plugin does not provide — e.g. neutralize()'s glyph-restore (the plugin entity-encodes and never decodes; §6). A runner skips cases whose engines omit its own id."
+          "description": "Which engines assert this case. Absent = ALL engines (the default cross-engine gate) — an explicit list is only for a deliberate divergence. e.g. neutralize()'s glyph-restore is [\"ts\",\"py\"]: the PHP plugin entity-encodes and never decodes, so it does not assert those (§6). A runner skips cases whose engines omit its own id."
         },
         "seed": {
           "oneOf": [{ "type": "integer" }, { "type": "string" }],

@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 
 export type Op = 'render' | 'validate' | 'extract' | 'neutralize';
 export type Kind = 'deterministic' | 'rng';
-export type Engine = 'ts' | 'php';
+export type Engine = 'ts' | 'php' | 'py';
 export type RngStrategy = 'first' | 'last' | { sequence: number[] };
 
 export interface ExpectValidate {
