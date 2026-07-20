@@ -30,17 +30,27 @@ let sent: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let calls: { method: string; body: any }[];
 
+/** Bot API methods the mocked Telegram should reject, and how. Set per test. */
+let failing: Map<string, 'http' | 'ok-false'>;
+
 beforeEach(() => {
   sent = [];
   calls = [];
+  failing = new Map();
   aiRun.mockClear();
   vi.stubGlobal(
     'fetch',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.fn(async (url: string, init: any) => {
       const body = JSON.parse(init.body);
+      const method = url.split('/').pop() ?? '';
       sent.push(body);
-      calls.push({ method: url.split('/').pop() ?? '', body });
+      calls.push({ method, body });
+      // Telegram signals failure two ways, and a bot that checks only the status misses half:
+      // ok:false arrives under a 200 routinely.
+      const mode = failing.get(method);
+      if (mode === 'http') return new Response('{"ok":false}', { status: 400 });
+      if (mode === 'ok-false') return new Response('{"ok":false,"description":"nope"}');
       return new Response('{"ok":true}');
     }),
   );
@@ -353,9 +363,57 @@ describe('inline keyboard: exactly one live keyboard, and it is never deleted', 
   });
 });
 
+// Found in review. The send→strip ORDER was correct and the invariant was still unenforced,
+// because callApi ignored the response: a failed send resolved, the strip ran anyway, and the
+// user was left with neither the batch nor a keyboard. Ordering without error detection is
+// decoration — so these tests assert the failure path, which is where the invariant actually lives.
+describe('inline keyboard: a failed send must leave the old keyboard usable', () => {
+  test.each([
+    ['an HTTP error', 'http'],
+    ['ok:false under a 200', 'ok-false'],
+  ] as const)('%s on sendMessage does NOT strip the previous keyboard', async (_name, mode) => {
+    failing.set('sendMessage', mode);
+    const res = await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+
+    expect(res.status).toBe(200); // acked: a redelivery could send the batch twice
+    expect(methods()).toEqual(['answerCallbackQuery', 'sendMessage']);
+    expect(methods()).not.toContain('editMessageReplyMarkup');
+  });
+
+  test('a failed strip is soft — the batch was sent, so the callback still succeeded', async () => {
+    failing.set('editMessageReplyMarkup', 'http');
+    const res = await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+    expect(res.status).toBe(200);
+    expect(methods()).toEqual(['answerCallbackQuery', 'sendMessage', 'editMessageReplyMarkup']);
+  });
+
+  test('a rejected answerCallbackQuery does not abandon the work it was acknowledging', async () => {
+    // The one call that must stay soft: a stale query id is exactly what Telegram rejects, and
+    // exactly when the user is still waiting for the render.
+    failing.set('answerCallbackQuery', 'http');
+    await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+    expect(callTo('sendMessage').text).toMatch(/Valid/u);
+  });
+
+  test('a failed reply to a plain template is logged, not retried into a duplicate', async () => {
+    failing.set('sendMessage', 'http');
+    const res = await bot.fetch(update('{Hi|Hello} World'), ENV);
+    expect(res.status).toBe(200);
+    expect(methods()).toEqual(['sendMessage']);
+  });
+});
+
 describe('inline keyboard: every callback is answered, and stale state degrades to a toast', () => {
   test('an unknown callback is still answered — an unanswered query spins forever', async () => {
     await bot.fetch(press('nonsense:verb'), ENV);
+    expect(methods()).toEqual(['answerCallbackQuery']);
+  });
+
+  // Also from review: `v:` used to accept ANY verb as "more", so a button left over from an older
+  // deploy would render and strip instead of answering, and a future verb rename would silently
+  // alias itself to this branch rather than failing where someone would notice.
+  test('an unknown verb in a known namespace is answered, not treated as "more"', async () => {
+    await bot.fetch(press('v:x:31', batchMessage('{Hi|Hello} World')), ENV);
     expect(methods()).toEqual(['answerCallbackQuery']);
   });
 

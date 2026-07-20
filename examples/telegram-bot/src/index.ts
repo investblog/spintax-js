@@ -409,12 +409,24 @@ export function templateOf(messageText: string | undefined, len: number): string
 /** One inline button row set. `undefined` means "no keyboard"; `[]` means "strip the keyboard". */
 type Keyboard = readonly (readonly { text: string; callback_data: string }[])[];
 
+/**
+ * One Bot API call. THROWS on failure — both the HTTP status and Telegram's own `ok:false`, which
+ * it returns under a 200 often enough that checking only the status is not checking at all.
+ *
+ * Silence here would make the send→strip ordering in `handleCallback` purely decorative: a failed
+ * send would resolve, the strip would run anyway, and the user would be left with neither the new
+ * batch nor a working keyboard — the exact outcome the ordering exists to prevent. An invariant
+ * that cannot observe failure is not enforced.
+ */
 async function callApi(token: string, method: string, body: unknown): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+  if (!res.ok) throw new Error(`${method}: HTTP ${res.status}`);
+  const payload = (await res.json().catch(() => ({ ok: true }))) as { ok?: boolean };
+  if (payload.ok === false) throw new Error(`${method}: Telegram returned ok:false`);
 }
 
 interface SendOptions {
@@ -480,12 +492,21 @@ async function stripKeyboard(token: string, chatId: number, messageId: number): 
  * Mandatory on EVERY callback, including the ones that change nothing: "Telegram clients will
  * display a progress bar until you call answerCallbackQuery." Note *until* — there is no
  * documented timeout, so an unanswered query spins indefinitely rather than recovering.
+ *
+ * Soft, deliberately, and this is the one place where softness is load-bearing rather than
+ * tidy: a stale query id is exactly the case Telegram rejects, and it is also exactly the case
+ * where the user is still waiting for the work. Letting the rejection propagate would abandon
+ * the render because the acknowledgement of the render failed.
  */
 async function answerCallback(token: string, id: string, text?: string): Promise<void> {
-  await callApi(token, 'answerCallbackQuery', {
-    callback_query_id: id,
-    ...(text === undefined ? {} : { text }),
-  });
+  try {
+    await callApi(token, 'answerCallbackQuery', {
+      callback_query_id: id,
+      ...(text === undefined ? {} : { text }),
+    });
+  } catch (e) {
+    console.error('answerCallback failed =', e instanceof Error ? e.message : String(e));
+  }
 }
 
 /**
@@ -552,7 +573,10 @@ async function handleCallback(env: Env, q: CallbackQuery): Promise<void> {
     return;
   }
 
-  if (ns === 'v') {
+  // Verbs are enumerated, not defaulted. Falling through to "more" on an unrecognised verb would
+  // mean a button left over from an older deploy silently renders and strips instead of answering
+  // — and a future verb rename would alias itself to this branch rather than failing visibly.
+  if (ns === 'v' && (verb === 'm' || verb === 'r')) {
     // The template is the user's own message, reached through reply_to_message. Note this is
     // inference from the Bot API's typing rather than a documented guarantee (spec §1.1) —
     // hence the explicit null check rather than an assumption.
@@ -612,7 +636,15 @@ export default {
     // Before the message branch: a callback is not a message, and the old handler would have
     // acked it into silence.
     if (update.callback_query) {
-      await handleCallback(env, update.callback_query);
+      // A Bot API failure now throws (see `callApi`), which is what keeps the strip from running
+      // after a failed send. Swallow it HERE, at the boundary, and still ack: a non-2xx makes
+      // Telegram redeliver the update, and a redelivered "more" that half-succeeded would send
+      // the batch twice. A logged miss beats a duplicate.
+      try {
+        await handleCallback(env, update.callback_query);
+      } catch (e) {
+        console.error('callback failed =', e instanceof Error ? e.message : String(e));
+      }
       return new Response('ok');
     }
 
@@ -625,28 +657,42 @@ export default {
 
     const token = env.TELEGRAM_BOT_TOKEN;
     const trimmed = text.trim();
-    if (trimmed === '/start' || trimmed === '/help') {
-      await sendMessage(token, chatId, HELP, { parseMode: 'HTML' });
-    } else if (trimmed === '/draft' || trimmed.startsWith('/draft ')) {
-      const { text: reply, nextSeed, templateLen } = await draftTemplate(
-        env,
-        trimmed.slice('/draft'.length).trim(),
-      );
-      await sendMessage(token, chatId, reply, {
-        ...(nextSeed === undefined || templateLen === undefined
-          ? {}
-          : { keyboard: draftKeyboard(nextSeed, templateLen) }),
-      });
-    } else {
-      const { text: reply, nextSeed } = handleTemplate(trimmed);
-      // Reply to the user's message: that is what puts the template within reach of the
-      // buttons (spec §1), and it is the only state this bot keeps.
-      const originId = message?.message_id;
-      await sendMessage(token, chatId, reply, {
-        ...(originId === undefined ? {} : { replyTo: originId }),
-        ...(nextSeed === undefined ? {} : { keyboard: templateKeyboard(nextSeed) }),
-      });
+    try {
+      await dispatchMessage(env, token, chatId, message?.message_id, trimmed);
+    } catch (e) {
+      // Same reasoning as the callback branch: ack, log, do not invite a redelivery.
+      console.error('message failed =', e instanceof Error ? e.message : String(e));
     }
     return new Response('ok');
   },
 } satisfies ExportedHandler<Env>;
+
+async function dispatchMessage(
+  env: Env,
+  token: string,
+  chatId: number,
+  originId: number | undefined,
+  trimmed: string,
+): Promise<void> {
+  if (trimmed === '/start' || trimmed === '/help') {
+    await sendMessage(token, chatId, HELP, { parseMode: 'HTML' });
+    return;
+  }
+  if (trimmed === '/draft' || trimmed.startsWith('/draft ')) {
+    const brief = trimmed.slice('/draft'.length).trim();
+    const { text: reply, nextSeed, templateLen } = await draftTemplate(env, brief);
+    await sendMessage(token, chatId, reply, {
+      ...(nextSeed === undefined || templateLen === undefined
+        ? {}
+        : { keyboard: draftKeyboard(nextSeed, templateLen) }),
+    });
+    return;
+  }
+  const { text: reply, nextSeed } = handleTemplate(trimmed);
+  // Reply to the user's message: that is what puts the template within reach of the buttons
+  // (spec §1), and it is the only state this bot keeps.
+  await sendMessage(token, chatId, reply, {
+    ...(originId === undefined ? {} : { replyTo: originId }),
+    ...(nextSeed === undefined ? {} : { keyboard: templateKeyboard(nextSeed) }),
+  });
+}

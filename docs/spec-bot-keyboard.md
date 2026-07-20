@@ -111,6 +111,27 @@ the send fails, stripping first would have left the user with no working keyboar
 Stripping is soft, exactly like `safeDelete`: wrapped, failure logged, never fatal. A keyboard
 that outlived its message is a cosmetic defect; a handler that throws on it is an outage.
 
+**The ordering only enforces anything if a failed send is detectable.** The first implementation
+got the order right and the invariant wrong: `callApi` ignored the response, so a 400, a 429 or
+a `{ok:false}` all resolved, the strip ran regardless, and the user was left with neither the new
+batch nor a working keyboard — the precise outcome the ordering exists to prevent. Caught in
+review, not by the suite, because every test mocked a successful Bot API.
+
+So the failure model is explicit, and it is not uniform:
+
+| Call | On failure | Why |
+|---|---|---|
+| `sendMessage` / `editMessageText` | **throws** | The next step must not run as if it had worked |
+| `editMessageReplyMarkup` (strip) | soft | The batch already landed; an orphaned keyboard is cosmetic |
+| `answerCallbackQuery` | soft | A stale query id is what Telegram rejects, and exactly when the user is still owed the render — never abandon work because its acknowledgement failed |
+
+Telegram reports failure two ways and checking only the HTTP status catches half of them:
+`ok:false` arrives under a 200 routinely.
+
+At the handler boundary the throw is caught, logged, and still answered `200`. A non-2xx makes
+Telegram redeliver the update, and a redelivered "more" that partly succeeded would send the
+batch twice — a logged miss beats a duplicate.
+
 Two consequences worth stating, because both are only visible at the second button press:
 
 - **A new batch must reply to the ORIGINAL user message**, never to the previous batch —
@@ -185,6 +206,12 @@ task_center's convention — `namespace:verb[:args]`, colon-delimited, matched b
 `<seed>` is an integer, bounded on parse. A hostile or stale value must not become an
 unbounded loop: reject anything not matching `/^\d{1,6}$/` and fall back to `1`.
 
+**Verbs are enumerated, never defaulted.** Dispatching on the namespace alone and treating
+every unrecognised verb as the common case means a button from an older deploy silently does
+work instead of answering, and a future verb rename aliases itself onto an existing branch
+rather than failing where someone would see it. Unknown data gets an `answerCallbackQuery` and
+nothing else.
+
 ### 3.1 Why `d:m:` carries a length — a bug the tests caught
 
 The first implementation found the end of the template by searching for the samples marker.
@@ -246,7 +273,12 @@ Beyond the obvious render assertions:
   and a length that does not line up degrades to the toast rather than to a fragment.
 - `d:m:` on an invalid draft is unreachable (no keyboard was attached).
 
-All of the above are implemented in `test/bot.test.ts` (49 tests). The transport assertions
+- **A failed `sendMessage` does not strip the previous keyboard** — asserted for both an HTTP
+  error and an `ok:false` under a 200. A failed *strip* is soft, and a rejected
+  `answerCallbackQuery` still leaves the render done.
+- An unknown verb inside a known namespace is answered and nothing else.
+
+All of the above are implemented in `test/bot.test.ts` (55 tests). The transport assertions
 check *which Bot API method fired and in what order* — `methods()` / `callTo()` over the mocked
 `fetch` — because none of the §1.5 reasoning is observable in the reply text.
 
