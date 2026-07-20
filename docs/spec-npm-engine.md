@@ -1,11 +1,19 @@
 # Spintax npm engine — `@spintax/core`
 
-Status: IMPLEMENTED — `@spintax/core` **0.1.6** is published to npm (MIT, provenance via OIDC).
+Status: IMPLEMENTED — `@spintax/core` **0.3.0** is published to npm (MIT, provenance via OIDC).
 M0–M5 are shipped: golden corpus, engine (parse / render / validate / extract / analyze /
-neutralize), the reference Cloudflare Worker, and the Telegram bot. **M6** (browser playground on
-`spintax.net`) is the one open milestone. The spec stays the source of truth for the parity
-contract (§3.1), the fixture schema (§7.1), and the public API surface (§9.2) — behavior changes
-are argued against it and the golden corpus, not against the current code.
+neutralize), the reference Cloudflare Worker, and the Telegram bot — both Workers live, see
+`DEPLOYING.md`. **M6** (browser playground on `spintax.net`) is the one open milestone. The spec
+stays the source of truth for the parity contract (§3.1), the fixture schema (§7.1), and the
+public API surface (§9.2) — behavior changes are argued against it and the golden corpus, not
+against the current code.
+
+Two syntax-surface changes have shipped since 0.1.x, both breaking by §0.1's definition and both
+recorded in `packages/core/CHANGELOG.md`: **0.2.0** added the BCS 3-form plural family (`sr`/`hr`/
+`bs`), which changes a validation verdict; **0.3.0** returned `#set` to macro semantics and
+introduced **`#def`** for roll-once, taking `AST_VERSION` to 2, adding `defs` to `extract()`, and
+adding four diagnostics. Read that entry before reasoning about any template using either
+directive — 0.3.0 changes what existing templates mean.
 Owner: 301st
 Canonical location: this file, `W:\projects\spintax-js\docs\spec-npm-engine.md`.
 
@@ -641,7 +649,7 @@ rule), after the Worker proves the need — never speculatively.
 
 > **HISTORICAL — M0 → M5 are done and shipped.** Kept for the *rationale* (why things are sequenced
 > this way), not as a to-do. Its instructions are spent: "do NOT publish `0.1.0` yet" was satisfied
-> long ago, and the package is on **0.1.6**. The only open milestone is **M6** (browser playground);
+> long ago, and the package is on **0.3.0**. The only open milestone is **M6** (browser playground);
 > the agreed next product step is the **n8n node** (`docs/spec-n8n-node.md`, #44).
 
 1. **M0 — corpus extraction.** **First task: lock the §7.1 fixture schema** (incl. the `rng`
