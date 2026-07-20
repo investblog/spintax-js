@@ -123,6 +123,18 @@ does not depend on it; it reads its own message.
 Also worth one look: pressing a button must never leave the client's progress spinner running.
 That means an `answerCallbackQuery` was missed.
 
+## Verifying right after a deploy — wait, or you will misread the fleet
+
+A deploy does not flip atomically. Verifying seconds after `Deployed` can hit old and new isolates
+in the same batch of requests, and the result looks like a **bundling** bug rather than a timing
+one: on 2026-07-20 one round of four probes came back with a pre-0.3.0 `extract()` (no `defs`)
+alongside a 0.3.0-only diagnostic — a combination no single build can produce. Twenty minutes went
+into inspecting module resolution before the obvious check settled it.
+
+The cheap discriminator: **re-run the same probe, and run one with a different payload.** If the
+answers change or disagree between payloads, it is propagation. If they stay wrong identically, it
+is the build. Give it a few seconds first and the question usually does not arise.
+
 ## Rollback
 
 ```sh

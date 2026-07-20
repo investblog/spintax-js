@@ -80,3 +80,47 @@ describe('worker — owns non-engine concerns (§8)', () => {
     expect(r.output).toBe('Welcome');
   });
 });
+
+// The deployed Worker sat on a pre-0.3.0 build for eleven days and answered with pre-0.3.0
+// semantics: `#def` unrecognised, no `defs` in extract, and a `#set` plural counter pronounced
+// valid. Nothing at the HTTP surface pinned any of it — the endpoints just pass the engine's
+// result through, so a stale build is invisible until someone diffs a live response by hand.
+describe('worker — the 0.3.0 directive contract, pinned at the HTTP surface', () => {
+  test('/extract-variables reports defs, and a #def name is not a runtime ref', async () => {
+    const body = await bodyOf(
+      await post('/extract-variables', { template: '#def %a% = {x|y}\n#set %b% = z\n%a% %b% %c%' }),
+    );
+    expect(body.defs).toEqual(['a']);
+    expect(body.sets).toEqual(['b']);
+    // `a` and `b` are defined by the template; only `c` is the host's to supply.
+    expect(body.refs).toContain('c');
+  });
+
+  test('/validate-template accepts #def without calling it an undefined variable', async () => {
+    const body = await bodyOf(
+      await post('/validate-template', {
+        template: '#def %p% = {course|training}\nThe %p% is a %p%.',
+      }),
+    );
+    expect(body.valid).toBe(true);
+    expect(body.diagnostics.map((d: { code: string }) => d.code)).not.toContain(
+      'variable.undefined',
+    );
+  });
+
+  test('/validate-template rejects a #set plural counter — the 0.3.0 verdict', async () => {
+    const body = await bodyOf(
+      await post('/validate-template', {
+        template: '#set %n% = {1|4}\n{plural %n%: item|items}',
+        locale: 'en',
+      }),
+    );
+    expect(body.valid).toBe(false);
+    expect(body.diagnostics.map((d: { code: string }) => d.code)).toContain('plural.count-macro');
+  });
+
+  test('/analyze-template carries defs too', async () => {
+    const body = await bodyOf(await post('/analyze-template', { template: '#def %a% = {x|y}\n%a%' }));
+    expect(body.defs).toEqual(['a']);
+  });
+});

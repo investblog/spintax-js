@@ -8,8 +8,8 @@
  *
  * Endpoints (all POST, JSON body with a `template` string):
  *   /validate-template  → validate()   { valid, diagnostics }
- *   /extract-variables  → extract()    { refs, sets, includes }
- *   /analyze-template   → analyze()    { refs, sets, includes, diagnostics, constructs }
+ *   /extract-variables  → extract()    { refs, sets, defs, includes }
+ *   /analyze-template   → analyze()    { refs, sets, defs, includes, diagnostics, constructs }
  *   /preview-render     → render()     { output }        (post-process on by default)
  *   /render-batch       → host loop over render(ast, { seed: base + i }) → { variants }
  */
