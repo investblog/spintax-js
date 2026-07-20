@@ -1,7 +1,7 @@
 # Spec — inline keyboard for `examples/telegram-bot`
 
-Status: **implemented** 2026-07-20 (`examples/telegram-bot/src/index.ts`). One assumption is still
-unverified against a live bot — see §1.1, and read it before trusting the `v:` flow in production.
+Status: **implemented and live** 2026-07-20 (`examples/telegram-bot/src/index.ts`). §1.1's
+assumption is **confirmed against the live bot** — see the verdict there.
 
 ## 0. What this is, and what it deliberately is not
 
@@ -43,7 +43,21 @@ For `/draft` the source is different: the template is in the bot's *own* reply
 `📝 Template:` prefix and the blank line after the template **load-bearing format, not
 decoration** — pin them in a test, or a cosmetic edit to the reply silently breaks the buttons.
 
-### 1.1 The assumption this rests on — verify it FIRST
+### 1.1 The assumption this rests on — CONFIRMED 2026-07-20
+
+**Verdict: `callback_query.message.reply_to_message.text` is delivered.** Confirmed on the live
+bot, and not by a test written to pass: a production report that "Заново only works after Ещё 5"
+proved it incidentally. For that button to fail the way it did, it had to reach
+`editMessageText` — which is downstream of the `reply_to_message` check. The design's one
+undocumented dependency held.
+
+The checks below stay in the code regardless. The field is still undocumented, so it is a
+behaviour that happens to be true, not a contract; and the inaccessible-message case (§1.2) is
+documented and will eventually happen on its own.
+
+The original reasoning follows, kept because it explains why the fallbacks exist.
+
+---
 
 **`callback_query.message` carrying a populated `reply_to_message` is not documented.** The
 Bot API describes no field-stripping for the callback-embedded `Message`, so it should be
@@ -56,6 +70,23 @@ written: send a reply with `reply_to_message_id`, press a button, log the update
 — the honest fallbacks are then echoing the template into the bot's own reply (making both
 flows work like `/draft`), or accepting a store. Do not discover this after writing the
 handlers.
+
+### 1.3 A control that cannot act must not be rendered
+
+"Заново" restarts the seed walk. On a first batch — already rendered from seed 1 — it produced
+byte-identical text and, since `nextSeed` was unchanged, identical markup. Telegram rejects an
+edit that changes neither, so the button did nothing, and only worked once "Ещё" had moved the
+message to a later window. It looked like a race; it was determinism.
+
+The button is therefore offered **only when `startSeed > 1`**, which is task_center's pagination
+rule (hide the nav row at one page) applied to a different control.
+
+Separately, and not made redundant by that: **a reroll can legitimately reproduce the current
+text**, because distinct seeds are independent draws rather than distinct results and a
+low-cardinality template exhausts its combinations. So the handler compares against
+`message.text` and answers with an explanation rather than attempting a doomed edit. The
+comparison must happen **before** `answerCallbackQuery` — a query is answerable once, so
+discovering the no-op afterwards leaves no channel to explain it in.
 
 ### 1.2 Documented limits, all of which must be handled
 
