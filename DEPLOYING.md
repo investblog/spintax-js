@@ -57,10 +57,12 @@ Then confirm it actually took effect before trusting it:
 npx wrangler whoami   # must show 2a8133f810cef6eff8f7bba2cfd2a09c
 ```
 
-That check is not ceremony. The docs describe `CLOUDFLARE_API_TOKEN` as the mechanism for CI/CD
-and automation, but they do **not** explicitly state that it overrides an existing OAuth login —
-so verify the precedence on this machine rather than assuming it. `predeploy` performs the same
-check, so a wrong-account deploy is refused either way.
+The precedence is **confirmed on this machine** (2026-07-20): with the global OAuth login still
+set to `investblog.io@gmail.com`, a `.env` token made `whoami` report
+`2a8133f810cef6eff8f7bba2cfd2a09c` and the deploy landed on the right account. Worth knowing,
+because the Cloudflare docs describe `CLOUDFLARE_API_TOKEN` as the CI/CD mechanism without ever
+stating that it overrides an interactive login. `predeploy` runs the same check regardless, so a
+wrong-account deploy is refused either way.
 
 ## Deploying the bot
 
