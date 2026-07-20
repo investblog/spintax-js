@@ -301,10 +301,20 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
 // API method fires, and in what order — because that is where the spec's reasoning lives and none
 // of it shows up in the reply text.
 describe('inline keyboard: exactly one live keyboard, and it is never deleted', () => {
-  test('a valid template replies WITH buttons, as a reply to the user message', async () => {
+  // Reported from production as "Заново only works after Ещё 5" — which reads like a race and was
+  // pure determinism: a first batch is rendered from seed 1, so restarting redraws byte-identical
+  // text and markup, and Telegram rejects an edit that changes nothing. Ten HTTP 400s in the tail
+  // log, one per press. The button is now simply not offered where it cannot act.
+  test('a first batch offers no "Заново" — it would only redraw itself', async () => {
     await bot.fetch(update('{Hi|Hello} World'), ENV);
     expect(sent[0].reply_to_message_id).toBe(1); // the state channel (spec §1)
-    expect(kbOf(sent[0])).toMatch(/^v:m:\d+ v:r help$/u);
+    expect(kbOf(sent[0])).toMatch(/^v:m:\d+ help$/u);
+    expect(kbOf(sent[0])).not.toContain('v:r');
+  });
+
+  test('a later batch DOES offer "Заново" — there it changes something', async () => {
+    await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+    expect(kbOf(callTo('sendMessage'))).toMatch(/^v:m:\d+ v:r help$/u);
   });
 
   test('an invalid template gets NO keyboard — there is nothing to reroll', async () => {
@@ -356,6 +366,23 @@ describe('inline keyboard: exactly one live keyboard, and it is never deleted', 
     expect(callTo('editMessageText').message_id).toBe(7);
   });
 
+  // The safety net behind the fix above. Distinct seeds are independent draws, not distinct
+  // results, so a low-cardinality template exhausts itself and a reroll legitimately reproduces
+  // what is already on screen. Telegram would reject that edit; say so instead of going quiet.
+  test('a reroll that reproduces the current text explains itself instead of failing', async () => {
+    // Render what the first batch would be, then present it as the message being rerolled.
+    await bot.fetch(update('{Hi|Hello} World'), ENV);
+    const current: string = sent[0].text;
+    calls = [];
+    sent = [];
+
+    const message = { ...batchMessage('{Hi|Hello} World'), text: current };
+    await bot.fetch(press('v:r', message), ENV);
+
+    expect(methods()).toEqual(['answerCallbackQuery']); // no doomed editMessageText
+    expect(sent[0].text).toMatch(/run out of distinct combinations/u);
+  });
+
   test('"Синтаксис" does NOT strip the batch above it — a lookup is not the end of the session', async () => {
     await bot.fetch(press('help'), ENV);
     expect(methods()).toEqual(['answerCallbackQuery', 'sendMessage']);
@@ -378,6 +405,16 @@ describe('inline keyboard: a failed send must leave the old keyboard usable', ()
     expect(res.status).toBe(200); // acked: a redelivery could send the batch twice
     expect(methods()).toEqual(['answerCallbackQuery', 'sendMessage']);
     expect(methods()).not.toContain('editMessageReplyMarkup');
+  });
+
+  // The tail log said `editMessageText: HTTP 400` ten times for a bug whose cause Telegram had
+  // spelled out in the response body the old code discarded. Errors carry the description now.
+  test('a Bot API error reports Telegram’s description, not just the status', async () => {
+    failing.set('sendMessage', 'ok-false');
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+    expect(spy.mock.calls.flat().join(' ')).toContain('nope'); // the mocked description
+    spy.mockRestore();
   });
 
   test('a failed strip is soft — the batch was sent, so the callback still succeeded', async () => {

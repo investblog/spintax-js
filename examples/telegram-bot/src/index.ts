@@ -66,6 +66,16 @@ const DRAFT_USAGE =
 /** Shown when the state channel is gone — an old, deleted or inaccessible message (spec §1.2). */
 const STALE = 'That message is too old to reroll — send the template again.';
 
+/**
+ * Shown when a reroll produced byte-identical output.
+ *
+ * Not hypothetical even with "Заново" hidden on a first batch: distinct seeds are independent
+ * draws, not distinct results, so a low-cardinality template exhausts its variations and the next
+ * window repeats. Telegram would reject that edit as "message is not modified" — which, silently
+ * swallowed, is a button that does nothing for no stated reason.
+ */
+const NO_CHANGE = 'Same variations — this template has run out of distinct combinations.';
+
 const VARIANTS = 5;
 const TG_LIMIT = 4000; // Telegram hard-caps messages at 4096 chars.
 
@@ -209,13 +219,22 @@ const parseSeed = (raw: string | undefined): number =>
 const parseCount = (raw: string | undefined): number =>
   raw !== undefined && /^\d{1,6}$/u.test(raw) ? Number(raw) : 0;
 
-const templateKeyboard = (nextSeed: number): Keyboard => [
-  [
-    { text: `🎲 Ещё ${VARIANTS}`, callback_data: cbMore(nextSeed) },
-    { text: '🔁 Заново', callback_data: CB_RESTART },
-  ],
-  [{ text: '📋 Синтаксис', callback_data: CB_HELP }],
-];
+/**
+ * `startSeed` decides whether "Заново" is offered at all.
+ *
+ * A batch rendered from seed 1 IS the restart, so the button could only redraw what is already
+ * on screen — and Telegram rejects an edit that changes neither text nor markup, so it did
+ * nothing at all. Reported from production as "Заново only works after Ещё 5", which is exactly
+ * the shape of the bug: it looked like a race and was pure determinism.
+ *
+ * Same instinct as task_center's pagination rule, which hides the nav row when there is one page:
+ * do not render a control that cannot act.
+ */
+const templateKeyboard = (nextSeed: number, startSeed: number): Keyboard => {
+  const top = [{ text: `🎲 Ещё ${VARIANTS}`, callback_data: cbMore(nextSeed) }];
+  if (startSeed > 1) top.push({ text: '🔁 Заново', callback_data: CB_RESTART });
+  return [top, [{ text: '📋 Синтаксис', callback_data: CB_HELP }]];
+};
 
 const draftKeyboard = (nextSeed: number, templateLen: number): Keyboard => [
   [
@@ -418,15 +437,36 @@ type Keyboard = readonly (readonly { text: string; callback_data: string }[])[];
  * batch nor a working keyboard — the exact outcome the ordering exists to prevent. An invariant
  * that cannot observe failure is not enforced.
  */
+/**
+ * A rejected Bot API call, carrying Telegram's own `description`.
+ *
+ * The description is the whole diagnostic: the first version of this threw on the status alone
+ * and produced ten identical `editMessageText: HTTP 400` log lines for a bug whose cause was
+ * spelled out in the body it had thrown away.
+ */
+class BotApiError extends Error {
+  constructor(
+    readonly method: string,
+    readonly status: number,
+    readonly description: string,
+  ) {
+    super(`${method}: ${description || `HTTP ${status}`}`);
+    this.name = 'BotApiError';
+  }
+}
+
 async function callApi(token: string, method: string, body: unknown): Promise<void> {
   const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${method}: HTTP ${res.status}`);
-  const payload = (await res.json().catch(() => ({ ok: true }))) as { ok?: boolean };
-  if (payload.ok === false) throw new Error(`${method}: Telegram returned ok:false`);
+  // Read the body BEFORE deciding: Telegram returns `ok:false` under a 200 routinely, and its
+  // `description` is the only human-readable account of what went wrong.
+  const payload = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+  if (!res.ok || payload.ok === false) {
+    throw new BotApiError(method, res.status, payload.description ?? '');
+  }
 }
 
 interface SendOptions {
@@ -562,6 +602,10 @@ async function handleCallback(env: Env, q: CallbackQuery): Promise<void> {
       return;
     }
     const { text, nextSeed } = draftReply(template, parseSeed(arg));
+    if (text === msg.text) {
+      await answerCallback(token, q.id, NO_CHANGE);
+      return;
+    }
     await answerCallback(token, q.id);
     await editMessageText(
       token,
@@ -586,8 +630,17 @@ async function handleCallback(env: Env, q: CallbackQuery): Promise<void> {
       return;
     }
 
-    const { text, nextSeed } = handleTemplate(origin.text, verb === 'r' ? 1 : parseSeed(arg));
-    const keyboard = nextSeed === undefined ? undefined : templateKeyboard(nextSeed);
+    const startSeed = verb === 'r' ? 1 : parseSeed(arg);
+    const { text, nextSeed } = handleTemplate(origin.text, startSeed);
+    const keyboard = nextSeed === undefined ? undefined : templateKeyboard(nextSeed, startSeed);
+
+    // Decide BEFORE answering. An edit that changes neither text nor markup is rejected by
+    // Telegram, and the callback can only be answered once — so detecting it afterwards leaves
+    // no way to say why nothing happened.
+    if (verb === 'r' && text === msg.text) {
+      await answerCallback(token, q.id, NO_CHANGE);
+      return;
+    }
     await answerCallback(token, q.id);
 
     if (verb === 'r') {
@@ -693,6 +746,7 @@ async function dispatchMessage(
   // (spec §1), and it is the only state this bot keeps.
   await sendMessage(token, chatId, reply, {
     ...(originId === undefined ? {} : { replyTo: originId }),
-    ...(nextSeed === undefined ? {} : { keyboard: templateKeyboard(nextSeed) }),
+    // startSeed 1: this IS the first batch, so no "Заново" — it would only redraw itself.
+    ...(nextSeed === undefined ? {} : { keyboard: templateKeyboard(nextSeed, 1) }),
   });
 }
