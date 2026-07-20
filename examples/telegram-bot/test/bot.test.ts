@@ -117,6 +117,7 @@ describe('the help must not teach anything the engine rejects', () => {
     const out = render(example, { seed: 1, locale: LOCALE, context: { name: 'Ada' } });
     expect(out).not.toContain('｛'); // fullwidth braces = the engine rejected a block
     expect(out).not.toContain('#set'); // the directive must be consumed, never printed
+    expect(out).not.toContain('#def');
   });
 
   test('the power example proves #def picks once — one product name, twice', () => {
@@ -136,12 +137,21 @@ describe('the help must not teach anything the engine rejects', () => {
     expect(out).toMatch(/(enrol you today|answer any question|refund within 14 days), /u);
   });
 
-  test('help lists every construct, including #set', async () => {
+  test('help lists every construct, including both directives', async () => {
     await bot.fetch(update('/help'), ENV);
     const help: string = sent[0].text;
-    for (const construct of ['#set', '%name%', '{?flag?', '{plural', 'sep=']) {
+    for (const construct of ['#set', '#def', '%name%', '{?flag?', '{plural', 'sep=']) {
       expect(help).toContain(construct);
     }
+  });
+
+  // The help once said "#set picks once" two lines below a cheat-sheet row saying the opposite —
+  // 0.3.0 swapped the semantics and the prose was left behind. Pin the attribution, not the wording.
+  test('roll-once is attributed to #def, never to #set', async () => {
+    await bot.fetch(update('/help'), ENV);
+    const help: string = sent[0].text;
+    expect(help).not.toMatch(/#set<\/code> picks once/u);
+    expect(help).toMatch(/#def<\/code> picks once/u);
   });
 });
 

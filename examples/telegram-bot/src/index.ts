@@ -120,8 +120,8 @@ const HELP = [
   '<b>Example</b> (send this):',
   `<code>${esc(EXAMPLE_BASIC)}</code>`,
   '',
-  '<b>Putting it together</b> — <code>#set</code> picks once, variables nest, and the',
-  'permutation reorders three clauses that carry equal weight:',
+  '<b>Putting it together</b> — <code>#def</code> picks once, <code>#set</code> expands as a',
+  'macro, variables nest, and the permutation reorders three clauses of equal weight:',
   `<code>${esc(EXAMPLE_POWER)}</code>`,
   'Every variant names the same product twice — never “course … training”.',
   '',
@@ -135,6 +135,20 @@ const HELP = [
   '',
   'Powered by the open-source <code>@spintax/core</code> engine · by 301.st',
 ].join('\n');
+
+/**
+ * The variables a HOST would have to supply — references minus the ones the template defines itself.
+ *
+ * `extract().refs` is not that list: it strips only the `#set`/`#def` definition LHS, so every
+ * *reference* to a locally-defined name is still a ref. Calling that "filled at runtime" tells the
+ * author their own `#def` is missing. `defs` is 0.3.0-new; a consumer subtracting `sets` alone —
+ * which is exactly what this bot did — now under-reports by every `#def` in the template.
+ */
+function runtimeRefs(src: string): string[] {
+  const { refs, sets, defs } = extract(src);
+  const defined = new Set([...sets, ...defs]);
+  return refs.filter((r) => !defined.has(r));
+}
 
 /** Validate a template and render up to VARIANTS distinct variations. */
 function handleTemplate(src: string): string {
@@ -150,6 +164,13 @@ function handleTemplate(src: string): string {
       reply +=
         `\n\nℹ️ This bot renders with locale “${LOCALE}”, which takes 2 plural forms — ` +
         '{plural %n%: item|items}. Languages like ru/uk/be and sr/hr/bs take 3.';
+    }
+    // The 0.3.0 trap: a plural counter defined with #set is re-picked at every reference, so the
+    // printed number and the form it agrees with are two independent draws. #def rolls it once.
+    if (errors.some((e) => e.code === 'plural.count-macro')) {
+      reply +=
+        '\n\nℹ️ A {plural …} count cannot come from a #set — a macro is re-picked at every use, ' +
+        'so the number and its noun would disagree. Use #def instead: #def %n% = {1|4|9}.';
     }
     return reply;
   }
@@ -169,9 +190,9 @@ function handleTemplate(src: string): string {
   reply += variants.map((v, i) => `${i + 1}. ${v}`).join('\n');
 
   if (diagnostics.some((d) => d.code === 'variable.undefined')) {
-    const refs = extract(src).refs;
-    if (refs.length > 0) {
-      reply += `\n\nℹ️ Variables (filled at runtime): ${refs.map((r) => `%${r}%`).join(', ')}`;
+    const runtime = runtimeRefs(src);
+    if (runtime.length > 0) {
+      reply += `\n\nℹ️ Variables (filled at runtime): ${runtime.map((r) => `%${r}%`).join(', ')}`;
     }
   }
   return reply.length > TG_LIMIT ? `${reply.slice(0, TG_LIMIT)}\n…` : reply;
@@ -271,7 +292,7 @@ async function draftTemplate(env: Env, brief: string): Promise<string> {
   // The prompt allows exactly DRAFT_VARS. If the model reached for another name it is only a
   // `variable.undefined` WARNING, so the draft is still usable — but the samples above will carry
   // a raw %placeholder% (or, for a count, silently drop the {plural …} block). Say so.
-  const invented = extract(template).refs.filter((r) => !DRAFT_VARS.includes(r));
+  const invented = runtimeRefs(template).filter((r) => !DRAFT_VARS.includes(r));
   if (invented.length > 0) {
     reply +=
       `\n⚠️ The draft also used ${invented.map((v) => `%${v}%`).join(', ')} — outside the demo set, ` +
