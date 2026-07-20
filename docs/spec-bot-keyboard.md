@@ -1,6 +1,7 @@
 # Spec — inline keyboard for `examples/telegram-bot`
 
-Status: **proposed**, not implemented. Scope decided 2026-07-20.
+Status: **implemented** 2026-07-20 (`examples/telegram-bot/src/index.ts`). One assumption is still
+unverified against a live bot — see §1.1, and read it before trusting the `v:` flow in production.
 
 ## 0. What this is, and what it deliberately is not
 
@@ -175,13 +176,30 @@ task_center's convention — `namespace:verb[:args]`, colon-delimited, matched b
 
 | Data | Meaning | Source of template |
 |---|---|---|
-| `v:<seed>` | Render `VARIANTS` variations from `<seed>` | `message.reply_to_message.text` |
-| `dv:<seed>` | Same, with `DRAFT_CONTEXT` | `message.text`, after `📝 Template:` |
+| `v:m:<seed>` | Render `VARIANTS` variations from `<seed>`, as a new message | `message.reply_to_message.text` |
+| `v:r` | Restart the walk, editing in place | same |
+| `d:m:<seed>:<len>` | Same, with `DRAFT_CONTEXT`, editing in place | `message.text`, `<len>` chars after `📝 Template:` |
 | `help` | Send `HELP` | — |
 | `brief` | Toast the `/draft` usage line | — |
 
 `<seed>` is an integer, bounded on parse. A hostile or stale value must not become an
 unbounded loop: reject anything not matching `/^\d{1,6}$/` and fall back to `1`.
+
+### 3.1 Why `d:m:` carries a length — a bug the tests caught
+
+The first implementation found the end of the template by searching for the samples marker.
+A template is free to **contain that marker itself**, so the search truncated and returned a
+fragment. The re-validation guard did not save it: `{Hi|Hello}` cut out of a longer template
+is perfectly valid spintax, so the guard passed and the bot rendered part of the template as
+though it were the whole one — exactly the silently-wrong reroll §5 forbids.
+
+Neither "first occurrence" nor "last occurrence" is sound; the failure is structural, because
+an unescaped text channel can be forged by its own payload. **The length comes from the
+sender**, which the message content cannot influence. `templateOf` then checks that the marker
+lands exactly where the length says, and a mismatch degrades to the toast.
+
+The general lesson, worth keeping: a delimiter you search for is attacker-controlled when the
+attacker writes the body. A length or an escape is not.
 
 **Every** `callback_query` gets an `answerCallbackQuery`, including the ones that do nothing.
 Verbatim from the docs: *"Telegram clients will display a progress bar until you call
@@ -224,8 +242,13 @@ Beyond the obvious render assertions:
   depth-2 trap from §1.2.
 - The three-way `callback_query.message` branch: readable / `date === 0` / absent. The latter
   two produce the "send it again" toast, not a crash and not a render of `''`.
-- The `📝 Template:` extraction survives a template containing that literal string itself.
-- `dv:` on an invalid draft is unreachable (no keyboard was attached).
+- The `📝 Template:` extraction survives a template containing the samples marker itself (§3.1),
+  and a length that does not line up degrades to the toast rather than to a fragment.
+- `d:m:` on an invalid draft is unreachable (no keyboard was attached).
+
+All of the above are implemented in `test/bot.test.ts` (49 tests). The transport assertions
+check *which Bot API method fired and in what order* — `methods()` / `callTo()` over the mocked
+`fetch` — because none of the §1.5 reasoning is observable in the reply text.
 
 ## 6. Non-goals
 

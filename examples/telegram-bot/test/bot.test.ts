@@ -26,26 +26,61 @@ const ENV = {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let sent: any[];
+/** Same calls as `sent`, but keeping the Bot API method — needed to assert WHICH call was made. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let calls: { method: string; body: any }[];
 
 beforeEach(() => {
   sent = [];
+  calls = [];
   aiRun.mockClear();
   vi.stubGlobal(
     'fetch',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.fn(async (_url: string, init: any) => {
-      sent.push(JSON.parse(init.body));
+    vi.fn(async (url: string, init: any) => {
+      const body = JSON.parse(init.body);
+      sent.push(body);
+      calls.push({ method: url.split('/').pop() ?? '', body });
       return new Response('{"ok":true}');
     }),
   );
 });
 
-const update = (text: string): Request =>
+const methods = (): string[] => calls.map((c) => c.method);
+/** The callback_data of every button on a sent/edited payload, flattened — "" when there is none. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const kbOf = (payload: any): string =>
+  (payload?.reply_markup?.inline_keyboard ?? [])
+    .flat()
+    .map((b: { callback_data: string }) => b.callback_data)
+    .join(' ');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const callTo = (method: string): any => calls.find((c) => c.method === method)?.body;
+
+const post = (payload: unknown): Request =>
   new Request('https://bot.dev', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': 'sekret' },
-    body: JSON.stringify({ update_id: 1, message: { message_id: 1, chat: { id: 42 }, text } }),
+    body: JSON.stringify(payload),
   });
+
+const update = (text: string): Request =>
+  post({ update_id: 1, message: { message_id: 1, chat: { id: 42 }, text } });
+
+/** A button press. `message` is the bot's own message that carried the keyboard. */
+const press = (
+  data: string,
+  message: Record<string, unknown> = { message_id: 7, chat: { id: 42 }, date: 100 },
+): Request => post({ update_id: 2, callback_query: { id: 'cb1', data, message } });
+
+/** The bot's reply to a template, as the callback would see it: a reply to the user's message. */
+const batchMessage = (template: string): Record<string, unknown> => ({
+  message_id: 7,
+  chat: { id: 42 },
+  date: 100,
+  text: '✅ Valid! …',
+  reply_to_message: { message_id: 1, text: template },
+});
 
 describe('telegram bot', () => {
   test('rejects spoofed updates (missing secret) with 403', async () => {
@@ -249,5 +284,164 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
 
     expect(sent[0].text).toContain('{Hi|Hello} there, %name%!');
     expect(sent[0].text).not.toContain('syntax issue');
+  });
+});
+
+// The keyboard contract (docs/spec-bot-keyboard.md). These assert TRANSPORT decisions — which Bot
+// API method fires, and in what order — because that is where the spec's reasoning lives and none
+// of it shows up in the reply text.
+describe('inline keyboard: exactly one live keyboard, and it is never deleted', () => {
+  test('a valid template replies WITH buttons, as a reply to the user message', async () => {
+    await bot.fetch(update('{Hi|Hello} World'), ENV);
+    expect(sent[0].reply_to_message_id).toBe(1); // the state channel (spec §1)
+    expect(kbOf(sent[0])).toMatch(/^v:m:\d+ v:r help$/u);
+  });
+
+  test('an invalid template gets NO keyboard — there is nothing to reroll', async () => {
+    await bot.fetch(update('{a|b'), ENV);
+    expect(sent[0].reply_markup).toBeUndefined();
+  });
+
+  test('"Ещё" sends a new batch AND strips the previous keyboard — in that order', async () => {
+    await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+
+    // send → strip. Stripping first would leave the user with nothing if the send failed.
+    expect(methods()).toEqual(['answerCallbackQuery', 'sendMessage', 'editMessageReplyMarkup']);
+    const strip = callTo('editMessageReplyMarkup');
+    expect(strip.message_id).toBe(7); // the OLD batch
+    expect(strip.reply_markup).toBeUndefined(); // markup removed, text untouched
+  });
+
+  // The whole point of §1.5: deleteMessage is capped at 48h for a bot's own messages, so a sweep
+  // fails silently on exactly the stale keyboard it was meant to remove. Editing has no such limit.
+  test('deleteMessage is never called, on any path', async () => {
+    await bot.fetch(update('{Hi|Hello} World'), ENV);
+    await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+    await bot.fetch(press('v:r', batchMessage('{Hi|Hello} World')), ENV);
+    await bot.fetch(press('help'), ENV);
+    expect(methods()).not.toContain('deleteMessage');
+  });
+
+  test('a second "Ещё" replies to the ORIGINAL user message, not to the batch above it', async () => {
+    await bot.fetch(press('v:m:31', batchMessage('{Hi|Hello} World')), ENV);
+    // reply_to_message does not nest — a chain of replies-to-replies loses the template at depth 2.
+    expect(callTo('sendMessage').reply_to_message_id).toBe(1);
+  });
+
+  test('"Ещё" resumes the seed walk instead of redrawing the same window', async () => {
+    await bot.fetch(update('{a|b|c|d|e|f|g|h}'), ENV);
+    const firstBatch: string = sent[0].text;
+    const resume = Number(/v:m:(\d+)/u.exec(kbOf(sent[0]))?.[1]);
+    expect(resume).toBeGreaterThan(1);
+
+    calls = [];
+    sent = [];
+    await bot.fetch(press(`v:m:${resume}`, batchMessage('{a|b|c|d|e|f|g|h}')), ENV);
+    expect(callTo('sendMessage').text).not.toBe(firstBatch);
+  });
+
+  test('"Заново" edits in place — no new message, nothing left to strip', async () => {
+    await bot.fetch(press('v:r', batchMessage('{Hi|Hello} World')), ENV);
+    expect(methods()).toEqual(['answerCallbackQuery', 'editMessageText']);
+    expect(callTo('editMessageText').message_id).toBe(7);
+  });
+
+  test('"Синтаксис" does NOT strip the batch above it — a lookup is not the end of the session', async () => {
+    await bot.fetch(press('help'), ENV);
+    expect(methods()).toEqual(['answerCallbackQuery', 'sendMessage']);
+    expect(sent[1].text).toContain('Spintax bot');
+  });
+});
+
+describe('inline keyboard: every callback is answered, and stale state degrades to a toast', () => {
+  test('an unknown callback is still answered — an unanswered query spins forever', async () => {
+    await bot.fetch(press('nonsense:verb'), ENV);
+    expect(methods()).toEqual(['answerCallbackQuery']);
+  });
+
+  test.each([
+    ['inaccessible (date === 0)', { message_id: 7, chat: { id: 42 }, date: 0 }],
+    ['no reply_to_message', { message_id: 7, chat: { id: 42 }, date: 100 }],
+  ])('%s degrades to the "send it again" toast, not a crash', async (_name, message) => {
+    const res = await bot.fetch(press('v:m:31', message), ENV);
+    expect(res.status).toBe(200);
+    expect(methods()).toEqual(['answerCallbackQuery']);
+    expect(sent[0].text).toMatch(/send the template again/iu);
+  });
+
+  test('an absent message (inline-mode button) is the third branch, not a crash', async () => {
+    const res = await bot.fetch(
+      post({ update_id: 2, callback_query: { id: 'cb1', data: 'v:m:31' } }),
+      ENV,
+    );
+    expect(res.status).toBe(200);
+    expect(methods()).toEqual(['answerCallbackQuery']);
+  });
+
+  test('a hostile seed is clamped, not walked', async () => {
+    await bot.fetch(press('v:m:999999999999', batchMessage('{Hi|Hello} World')), ENV);
+    expect(callTo('sendMessage').text).toMatch(/Valid/u); // fell back to seed 1, did not hang
+  });
+});
+
+describe('inline keyboard: the draft rerolls in place, because it IS the state channel', () => {
+  const draftMessage = (text: string): Record<string, unknown> => ({
+    message_id: 9,
+    chat: { id: 42 },
+    date: 100,
+    text,
+  });
+
+  test('a valid draft carries the reroll keyboard, and its reply is its own state', async () => {
+    await bot.fetch(update('/draft a friendly welcome'), ENV);
+    // seed AND template length — the length is what makes extraction unforgeable.
+    expect(kbOf(sent[0])).toMatch(/^d:m:\d+:\d+ brief$/u);
+    expect(sent[0].text).toContain('📝 Template:\n');
+  });
+
+  test('an unfixable draft gets NO keyboard — a reroll on ｛garbage｝ would look usable', async () => {
+    aiRun
+      .mockResolvedValueOnce({ response: '{Hi|Hello there, %name%!' })
+      .mockResolvedValueOnce({ response: '{still|broken' });
+    await bot.fetch(update('/draft a friendly welcome'), ENV);
+    expect(sent[0].text).toContain('syntax issue');
+    expect(sent[0].reply_markup).toBeUndefined();
+  });
+
+  test('the reroll edits in place and never calls the model again', async () => {
+    await bot.fetch(update('/draft a friendly welcome'), ENV);
+    const draft: string = sent[0].text;
+    const reroll = kbOf(sent[0]).split(' ')[0] ?? '';
+    calls = [];
+    sent = [];
+    aiRun.mockClear();
+
+    await bot.fetch(press(reroll, draftMessage(draft)), ENV);
+    expect(methods()).toEqual(['answerCallbackQuery', 'editMessageText']);
+    expect(callTo('editMessageText').message_id).toBe(9); // the SAME message — the template lives here
+    expect(aiRun).not.toHaveBeenCalled();
+  });
+
+  // This is the bug the length channel exists for. Searching for the samples marker truncated at
+  // the template's OWN copy of it and recovered `{Hi|Hello}` — valid spintax, so re-validation
+  // waved it through and the bot rendered a fragment as if it were the whole template.
+  test('a template containing the samples marker still rerolls in full', async () => {
+    const nasty = '{Hi|Hello}\n\n✨ Sample variations:\n{a|b}';
+    const body = `📝 Template:\n${nasty}\n\n✨ Sample variations:\n1. x`;
+    await bot.fetch(press(`d:m:1:${nasty.length}`, draftMessage(body)), ENV);
+    expect(callTo('editMessageText').text).toContain(nasty);
+  });
+
+  test('a length that does not line up degrades to the toast, never to a fragment', async () => {
+    const body = '📝 Template:\n{Hi|Hello} World\n\n✨ Sample variations:\n1. x';
+    await bot.fetch(press('d:m:1:10', draftMessage(body)), ENV); // 10 lands mid-template
+    expect(methods()).toEqual(['answerCallbackQuery']);
+    expect(sent[0].text).toMatch(/send the template again/iu);
+  });
+
+  test('"Новый бриф" toasts the usage line without changing anything', async () => {
+    await bot.fetch(press('brief'), ENV);
+    expect(methods()).toEqual(['answerCallbackQuery']);
+    expect(sent[0].text).toContain('/draft <describe the copy>');
   });
 });
