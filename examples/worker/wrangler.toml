@@ -3,4 +3,6 @@
 # handler is unit-tested with vitest; wrangler is only for live/deploy).
 name = "spintax-worker"
 main = "src/index.ts"
+# Pinned so a deploy cannot land on the wrong Cloudflare account (see DEPLOYING.md).
+account_id = "2a8133f810cef6eff8f7bba2cfd2a09c"
 compatibility_date = "2024-11-27"

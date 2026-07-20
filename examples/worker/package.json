@@ -7,7 +7,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "wrangler dev"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "predeploy": "node ../../scripts/check-cf-account.mjs ."
   },
   "dependencies": {
     "@spintax/core": "*"

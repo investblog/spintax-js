@@ -87,7 +87,9 @@ dialect of it.
 ## Design & specs
 
 Releases publish from CI with provenance via npm Trusted Publishing — see
-[`RELEASING.md`](./RELEASING.md).
+[`RELEASING.md`](./RELEASING.md). Deploying the two reference Workers (the HTTP API and the
+Telegram bot) — accounts, secrets, the webhook, and what to verify live — is
+[`DEPLOYING.md`](./DEPLOYING.md).
 
 The governing spec is [`docs/spec-npm-engine.md`](./docs/spec-npm-engine.md) in this repo —
 it holds the locked decisions, the parity contract, and the milestone plan. It mirrors the

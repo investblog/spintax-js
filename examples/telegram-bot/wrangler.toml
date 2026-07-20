@@ -3,6 +3,8 @@
 # For local dev, put it in .dev.vars (gitignored).
 name = "spintax-bot"
 main = "src/index.ts"
+# Pinned so a deploy cannot land on the wrong Cloudflare account (see DEPLOYING.md).
+account_id = "2a8133f810cef6eff8f7bba2cfd2a09c"
 compatibility_date = "2024-11-27"
 
 # Workers AI — powers the /draft command (LLM writes a spintax template from a brief).

@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "predeploy": "node ../../scripts/check-cf-account.mjs ."
   },
   "dependencies": {
     "@spintax/authoring-prompt": "*",
