@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import { analyze, neutralize, parse, render, type RenderOptions } from '../src/index';
+// The public `Ast` is opaque by design (a host cannot read `source` off a handle), so the
+// one assertion about what the tree retains goes through the internal parser.
+import { parseTemplate } from '../src/internal/parser';
 
 /**
  * The parse-once-reuse contract (§4): a handle must behave exactly like its source.
@@ -71,7 +74,7 @@ describe('the sentinel edge, pinned to its value (#51)', () => {
   });
 
   test('the AST keeps the ORIGINAL source, so diagnostics point at what was typed', () => {
-    expect(parse(src).source).toBe(src);
+    expect(parseTemplate(src).source).toBe(src);
   });
 });
 
