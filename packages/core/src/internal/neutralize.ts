@@ -11,10 +11,12 @@
  * HTML/JS sink — neutralize does not touch `< > &`, so it is not XSS mitigation
  * (an HTML-entity variant is a host concern, §6).
  *
- * RESERVED RANGE: U+E000–U+E005 are engine sentinels. `render()` strips them from
- * author markup (template source + #include results) via {@link stripSentinels}
- * and rewrites them in output, so a RAW (non-neutralized) context value carrying
- * these code points will be altered — hosts should neutralize/strip such data.
+ * RESERVED RANGE: U+E000–U+E005 are engine sentinels. `parseTemplate` strips them
+ * from author markup (template source + #include results) via {@link stripSentinels}
+ * — every door from author source into a tree, so `parse()`/`analyze()`/`render()`
+ * agree — and the restore rewrites them in output, so a RAW (non-neutralized) context
+ * value carrying these code points will be altered — hosts should neutralize/strip
+ * such data.
  */
 const STRUCTURAL = ['{', '}', '[', ']', '%', '#'] as const;
 const SENTINEL_BASE = 0xe000;

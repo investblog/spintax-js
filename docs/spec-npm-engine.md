@@ -324,6 +324,18 @@ not give a neutralized `{ } [ ] % #` a second chance to execute. Concretely:
 literal `A {x|y}` — sentinel gone, braces inert — not a raw sentinel and not a resolved
 `{x|y}`.
 
+**The reserved range cuts both ways, and author markup is sanitised at ONE door.** For the
+restore above to be safe, only `neutralize()` may introduce a sentinel — so a sentinel an
+*author* typed has to be stripped before it reaches a tree, or the mandatory restore rewrites
+it into a structural glyph they never wrote. That strip lives in `parseTemplate`, the single
+door from author source (template + `#include` result) into an AST, so `parse()`,
+`analyze(str)` and `render(str)` cannot disagree. It originally sat at the render entry
+points instead, which left `parse()` and `analyze(str)` unsanitised and broke the
+parse-once-reuse contract on that edge (`render(parse(src))` ≠ `render(src)`, issue #51).
+`parseSequence` is deliberately NOT sanitised: it re-parses a variable's *value*, where
+sentinels a host neutralized are legitimate and must reach the restore. `ParsedAst.source`
+keeps the original, unsanitised text — diagnostics point at what the author wrote.
+
 ---
 
 ## 7. Testing — shared golden corpus

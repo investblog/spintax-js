@@ -15,6 +15,7 @@
  * plugin's post-enum `resolve_includes`).
  */
 import { AST_VERSION, type Node, type ParsedAst, type PermConfig, type PermOption } from './ast';
+import { stripSentinels } from './neutralize';
 
 const VARIABLE_RE = /^%(\w+)%/;
 // `\r?` before the multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
@@ -27,9 +28,25 @@ export const DIRECTIVE_RE = /^[ \t]*#(set|def)[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \
 const CONDITIONAL_NAME_RE = /^[A-Za-z_]\w*/;
 const PLURAL_PREFIX = 'plural ';
 
-/** Parse a full template into an AST (comments stripped + directives extracted first). */
+/**
+ * Parse a full template into an AST (sanitised + comments stripped + directives extracted first).
+ *
+ * **This is the one door from author source into a tree, and it sanitises.** Stray engine
+ * sentinels (U+E000–U+E005) come out first, so a reserved-range character an author typed
+ * cannot survive to be rewritten into a brace by the mandatory {@link safetyRestore} — the
+ * invariant `neutralize` documents ("only `neutralize()` may introduce a sentinel"). It lives
+ * here rather than at each caller because there were three callers and two of them (`parse()`
+ * and `analyze(str)`) forgot it, so `render(parse(src))` diverged from `render(src)` on that
+ * edge and broke the parse-once-reuse contract (#51).
+ *
+ * {@link parseSequence} is NOT sanitised, and must not be: it re-parses a variable's *value*,
+ * where sentinels a host neutralized are legitimate and have to reach the safety-restore.
+ *
+ * `source` keeps the ORIGINAL, unsanitised text — the validator reads it to place diagnostics,
+ * which must point at the bytes the author actually wrote.
+ */
 export function parseTemplate(src: string): ParsedAst {
-  const { body, setDefs, defDefs } = extractDirectives(stripComments(src));
+  const { body, setDefs, defDefs } = extractDirectives(stripComments(stripSentinels(src)));
   return { astVersion: AST_VERSION, source: src, setDefs, defDefs, nodes: parseSequence(body) };
 }
 

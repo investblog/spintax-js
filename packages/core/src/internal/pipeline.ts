@@ -9,7 +9,7 @@
  */
 import { renderAst, type PluralIssue, type RenderCtx } from './render';
 import { postProcess } from './postprocess';
-import { safetyRestore, stripSentinels } from './neutralize';
+import { safetyRestore } from './neutralize';
 import { parseTemplate } from './parser';
 import { isParsedAst, type Ast, type ParsedAst } from './ast';
 import { AstVersionError } from './errors';
@@ -37,8 +37,9 @@ export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions 
     includeStack: [],
     onPluralError: opts.onPluralError,
   };
-  // Strip stray engine sentinels from author markup so only neutralize() introduces them.
-  const ast = resolveAst(typeof input === 'string' ? stripSentinels(input) : input);
+  // parseTemplate sanitises author markup itself now (see its docblock), so the sentinel strip
+  // that used to live here — and only here, missing parse() and analyze() — is gone.
+  const ast = resolveAst(input);
   let out = renderAst(ast, ctx);
   // Cosmetic post-process defaults ON (§0.1); false skips it. It runs on the still-
   // shielded form (neutralize sentinels are inert here).
