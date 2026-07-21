@@ -3,6 +3,34 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.1 — 2026-07-21
+
+Author markup is sanitised in one place, so a handle renders exactly like its source.
+
+### Fixed
+
+- **`render(parse(src))` no longer diverges from `render(src)`** when the template contains an
+  author-typed engine sentinel (the reserved range U+E000–U+E005). The strip that keeps stray
+  sentinels out of a tree lived at the render entry points, so `parse()` and `analyze(str)` — two
+  of the three doors into the parser — skipped it, and the mandatory safety-restore then rewrote
+  the author's character into a structural glyph they never wrote:
+
+  ```js
+  const src = `a${String.fromCharCode(0xe000)}b`;
+  render(src, { postProcess: false }); // "ab"
+  render(parse(src), { postProcess: false }); // "a{b"  ← before this release
+  ```
+
+  The strip now lives in `parseTemplate`, the single door from author source into an AST, so all
+  three entry points agree. `parseSequence` is deliberately **not** sanitised — it re-parses a
+  variable's *value*, where sentinels a host `neutralize()`d are legitimate and must survive to the
+  restore — and `ParsedAst.source` still keeps the original bytes so diagnostics point at what was
+  typed. ([#51](https://github.com/investblog/spintax-js/issues/51))
+
+  Templates that contain no reserved-range characters are unaffected: the strip is a no-op on them.
+  The Python port fixed the same defect the same way; the PHP engines never had it (no `parse()`
+  handle, no PUA sentinels).
+
 ## 0.3.0 — 2026-07-19
 
 `#set` goes back to being a macro and a new `#def` carries roll-once. Breaking: it changes what
