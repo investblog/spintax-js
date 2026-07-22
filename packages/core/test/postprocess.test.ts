@@ -94,6 +94,23 @@ describe('postProcess — placeholder restore (spintax-js#52)', () => {
     );
   });
 
+  // The guard is NOT exact, and the comment above restore() used to claim it was (spintax-js#54).
+  // A placeholder's delimiters are not owned by the token that placed them, so two adjacent
+  // placeholders can sandwich author text that spells a key and forge a third occurrence of a
+  // real one — with no \x00 in the input, and so on the fast path. The loop substitutes the
+  // forgery, destroys both real tokens and returns raw \x00 from \x00-free input; the single pass
+  // tokenises left to right and never sees it. That divergence is the reason this is a corpus
+  // fixture too: the engines did not agree on it.
+  test('adjacent placeholders around an author-written key name (spintax-js#54)', () => {
+    const src = 'https://a.io e.g. URL_0mailto:x@y.io';
+    expect(src).not.toContain(NUL);
+    expect(postProcess(src)).toBe(src);
+    expect(postProcess(src)).not.toContain(NUL);
+    // The same shape reached through the abbreviation shield rather than the URL one.
+    expect(postProcess('hello worldт.д.URL_0http://x.io/p?q=1')).toBe(
+      'Hello worldт.д.URL_0http://x.io/p?q=1',
+    );
+  });
 });
 
 // URIs shield in ONE pass. Two passes let the second run into a placeholder the first had

@@ -442,6 +442,17 @@
     }
   },
   {
+    "id": "postprocess/adjacent-placeholders-around-a-key-name",
+    "note": "Restore must substitute the tokens the shield placed, not every occurrence of their text. Here the shield leaves <NUL>URL_0<NUL> <NUL>ABBR_2<NUL>URL_0<NUL>URI_1<NUL>: ABBR_2's closing delimiter, the author's literal 'URL_0' and URI_1's opening delimiter spell a third occurrence of URL_0's key, because delimiters are not owned by the token that placed them. A restore that replaces each key across the whole text substitutes the forgery and destroys two real tokens, returning raw U+0000 from input that carries none. No U+0000 is needed in the input to reach this — only prose that names a placeholder, which any document about this engine does (spintax-js#54).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "https://a.io e.g. URL_0mailto:x@y.io",
+    "postProcess": true,
+    "expect": {
+      "output": "https://a.io e.g. URL_0mailto:x@y.io"
+    }
+  },
+  {
     "id": "postprocess/url-carrying-mailto-is-one-token",
     "note": "NEGATIVE case, guarding the mirror direction: a URL whose path carries a mailto:. Fixing the case above by shielding mailto: BEFORE urls passes that one and breaks this one — the URL is split and its leading half loses the trailing dot to the punctuation pass ('https://x.io/a. mailto:…'). Both directions hold only if the two schemes shield in one pass.",
     "kind": "deterministic",

@@ -126,20 +126,26 @@ const RESTORE_RE = new RegExp(`\\x00(?:${SHIELD_PREFIXES.join('|')})_\\d+\\x00`,
  * the text and this stage comes to dominate the render: 39 s on a 950 KB render, against
  * 0.07 s with `postProcess: false` (spintax-js#52).
  *
- * Replacing it with a single left-to-right pass is NOT unconditionally the same function.
- * `split/join` rewrites *every* occurrence of a key, including one the caller's own text
- * happened to spell; a later key can rewrite text an earlier restore produced; and an
- * unpaired `\x00` carried in from the input can pair with a real placeholder's delimiter
- * into a key that was never minted. All three need a literal `\x00` in the input: over a
- * 234 256-input differential sweep the unguarded single pass diverged on 6 779, every one
- * of them carrying a `\x00`, and on none of the 50 625 that did not.
+ * A single left-to-right pass is NOT the same function, because the loop is a repeated
+ * SUBSTRING substitution and the pass is a token substitution. `split/join` rewrites every
+ * occurrence of a key, not only the one the shield placed. Three shapes make them differ:
+ * the caller's own text spells a key the shield goes on to mint; an unpaired `\x00` from
+ * the input pairs with a real placeholder's delimiter; and — needing no `\x00` from the
+ * caller at all — two adjacent placeholders sandwich caller text that spells a key, so one
+ * token's CLOSING delimiter, that text, and the next token's OPENING delimiter form a
+ * third occurrence of a key that really was minted. Delimiters are not owned by the token
+ * that placed them.
  *
- * So the fast path is guarded on the input rather than chosen for all input. With no
- * `\x00` in the input, every `\x00` in the working text is one the shield placed: the
- * keys are well formed, uniquely numbered and disjoint, and passes 6–11 touch only
- * whitespace, punctuation and lowercase letters, so none of them can break a key open.
- * The single pass is then provably the loop. Real text does not carry `\x00`, so the fast
- * path is what actually runs; the loop survives for the corner that needs it.
+ * The guard therefore removes the `\x00`-borne disagreements; it does not make the two
+ * functions equal, and an earlier version of this comment claimed a proof that does not
+ * hold (spintax-js#54). Measured over a 456 976-input differential sweep whose fragments
+ * include bare key names: 13 266 inputs distinguish the two restores, 12 of them carrying
+ * no `\x00`. On every one of those 12 it is the LOOP that is wrong — it emits a raw U+0000
+ * from `\x00`-free input, wrecking two real tokens to serve a forged one — and the single
+ * pass returns the text intact. So the fast path is not merely faster on the shape that
+ * survives the guard; it is the answer we want there, and the guard's whole remaining
+ * effect is the 13 254 `\x00`-carrying inputs where the loop's reading is the defensible
+ * one. Real text carries no `\x00`, so the fast path is what actually runs.
  *
  * Neither path rescans a value it inserted, which is what makes them agree even if a stored
  * value ever came to contain another key. On `\x00`-free input none can: URI_BODY excludes

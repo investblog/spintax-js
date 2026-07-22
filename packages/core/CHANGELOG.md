@@ -47,16 +47,21 @@ All notable changes to `@spintax/core` are documented here. This project adheres
   | 189 KB | 0.006 s              | 3.06 s     | 0.057 s |
   | 756 KB | 0.081 s              | **43.9 s** | 0.25 s  |
 
-  A single left-to-right pass replaces the loop, but only behind a guard on the input, because the
-  two are not the same function on text that carries a literal `\x00`: the loop replaces *every*
-  occurrence of a key — including one the caller's own text spelled — and an unpaired `\x00` from
-  the input can pair with a real placeholder's delimiter into a key that was never minted. With no
-  `\x00` in the input, every `\x00` in the working text is one the shield placed, and the single
-  pass is provably the loop; when there is one, the original loop still runs. **Output is unchanged
-  on all input** — verified by differential run over 234 256 probes (183 631 of them carrying a
-  literal `\x00`) against the previous implementation, and the `\x00` contract is now pinned by
-  tests that nothing covered before. `npm run bench:postprocess` records the scaling.
-  ([#52](https://github.com/investblog/spintax-js/issues/52))
+  A single left-to-right pass replaces the loop, behind a guard on the input. The two are not the
+  same function: the loop is a repeated *substring* substitution, so it rewrites every occurrence
+  of a key rather than the one the shield placed. Most of the disagreement needs a literal `\x00`
+  from the caller, and the guard sends that input to the original loop.
+
+  **One shape survives the guard**, and on it the behaviour changed deliberately: two adjacent
+  placeholders can sandwich caller text that spells a key, so one token's closing delimiter, that
+  text, and the next token's opening delimiter form a third occurrence of a real key. Rendering
+  `https://a.io e.g. URL_0mailto:x@y.io` — no `\x00` anywhere in it — the loop substituted the
+  forgery, destroyed two real tokens and returned raw `\x00` bytes; the single pass returns the
+  text intact. Measured over 456 976 probes, 12 `\x00`-free inputs distinguish the two restores and
+  the loop emits a raw `\x00` on all 12. A corpus fixture now pins the surviving answer, since the
+  engines disagreed on it. `npm run bench:postprocess` records the scaling.
+  ([#52](https://github.com/investblog/spintax-js/issues/52),
+  [#54](https://github.com/investblog/spintax-js/issues/54))
 
 ## 0.3.1 — 2026-07-21
 
