@@ -3,7 +3,11 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.3.2 — 2026-07-23
+
+Post-process robustness and scaling: `postProcess()` no longer emits its own U+0000 sentinel, and
+the placeholder restore is linear instead of quadratic. Output is unchanged on ordinary text; the
+two behaviour changes are on shapes that previously produced invalid output (a raw U+0000).
 
 ### Fixed
 
