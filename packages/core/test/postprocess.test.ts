@@ -2,6 +2,8 @@ import { describe, test, expect } from 'vitest';
 import { postProcess } from '../src/internal/postprocess';
 import { render } from '../src/index';
 
+const NUL = '\x00';
+
 describe('postProcess — capitalization', () => {
   test('first letter / after period / after ellipsis / after linebreak', () => {
     expect(postProcess('hello world')).toBe('Hello world');
@@ -63,8 +65,6 @@ describe('postProcess — shielding', () => {
 // pass is ~100× faster but only agrees with the loop when no \x00 came in from the caller.
 // Nothing pinned the \x00 behaviour before, which is why dropping the guard would land unnoticed.
 describe('postProcess — placeholder restore (spintax-js#52)', () => {
-  const NUL = '\x00';
-
   test('shield-heavy text round-trips through the fast path', () => {
     expect(
       postProcess('visit https://example.com/a?b=1 or mail me@example.co.uk before 3.14, e.g. now'),
@@ -94,12 +94,56 @@ describe('postProcess — placeholder restore (spintax-js#52)', () => {
     );
   });
 
-  test('a nested placeholder stays literal on both paths', () => {
-    // \x00 is not excluded from the URI body class, so a `mailto:` glued to an already-shielded
-    // URL stores a value that itself contains URL_0's key. The loop is past URL_0 by the time
-    // that value lands in the text, and String.replace does not rescan a callback's output —
-    // so both paths leave it literal. Pinned as the shared behaviour, not as a desirable one.
-    expect(postProcess('mailto:http://x.io/p')).toBe(`mailto:${NUL}URL_0${NUL}`);
+});
+
+// URIs shield in ONE pass. Two passes let the second run into a placeholder the first had
+// minted, and the swallowed key then never restored — postProcess emitted a raw U+0000 on input
+// that carried none: illegal in XML, U+FFFD to an HTML parser, rejected by Postgres `text`, and
+// a live key again once an edit detaches it from the prefix that was shielding it.
+describe('postProcess — overlapping URIs shield as one token (spintax-js#53)', () => {
+  test('a URL inside a mailto:/tel: URI', () => {
+    expect(postProcess('mailto:sales@example.com?body=see%20https://shop.example.com/cart')).toBe(
+      'mailto:sales@example.com?body=see%20https://shop.example.com/cart',
+    );
+    expect(postProcess('write to mailto:a@b.com?subject=Re:%20https://x.io/p please')).toBe(
+      'Write to mailto:a@b.com?subject=Re:%20https://x.io/p please',
+    );
+    expect(postProcess('contact mailto:https://shop.example.com/cart now')).toBe(
+      'Contact mailto:https://shop.example.com/cart now',
+    );
+    // A tel: and a URL joined by a comma — the comma is inside the URI body class, so the whole
+    // run is one token and the "space after ," rule must not reach into it.
+    expect(postProcess('call tel:+1-555-0100,https://x.io/p now')).toBe(
+      'Call tel:+1-555-0100,https://x.io/p now',
+    );
+  });
+
+  test('the mirror case — a mailto:/tel: inside a URL', () => {
+    // What an ordering fix would have broken instead: shielding mailto: first splits this URL,
+    // and the leading half loses its trailing dot to the punctuation pass. One pass has no
+    // second pass to do that with.
+    expect(postProcess('https://x.io/?to=mailto:a@b.com')).toBe('https://x.io/?to=mailto:a@b.com');
+    expect(postProcess('see https://x.io/a.mailto:contact@example.com now')).toBe(
+      'See https://x.io/a.mailto:contact@example.com now',
+    );
+    expect(postProcess('https://x.io/p?q=tel:+1-555-0100 now')).toBe('https://x.io/p?q=tel:+1-555-0100 now');
+  });
+
+  test('no U+0000 reaches the caller from input that has none', () => {
+    for (const src of [
+      'mailto:sales@example.com?body=see%20https://shop.example.com/cart',
+      'contact mailto:https://shop.example.com/cart now',
+      'call tel:+1-555-0100,https://x.io/p now',
+      'https://x.io/?to=mailto:a@b.com',
+    ]) {
+      expect(postProcess(src)).not.toContain(NUL);
+    }
+  });
+
+  test('a plain mailto:/tel: is untouched — the #41 shield still holds', () => {
+    expect(postProcess('mailto:plain@example.com')).toBe('mailto:plain@example.com');
+    expect(postProcess('write mailto:contact@example.com now')).toBe('Write mailto:contact@example.com now');
+    expect(postProcess('reach us at tel:+1-800-555-0000 today')).toBe('Reach us at tel:+1-800-555-0000 today');
   });
 });
 

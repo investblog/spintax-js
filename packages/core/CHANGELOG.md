@@ -5,6 +5,35 @@ All notable changes to `@spintax/core` are documented here. This project adheres
 
 ## Unreleased
 
+### Fixed
+
+- **`postProcess()` no longer emits a raw U+0000** into the returned text — on input carrying
+  none. A URI body runs to the first delimiter, so the URL rule and the `mailto:`/`tel:` rule
+  overlap whenever one URI carries the other's scheme, and shielding them in two passes let the
+  second run into a placeholder the first had minted:
+
+  ```js
+  render('mailto:sales@example.com?body=see%20https://shop.example.com/cart');
+  // 'mailto:sales@example.com?body=see%20\x00URL_0\x00'  ← before this release
+  ```
+
+  The swallowed key never restored, so the engine returned its own placeholder delimiter: illegal
+  in an XML document, replaced with U+FFFD by an HTML parser, rejected by PostgreSQL in
+  `text`/`varchar` — and a live key again as soon as an edit detaches it from the `mailto:` prefix
+  that was shielding it, at which point the next render substitutes an unrelated URL into the
+  contact link. It also silently disabled the linear restore below, whose guard is
+  `input.includes('\x00')`.
+
+  The two rules are now **one alternation**, so the leftmost match takes the whole token whichever
+  scheme it is. Reordering the passes was the other candidate and is not equivalent: it moves the
+  damage onto a URL whose path carries a `mailto:`, where the leading half then loses its trailing
+  dot to the punctuation pass. Both directions are fixtures now, the second one negative. U+0000 is
+  also excluded from the URI body class, for a caller-supplied one.
+
+  Mirrored into the WordPress plugin engine, and gated by three golden-corpus fixtures — the
+  cross-engine contract, so `spintax-php`, `spintax-py` and `spintax-win` inherit the gate.
+  ([#53](https://github.com/investblog/spintax-js/issues/53))
+
 ### Performance
 
 - **Post-process no longer goes quadratic on shield-heavy text.** The restore step replaced each

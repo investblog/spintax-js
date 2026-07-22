@@ -28,12 +28,34 @@ const S = `[${WS}]`;
 
 const DOMAIN_PART =
   '(?:(?:(?:xn--)?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*)\\.)+(?:xn--[a-z0-9\\-]{2,59}|[\\p{L}][\\p{L}\\p{N}-]{1,62})';
-const URL_RE = new RegExp(`(?:https?|ftp):\\/\\/[^${WS}<>"')\\]]+`, 'giu');
-// `mailto:`/`tel:` URIs have no `//` authority, so URL_RE misses them. Without
-// this shield the EMAIL/DOMAIN passes swallow the address, the bare `mailto:` /
-// `tel:` prefix is left behind, and the "space after :" rule splits it into a
-// malformed `mailto: contact@…` href (spintax-js#41).
-const MAILTEL_RE = new RegExp(`(?:mailto|tel):[^${WS}<>"')\\]]+`, 'giu');
+/**
+ * URIs — `https?`/`ftp` (with a `//` authority) and `mailto:`/`tel:` (without one) — shielded
+ * in ONE pass, deliberately.
+ *
+ * They used to be two passes, URLs then `mailto:`/`tel:`. A URI body runs to the first
+ * delimiter, so the two match sets overlap whenever one URI contains the other's scheme, and
+ * with two passes the second one runs into a placeholder the first already minted:
+ * `mailto:sales@x.com?body=see%20https://shop.x.com/cart` shielded the URL first, then stored
+ * a `mailto:` value with URL_0's key inside it. Restore was past that key by the time the value
+ * landed, so the engine emitted a raw U+0000 — illegal in XML, U+FFFD to an HTML parser,
+ * rejected by Postgres `text`, and a live key again as soon as an edit detaches it from the
+ * prefix that was shielding it (spintax-js#53).
+ *
+ * Neither pass order fixes that, because whichever runs second is the one that gets split:
+ * ordering `mailto:` first instead only moves the damage onto a URL whose path carries a
+ * `mailto:`, where the leading half then loses its trailing dot to the punctuation pass
+ * (`https://x.io/a.mailto:…` → `https://x.io/a. mailto:…`). A single alternation has no second
+ * pass to damage: the leftmost match wins and takes the whole token, whichever scheme it is.
+ *
+ * `\x00` stays out of the body class regardless. Nothing is shielded yet when this pass runs,
+ * so on ordinary input it never bites; it is there for a caller-supplied U+0000, which would
+ * otherwise let a URI match run through the delimiters of a placeholder minted after it.
+ */
+const URI_BODY = `[^\\x00${WS}<>"')\\]]`;
+const URI_RE = new RegExp(`(?:(?:https?|ftp):\\/\\/|(?:mailto|tel):)${URI_BODY}+`, 'giu');
+// Which placeholder prefix a match gets. Kept distinct (URL vs URI) even though one pass mints
+// both: the prefixes are what the other engines' fixtures and #52's restore regex speak.
+const MAILTEL_PREFIX_RE = /^(?:mailto|tel):/iu;
 const EMAIL_RE = new RegExp(`[a-z0-9._%+\\-]+@${DOMAIN_PART}\\b`, 'giu');
 const DOMAIN_RE = new RegExp(`\\b${DOMAIN_PART}\\b`, 'giu');
 const DECIMAL_RE = /\b\d+\.\d+\b/gu;
@@ -119,11 +141,11 @@ const RESTORE_RE = new RegExp(`\\x00(?:${SHIELD_PREFIXES.join('|')})_\\d+\\x00`,
  * The single pass is then provably the loop. Real text does not carry `\x00`, so the fast
  * path is what actually runs; the loop survives for the corner that needs it.
  *
- * One shared subtlety, deliberately preserved: a stored value may itself contain an
- * earlier key (`mailto:` swallows an already-shielded URL, since `\x00` is not excluded
- * from the URI body class). The loop is already past that key by the time the value lands
- * in the text, so it stays literal — and `String.replace` does not rescan what a callback
- * returned, so the single pass leaves it literal too.
+ * Neither path rescans a value it inserted, which is what makes them agree even if a stored
+ * value ever came to contain another key. On `\x00`-free input none can: URI_BODY excludes
+ * `\x00` and every other shield class is letters/digits/dots, so no match can span a
+ * placeholder (spintax-js#53). The property is worth stating because it is the one an
+ * ordering change could quietly take away.
  */
 function restore(text: string, input: string, placeholders: Map<string, string>): string {
   if (!input.includes('\x00')) {
@@ -158,10 +180,12 @@ export function postProcess(input: string): string {
 
   let text = input;
 
-  // 1-5: shield. mailto:/tel: shielded before EMAIL/DOMAIN so the whole URI
-  // survives instead of the address being carved out from under its prefix.
-  text = text.replace(URL_RE, (m) => storeWithTrailingPunct(m, 'URL'));
-  text = text.replace(MAILTEL_RE, (m) => storeWithTrailingPunct(m, 'URI'));
+  // 1-5: shield. URIs go first and in one pass, so an overlapping pair is never split
+  // (spintax-js#53), and always before EMAIL/DOMAIN, so the whole `mailto:` survives
+  // instead of the address being carved out from under its prefix (spintax-js#41).
+  text = text.replace(URI_RE, (m) =>
+    storeWithTrailingPunct(m, MAILTEL_PREFIX_RE.test(m) ? 'URI' : 'URL'),
+  );
   text = text.replace(EMAIL_RE, (m) => store(m, 'EMAIL'));
   text = text.replace(DOMAIN_RE, (m) => store(m, 'DOM'));
   text = text.replace(DECIMAL_RE, (m) => store(m, 'NUM'));

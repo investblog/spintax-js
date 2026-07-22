@@ -418,5 +418,38 @@
     "expect": {
       "output": "Wait... What? Hola. ¡Genial!"
     }
+  },
+  {
+    "id": "postprocess/uri-carrying-url-is-one-token",
+    "note": "A URI body runs to the first delimiter, so a mailto: carrying a URL overlaps the URL rule. Shielding them in two passes let the second run into the placeholder the first had minted; the swallowed key never restored and the engine emitted a raw U+0000 on input that carried none (spintax-js#53). The whole token must shield as one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "mailto:sales@example.com?body=see%20https://shop.example.com/cart",
+    "postProcess": true,
+    "expect": {
+      "output": "mailto:sales@example.com?body=see%20https://shop.example.com/cart"
+    }
+  },
+  {
+    "id": "postprocess/tel-uri-glued-to-url",
+    "note": "The comma is inside the URI body class, so 'tel:…,https://…' is a single token and the 'space after ,' rule must not reach into it. Same defect as the mailto: case, reached through the other scheme.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "call tel:+1-555-0100,https://x.io/p now",
+    "postProcess": true,
+    "expect": {
+      "output": "Call tel:+1-555-0100,https://x.io/p now"
+    }
+  },
+  {
+    "id": "postprocess/url-carrying-mailto-is-one-token",
+    "note": "NEGATIVE case, guarding the mirror direction: a URL whose path carries a mailto:. Fixing the case above by shielding mailto: BEFORE urls passes that one and breaks this one — the URL is split and its leading half loses the trailing dot to the punctuation pass ('https://x.io/a. mailto:…'). Both directions hold only if the two schemes shield in one pass.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see https://x.io/a.mailto:contact@example.com now",
+    "postProcess": true,
+    "expect": {
+      "output": "See https://x.io/a.mailto:contact@example.com now"
+    }
   }
 ]
