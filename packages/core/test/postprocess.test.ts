@@ -57,6 +57,52 @@ describe('postProcess — shielding', () => {
   });
 });
 
+// The restore step (12) has two implementations behind one guard: a single left-to-right pass
+// when the input carries no \x00, and the original per-key split/join loop when it does. The
+// loop is O(text × placeholders) and cost 39 s on a 950 KB render (spintax-js#52); the single
+// pass is ~100× faster but only agrees with the loop when no \x00 came in from the caller.
+// Nothing pinned the \x00 behaviour before, which is why dropping the guard would land unnoticed.
+describe('postProcess — placeholder restore (spintax-js#52)', () => {
+  const NUL = '\x00';
+
+  test('shield-heavy text round-trips through the fast path', () => {
+    expect(
+      postProcess('visit https://example.com/a?b=1 or mail me@example.co.uk before 3.14, e.g. now'),
+    ).toBe('Visit https://example.com/a?b=1 or mail me@example.co.uk before 3.14, e.g. now');
+    // Many placeholders in one text: each restores to its own value, none to a neighbour's.
+    const many = Array.from({ length: 40 }, (_, i) => `see https://example.com/p${i} and 1.${i} now.`).join(' ');
+    expect(postProcess(many)).toBe(
+      Array.from({ length: 40 }, (_, i) => `See https://example.com/p${i} and 1.${i} now.`).join(' '),
+    );
+  });
+
+  test('a literal \\x00 in the input keeps the per-key loop, quirks and all', () => {
+    // split(key).join(value) replaces EVERY occurrence of a key — including one the caller's
+    // own text happened to spell. A single pass would leave the caller's copy alone.
+    expect(postProcess(`see ${NUL}URL_0${NUL} and https://example.com now`)).toBe(
+      'See https://example.com and https://example.com now',
+    );
+    // An unpaired \x00 from the input pairs with a real placeholder's opening delimiter into a
+    // key that was never minted. The loop never sees it; a single pass would consume it and so
+    // lose the genuine key that follows.
+    expect(postProcess(`hello world${NUL}DOM_2http://x.io/p?q=1`)).toBe(
+      `Hello world${NUL}DOM_2http://x.io/p?q=1`,
+    );
+    // The report's own case, all three effects at once.
+    expect(postProcess(`</p>${NUL}NUM_9${NUL}http://x.io/p?q=1${NUL}URI_1${NUL}. ${NUL}tel:+1-555-0100`)).toBe(
+      `</p>${NUL}NUM_9${NUL}http://x.io/p?q=1tel:+1-555-0100. ${NUL}tel:+1-555-0100`,
+    );
+  });
+
+  test('a nested placeholder stays literal on both paths', () => {
+    // \x00 is not excluded from the URI body class, so a `mailto:` glued to an already-shielded
+    // URL stores a value that itself contains URL_0's key. The loop is past URL_0 by the time
+    // that value lands in the text, and String.replace does not rescan a callback's output —
+    // so both paths leave it literal. Pinned as the shared behaviour, not as a desirable one.
+    expect(postProcess('mailto:http://x.io/p')).toBe(`mailto:${NUL}URL_0${NUL}`);
+  });
+});
+
 // Spanish is the only European language whose punctuation OPENS a sentence. The spacing and
 // capitalization passes were written as if a sentence always begins with a letter, so every
 // Spanish question silently lost its capital: the capitalizer upper-cased '¿', which has no

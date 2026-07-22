@@ -20,6 +20,7 @@
     "lint": "eslint .",
     "check:pkg": "npm run check:pkg -w @spintax/core",
     "smoke:pack": "bash scripts/smoke-tarball.sh",
+    "bench:postprocess": "node scripts/bench-postprocess.mjs",
     "conformance:validate": "npm run validate -w @spintax/conformance"
   },
   "devDependencies": {

@@ -3,6 +3,32 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Performance
+
+- **Post-process no longer goes quadratic on shield-heavy text.** The restore step replaced each
+  shielded placeholder across the whole text one key at a time — O(text × placeholders) — and
+  since URLs, `mailto:`/`tel:` URIs, emails, domains, decimals and abbreviations are all shielded,
+  the placeholder count grows with the input. The stage came to dominate the render:
+
+  | input  | `postProcess: false` | before     | after   |
+  |--------|----------------------|------------|---------|
+  | 47 KB  | 0.007 s              | 0.18 s     | 0.014 s |
+  | 189 KB | 0.006 s              | 3.06 s     | 0.057 s |
+  | 756 KB | 0.081 s              | **43.9 s** | 0.25 s  |
+
+  A single left-to-right pass replaces the loop, but only behind a guard on the input, because the
+  two are not the same function on text that carries a literal `\x00`: the loop replaces *every*
+  occurrence of a key — including one the caller's own text spelled — and an unpaired `\x00` from
+  the input can pair with a real placeholder's delimiter into a key that was never minted. With no
+  `\x00` in the input, every `\x00` in the working text is one the shield placed, and the single
+  pass is provably the loop; when there is one, the original loop still runs. **Output is unchanged
+  on all input** — verified by differential run over 234 256 probes (183 631 of them carrying a
+  literal `\x00`) against the previous implementation, and the `\x00` contract is now pinned by
+  tests that nothing covered before. `npm run bench:postprocess` records the scaling.
+  ([#52](https://github.com/investblog/spintax-js/issues/52))
+
 ## 0.3.1 — 2026-07-21
 
 Author markup is sanitised in one place, so a handle renders exactly like its source.

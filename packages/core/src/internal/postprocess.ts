@@ -88,17 +88,65 @@ const CAP_AFTER_BREAK_RE = new RegExp(`(\\n${LEAD})(\\p{Ll})`, 'gu');
 
 const up = (ch: string): string => ch.toUpperCase();
 
+// The shield's placeholder prefixes, in one place: RESTORE_RE below is built from this
+// list, so a new shield pass cannot mint a key shape the single-pass restore fails to
+// recognise. Keep the two in step by construction, not by memory.
+const SHIELD_PREFIXES = ['URL', 'URI', 'EMAIL', 'DOM', 'NUM', 'ABBR'] as const;
+type ShieldPrefix = (typeof SHIELD_PREFIXES)[number];
+const RESTORE_RE = new RegExp(`\\x00(?:${SHIELD_PREFIXES.join('|')})_\\d+\\x00`, 'gu');
+
+/**
+ * Restore the shielded values (step 12).
+ *
+ * The reference form is one `split(key).join(value)` per key — a full scan of the text
+ * per placeholder, so O(text × placeholders). Every URL, URI, email, domain, decimal and
+ * abbreviation is shielded, so on shield-heavy output the placeholder count grows with
+ * the text and this stage comes to dominate the render: 39 s on a 950 KB render, against
+ * 0.07 s with `postProcess: false` (spintax-js#52).
+ *
+ * Replacing it with a single left-to-right pass is NOT unconditionally the same function.
+ * `split/join` rewrites *every* occurrence of a key, including one the caller's own text
+ * happened to spell; a later key can rewrite text an earlier restore produced; and an
+ * unpaired `\x00` carried in from the input can pair with a real placeholder's delimiter
+ * into a key that was never minted. All three need a literal `\x00` in the input: over a
+ * 234 256-input differential sweep the unguarded single pass diverged on 6 779, every one
+ * of them carrying a `\x00`, and on none of the 50 625 that did not.
+ *
+ * So the fast path is guarded on the input rather than chosen for all input. With no
+ * `\x00` in the input, every `\x00` in the working text is one the shield placed: the
+ * keys are well formed, uniquely numbered and disjoint, and passes 6–11 touch only
+ * whitespace, punctuation and lowercase letters, so none of them can break a key open.
+ * The single pass is then provably the loop. Real text does not carry `\x00`, so the fast
+ * path is what actually runs; the loop survives for the corner that needs it.
+ *
+ * One shared subtlety, deliberately preserved: a stored value may itself contain an
+ * earlier key (`mailto:` swallows an already-shielded URL, since `\x00` is not excluded
+ * from the URI body class). The loop is already past that key by the time the value lands
+ * in the text, so it stays literal — and `String.replace` does not rescan what a callback
+ * returned, so the single pass leaves it literal too.
+ */
+function restore(text: string, input: string, placeholders: Map<string, string>): string {
+  if (!input.includes('\x00')) {
+    return text.replace(RESTORE_RE, (key) => placeholders.get(key) ?? key);
+  }
+  let out = text;
+  for (const [key, value] of placeholders) {
+    out = out.split(key).join(value);
+  }
+  return out;
+}
+
 export function postProcess(input: string): string {
   const placeholders = new Map<string, string>();
   let counter = 0;
 
-  const store = (value: string, prefix: string): string => {
+  const store = (value: string, prefix: ShieldPrefix): string => {
     const key = `\x00${prefix}_${counter}\x00`;
     placeholders.set(key, value);
     counter += 1;
     return key;
   };
-  const storeWithTrailingPunct = (value: string, prefix: string): string => {
+  const storeWithTrailingPunct = (value: string, prefix: ShieldPrefix): string => {
     const m = TRAILING_PUNCT_RE.exec(value);
     if (m) {
       const suffix = m[1] ?? '';
@@ -141,8 +189,5 @@ export function postProcess(input: string): string {
   text = text.replace(CAP_AFTER_BREAK_RE, (_m, br: string, ch: string) => br + up(ch));
 
   // 12: restore placeholders, then trim.
-  for (const [key, value] of placeholders) {
-    text = text.split(key).join(value);
-  }
-  return text.trim();
+  return restore(text, input, placeholders).trim();
 }
