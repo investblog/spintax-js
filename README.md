@@ -47,6 +47,8 @@ a client-side playground on `spintax.net` are all consumers of this package.
 | --- | --- | --- |
 | **JavaScript / TypeScript** | `npm i @spintax/core` | this package |
 | **PHP** | [`composer require spintax/core`](https://packagist.org/packages/spintax/core) | [investblog/spintax-php](https://github.com/investblog/spintax-php) — MIT, zero deps |
+| **Python** | [`pip install spintax-core`](https://pypi.org/project/spintax-core/) | [investblog/spintax-py](https://github.com/investblog/spintax-py) — MIT, zero deps |
+| **Object Pascal** | [investblog/spintax-win](https://github.com/investblog/spintax-win) | Free Pascal 3.2.2+ — MIT, zero deps |
 | **WordPress** | [wordpress.org/plugins/spintax](https://wordpress.org/plugins/spintax/) | templates, ACF / post-meta bindings, WooCommerce context, WP-CLI |
 | **OpenCart 3.x** | [Spintax SEO](https://github.com/investblog/spintax-opencart) | product / category copy and SEO URLs |
 
