@@ -119,6 +119,44 @@
     }
   },
   {
+    "id": "extract/set-name-is-ascii-only",
+    "note": "A #set whose name is not ASCII defines nothing and its reference refers to nothing — the whole line is text (#56). The verdict and render halves are pinned by validate/set-nonascii-name-is-malformed and render/set-name-nonascii-is-not-a-directive.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#set %имя% = X\n%имя%",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/directive-after-bare-cr",
+    "note": "The anchor half on the directive grammar: a bare \\r ends a line, so the #set after it is a directive and defines its name (#56).",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "x\r#set %a% = 1",
+    "expect": {
+      "refs": [],
+      "sets": [
+        "a"
+      ],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/conditional-ref-name-is-ascii",
+    "note": "The conditional-ref collector's name tail is ASCII, mirroring the renderer's name rule: {?xя?y} is not a conditional to any renderer in the family, so it must not contribute a phantom ref either. PHP's validator collected 'xя' via \\w under UCP while its own Conditionals::NAME_RE (spelled-out ASCII) refused it (#56).",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "{?xя?y}",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": []
+    }
+  },
+  {
     "id": "extract/include-line-starts-after-cr",
     "note": "A bare escaped U+000D CR ends a line for the anchors (ECMAScript's set: LF, CR, U+2028, U+2029), so the directive after it starts a line and matches. PCRE's /m breaks on LF alone — the anchor half in the direction the wide-whitespace engines used to REJECT.",
     "kind": "deterministic",

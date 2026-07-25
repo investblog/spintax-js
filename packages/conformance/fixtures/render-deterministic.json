@@ -54,5 +54,51 @@
     "locale": "ru",
     "postProcess": false,
     "expect": { "output": "товара" }
+  },
+  {
+    "id": "render/set-name-nonascii-is-not-a-directive",
+    "note": "Identifier names are ASCII by contract (#56): this #set line is NOT a directive — it renders verbatim and %имя% never becomes a variable. PHP's \\w under /u (UCP) read the name, consumed the line and expanded the reference; the fixture is what keeps the three engines on one grammar. validate/set-nonascii-name-is-malformed pins the verdict half.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %имя% = X\n(%имя%)",
+    "postProcess": false,
+    "expect": { "output": "#set %имя% = X\n(%имя%)" }
+  },
+  {
+    "id": "render/ref-nonascii-stays-literal",
+    "note": "The same ASCII rule on the reference side: %Имя% is not a variable, so a context entry under that key cannot reach the output.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "(%Имя%)",
+    "context": { "Имя": "Q" },
+    "postProcess": false,
+    "expect": { "output": "(%Имя%)" }
+  },
+  {
+    "id": "render/set-crlf-value-carries-no-cr",
+    "note": "A CRLF-terminated #set keeps its \\r OUT of the value: the grammar's value class excludes the four ECMAScript terminators and the tail eats an optional \\r. PCRE's dot-plus-$ used to force the \\r INTO the value, so every value on a Windows-authored template ended in a carriage return (#56).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a% = X\r\n(%a%)",
+    "postProcess": false,
+    "expect": { "output": "\n(X)" }
+  },
+  {
+    "id": "render/directive-after-bare-cr",
+    "note": "A bare \\r ends a line for the anchors, so the #set after it IS a directive: extracted, stripped, expanded. PCRE's /m breaks on \\n alone and left the whole line as text (#56).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x\r#set %a% = 1\n(%a%)",
+    "postProcess": false,
+    "expect": { "output": "x\r\n(1)" }
+  },
+  {
+    "id": "render/set-value-stops-at-line-separator",
+    "note": "The value's right edge is a line end: the terminator after X here is an escaped U+2028, so the value is exactly 'X' and the rest of the physical line stays in the body. An engine whose value class admits the separator captures 'X<LS>y' instead (#56).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a% = X\u2028y\n(%a%)",
+    "postProcess": false,
+    "expect": { "output": "\u2028y\n(X)" }
   }
 ]

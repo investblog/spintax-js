@@ -552,6 +552,48 @@
     }
   },
   {
+    "id": "validate/set-nonascii-name-is-malformed",
+    "note": "Identifier names are ASCII by contract (#56). The line starts with '#set ' but the name is not an identifier, so the malformed-directive check fires — the same template was a VALID, expanding directive to PHP's UCP-widened \\w, i.e. opposite verdicts for one line. render/set-name-nonascii-is-not-a-directive pins the output half.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %имя% = X",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "set.malformed",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/def-include-boundary-is-ascii",
+    "note": "The include-in-a-#def-value check ends its word at any non-ASCII-word character: #includeя still names the directive, so the error fires. PHP's \\b under /u treated я as a word character and the check never matched (#56).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %x% = #includeя\n%x%",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "def.include-in-value",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/def-includes-plural-word-is-clean",
+    "note": "The negative control for the boundary: 'includes' continues the word with an ASCII letter, so it is NOT the directive and no error fires — the lookahead must not over-reach into plain prose.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %x% = #includes\n%x%",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
     "id": "validate/include-nbsp-gap-is-not-an-include",
     "note": "The verdict half of the class question: the gap is an escaped U+00A0 NBSP, so the line is plain text, NOT an include with an unknown target — include.unknown-target must not fire. Before the class was spelled out on the PHP side, its UCP-widened whitespace shorthand read this as an include and the engines returned opposite verdicts for the same template (spintax-js#55).",
     "kind": "deterministic",
