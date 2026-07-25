@@ -15,7 +15,9 @@ import { DIRECTIVE_RE, extractDirectives, stripComments } from './parser';
 import { findPluralBlocks, normalizeBaseLang, pluralArity } from './plurals';
 
 const KNOWN_CONFIG_KEYS = new Set(['minsize', 'maxsize', 'sep', 'lastsep']);
-const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu; // ASCII \s (PHP parity)
+// The gap class is spelled out because no dialect's `\s` is this set — PHP's under /u is
+// UCP-Unicode (measured, #55), not the ASCII this comment once claimed. Corpus-pinned.
+const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu;
 
 /**
  * Pure raw-text validation — exactly like the plugin's `Validator` (which does

@@ -550,5 +550,18 @@
     "expect": {
       "verdict": "valid"
     }
+  },
+  {
+    "id": "validate/include-nbsp-gap-is-not-an-include",
+    "note": "The verdict half of the class question: the gap is an escaped U+00A0 NBSP, so the line is plain text, NOT an include with an unknown target — include.unknown-target must not fire. Before the class was spelled out on the PHP side, its UCP-widened whitespace shorthand read this as an include and the engines returned opposite verdicts for the same template (spintax-js#55).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#include\u00a0\"nope\"",
+    "knownIncludes": [
+      "ok"
+    ],
+    "expect": {
+      "verdict": "valid"
+    }
   }
 ]

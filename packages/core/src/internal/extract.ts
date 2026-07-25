@@ -31,7 +31,9 @@ export interface ExtractResult {
 const SET_DEF_RE = /^[ \t]*#set[ \t]+%(\w+)%[ \t]*=/gmu;
 const DEF_DEF_RE = /^[ \t]*#def[ \t]+%(\w+)%[ \t]*=/gmu;
 const DEFINITION_LHS_RE = /^[ \t]*#(?:set|def)[ \t]+%\w+%[ \t]*=/gmu;
-const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu; // ASCII \s (PHP parity)
+// The gap class is spelled out because no dialect's `\s` is this set — PHP's under /u is
+// UCP-Unicode (measured, #55), not the ASCII this comment once claimed. Corpus-pinned.
+const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu;
 const VARIABLE_RE = /%(\w+)%/gu;
 const CONDITIONAL_REF_RE = /\{\?!?([A-Za-z_]\w*)\?/gu;
 

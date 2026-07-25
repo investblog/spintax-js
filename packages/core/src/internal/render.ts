@@ -27,8 +27,10 @@ import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 
 const MAX_VARIABLE_DEPTH = 50;
-// ASCII whitespace only — PHP `\s` under /u is ASCII; JS `\s` matches Unicode
-// whitespace (NBSP etc.), which would diverge on exotic input. Parity.
+// ASCII whitespace only, spelled out — no dialect's `\s` is this set. This comment used to
+// claim PHP's `\s` under /u is ASCII; measured (#55), it is the opposite: /u turns on
+// PCRE2_UCP, so PHP matched NBSP and all of \p{Z} here until it spelled the class out too.
+// The contract is this regex, pinned by the corpus (extract/include-*).
 const INCLUDE_LINE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gmu;
 
 /** Document-level render context (threads through nested #include resolution). */

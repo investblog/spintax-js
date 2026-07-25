@@ -41,5 +41,95 @@
         "b"
       ]
     }
+  },
+  {
+    "id": "extract/include-gap-is-ascii-whitespace-only",
+    "note": "The gap after #include is the spelled-out ASCII class: space, tab, LF, CR, FF, VT. An NBSP (the escaped U+00A0 here) is not part of it, so this line is plain text, not an include. No engine may reach for its dialect's whitespace shorthand: PHP's u modifier turns on PCRE2_UCP, whose shorthand matches NBSP and all of Zs — the engines measurably disagreed on this exact template (spintax-js#55) until the class was spelled out on the PHP side too. This fixture is what keeps it one set.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include\u00a0\"hero\"",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/include-gap-accepts-vertical-tab",
+    "note": "Every member of the ASCII class counts, including the two nobody types — this gap is an escaped U+000B vertical tab.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include\u000b\"hero\"",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": [
+        "hero"
+      ]
+    }
+  },
+  {
+    "id": "extract/include-gap-rejects-line-separator",
+    "note": "The gap here is an escaped U+2028 LINE SEPARATOR: it ends a line for the anchors but is NOT gap whitespace, so this line is plain text. The trap this guards: a port that normalizes terminators to LF before scanning folds the separator into the LF the gap class itself contains, and one engine returns two answers for the same line — the Python engine's extract/validate did exactly that while its renderer got it right (fixed alongside spintax-js#55).",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include\u2028\"hero\"",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/include-gap-rejects-nel",
+    "note": "The gap here is an escaped U+0085 NEL, which is in PCRE2's UCP whitespace but is neither in the contract's class nor an ECMAScript line terminator — the sharpest single character for pinning that the gap is a spelled-out set, not any dialect's shorthand.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include\u0085\"hero\"",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/include-tail-stops-at-a-line-separator",
+    "note": "The character after the closing quote is an escaped U+2028 LINE SEPARATOR. It is not in the whitespace class, but it IS a line end for the multiline anchors, so the trailing run stops in front of it and the include matches. PCRE's /m anchors break on LF only — the other half of the same question, spelled out as lookarounds on the PHP side.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include \"hero\"\u2028x",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": [
+        "hero"
+      ]
+    }
+  },
+  {
+    "id": "extract/include-tail-rejects-unicode-space",
+    "note": "The class question on the other side of the target: the character after the closing quote is an escaped U+00A0 NBSP — not trailing whitespace, so no line end is reachable and the line is plain text.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include \"hero\"\u00a0",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/include-line-starts-after-cr",
+    "note": "A bare escaped U+000D CR ends a line for the anchors (ECMAScript's set: LF, CR, U+2028, U+2029), so the directive after it starts a line and matches. PCRE's /m breaks on LF alone — the anchor half in the direction the wide-whitespace engines used to REJECT.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "x\u000d#include \"hero\"",
+    "expect": {
+      "refs": [],
+      "sets": [],
+      "includes": [
+        "hero"
+      ]
+    }
   }
 ]
