@@ -100,5 +100,51 @@
     "template": "#set %a% = X\u2028y\n(%a%)",
     "postProcess": false,
     "expect": { "output": "\u2028y\n(X)" }
+  },
+  {
+    "id": "render/circular-set-stays-literal",
+    "note": "Render never throws on template content (#57). A self-referencing #set \u2014 invalid to every validator \u2014 still renders: expansion stops at the budget and the unresolved reference stays literal. The standalone PHP used to throw RuntimeException here and the plugin degraded to '' via a catch.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %b% = %b%\n(%b%)",
+    "postProcess": false,
+    "expect": { "output": "\n(%b%)" }
+  },
+  {
+    "id": "render/mutual-circular-set-parity",
+    "note": "The parity witness for the expansion budget: %a% and %b% swap on every hop, so which name survives states whether the budget is odd or even. The reference counts recursion depth 0..50 inclusive \u2014 51 hops, odd \u2014 leaving %b%; a 50-pass loop would leave %a% (#57).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a% = %b%\n#set %b% = %a%\n(%a%)",
+    "postProcess": false,
+    "expect": { "output": "\n\n(%b%)" }
+  },
+  {
+    "id": "render/circular-set-other-vars-unaffected",
+    "note": "The stop is per-text, not per-render: a knot in one variable must not take the others down with it \u2014 %c% still resolves (#57).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %b% = %b%\n#set %c% = ok\n(%b%)(%c%)",
+    "postProcess": false,
+    "expect": { "output": "\n\n(%b%)(ok)" }
+  },
+  {
+    "id": "render/context-var-self-reference",
+    "note": "The same lenient stop when the knot arrives through the HOST context rather than a #set: a T1 value of '%b%' under the key b leaves the literal reference (#57).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "(%b%)",
+    "context": { "b": "%b%" },
+    "postProcess": false,
+    "expect": { "output": "(%b%)" }
+  },
+  {
+    "id": "render/circular-set-accumulates-then-stops",
+    "note": "The exact-budget pin, from the other side: each hop wraps one more literal x…y pair around the still-unresolved reference, so the output counts the hops — 51 of each, then the raw value's own pair from the final, unexpanded return. Together with the parity witness this fixes the budget at exactly 51, not merely 'some odd number' (#57).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %b% = x%b%y\n(%b%)",
+    "postProcess": false,
+    "expect": { "output": "\n(xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx%b%yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy)" }
   }
 ]
