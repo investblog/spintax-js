@@ -594,6 +594,22 @@
     }
   },
   {
+    "id": "validate/perm-config-html-with-attributes-is-flagged",
+    "note": "The family-wide validator/renderer split, pinned AS IT SHIPS in all three engines (spintax-js#58): the renderer's HTML guard accepts attributes and renders this literally (see perm/config-html-with-attributes-renders), but the validator decides config-ness by 'looks like key=value' — class=\"x\" matches, 'class' is not a known key, verdict invalid. Changing either half is a verdict or output change for the whole family and gets its own issue first.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<li class=\"x\">one</li>|<li>two</li>]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "permutation.unknown-key",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
     "id": "validate/include-nbsp-gap-is-not-an-include",
     "note": "The verdict half of the class question: the gap is an escaped U+00A0 NBSP, so the line is plain text, NOT an include with an unknown target — include.unknown-target must not fire. Before the class was spelled out on the PHP side, its UCP-widened whitespace shorthand read this as an include and the engines returned opposite verdicts for the same template (spintax-js#55).",
     "kind": "deterministic",

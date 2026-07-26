@@ -722,5 +722,53 @@
     "expect": {
       "output": "\na, b / b, a"
     }
+  },
+  {
+    "id": "perm/config-html-full-elements-is-literal",
+    "note": "The permutation-config HTML guard, found missing in a port (spintax-js#58): a leading <li> is HTML, not config, when the tag shape matches AND its closing </li> appears later in the body — the elements keep their markup. Without the guard the whole first tag becomes the single-separator config and the output is mangled markup. rng 'first' reverses a two-element shuffle, hence two before one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<li>one</li>|<li>two</li>]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "<li>two</li> <li>one</li>"
+    }
+  },
+  {
+    "id": "perm/config-tag-without-closing-is-sep",
+    "note": "The guard's other half: no </li> anywhere after, so <li> is NOT HTML — it is a config, and a config with none of the four known keys is the single-separator form (the whole string becomes sep AND lastsep). A purely-alphabetic separator is space-padded on join, which is why the output reads 'two li one', not 'twolione'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<li>one|two]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "two li one"
+    }
+  },
+  {
+    "id": "perm/config-self-closing-is-html",
+    "note": "A self-closing tag needs no later closer to be HTML — the trailing slash alone passes the guard.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<br/>x|y]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "y <br/>x"
+    }
+  },
+  {
+    "id": "perm/config-html-with-attributes-renders",
+    "note": "The renderer's guard accepts attributes: <li class=\"x\">…</li> is HTML and renders literally. The VALIDATOR disagrees on this same template — see validate/perm-config-html-with-attributes-is-flagged; the two fixtures together pin the family-wide split exactly as all three engines ship it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<li class=\"x\">one</li>|<li>two</li>]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "<li>two</li> <li class=\"x\">one</li>"
+    }
   }
 ]
