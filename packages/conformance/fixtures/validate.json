@@ -594,6 +594,22 @@
     }
   },
   {
+    "id": "validate/perm-config-embedded-key-is-flagged",
+    "note": "The validator half of perm/config-embedded-key-with-value-is-still-a-sep: 'xminsize=2' looks like key=value to the validator (its test is `\\w+\\s*=`, boundary-free by design), 'xminsize' is not a known key, verdict invalid — while the renderer treats the whole string as a separator. The same family-wide split as the attributes pair, pinned as it ships in all three engines.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<xminsize=2>a|b]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "permutation.unknown-key",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
     "id": "validate/perm-config-html-with-attributes-is-flagged",
     "note": "The family-wide validator/renderer split, pinned AS IT SHIPS in all three engines (spintax-js#58): the renderer's HTML guard accepts attributes and renders this literally (see perm/config-html-with-attributes-renders), but the validator decides config-ness by 'looks like key=value' — class=\"x\" matches, 'class' is not a known key, verdict invalid. Changing either half is a verdict or output change for the whole family and gets its own issue first.",
     "kind": "deterministic",

@@ -770,5 +770,29 @@
     "expect": {
       "output": "<li>two</li> <li class=\"x\">one</li>"
     }
+  },
+  {
+    "id": "perm/config-key-substring-is-still-a-sep",
+    "note": "The key-form test is `\\b(?:minsize|maxsize|sep|lastsep)\\s*=` — a word boundary AND an equals sign, not a substring scan. 'separator' contains 'sep' but is no key, so the whole string is the single-separator form and pads like any alphabetic sep. A substring detector flips this into key-form-with-all-defaults and the word silently vanishes from the output (spintax-js#58, the Pascal port's Pos() test).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<separator>a|b]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b separator a"
+    }
+  },
+  {
+    "id": "perm/config-embedded-key-with-value-is-still-a-sep",
+    "note": "The word-boundary half of the same rule: 'xminsize=2' carries minsize= as a SUBSTRING but not at a boundary, so it is no key-form — the whole string is the separator (not purely alphabetic, so it glues bare). A substring detector does worse than default here: it finds 'minsize' inside the word, parses '=2', and renders a genuine minsize-2 permutation. The validator flags this template — validate/perm-config-embedded-key-is-flagged pins that half.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<xminsize=2>a|b]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "bxminsize=2a"
+    }
   }
 ]
