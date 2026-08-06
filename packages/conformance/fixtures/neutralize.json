@@ -153,5 +153,46 @@
     "expect": {
       "output": "{x|y}"
     }
+  },
+  {
+    "id": "neutralize/cosmetics-apply-to-neutralized-span",
+    "note": "ANSWER to the family question spintax-win filed 2026-08-06: neutralize() shields STRUCTURE from the parser, not typography from the cosmetic stage — post-process runs before the sentinel restore, and unshielded characters inside a neutralized value (here the commas) are ordinary text to it. Measured identical in @spintax/core and spintax-win before pinning. Exempting the span would be a family-wide breaking change; until then this is the contract.",
+    "kind": "deterministic",
+    "engines": [
+      "ts",
+      "py"
+    ],
+    "op": "render",
+    "template": "keep %f% here",
+    "context": {
+      "f": "#file[l.txt,1,S]"
+    },
+    "neutralizeContext": [
+      "f"
+    ],
+    "expect": {
+      "output": "Keep #file[l.txt,1, S] here"
+    }
+  },
+  {
+    "id": "neutralize/postprocess-off-roundtrips-byte-exact",
+    "note": "The escape hatch the case above points at: postProcess:false skips cosmetics only, the mandatory safety restore still runs, and a cosmetic-sensitive neutralized value round-trips byte-exact. This is what a converted GSA template wants.",
+    "kind": "deterministic",
+    "engines": [
+      "ts",
+      "py"
+    ],
+    "op": "render",
+    "template": "keep %f% here",
+    "context": {
+      "f": "#file[l.txt,1,S]"
+    },
+    "neutralizeContext": [
+      "f"
+    ],
+    "postProcess": false,
+    "expect": {
+      "output": "keep #file[l.txt,1,S] here"
+    }
   }
 ]
