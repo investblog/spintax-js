@@ -637,5 +637,107 @@
     "expect": {
       "verdict": "valid"
     }
+  },
+  {
+    "id": "validate/directive-check-vt-line-is-text",
+    "note": "The malformed-directive check trims ONLY spaces and tabs (/^[ \\t]+/, validator.ts) — a PHP-style ltrim charlist also eats VT/NUL and turns this into set.malformed. After the VT the line is not a directive, so %x% on it is an ordinary undefined REFERENCE (spintax-win's PhpLtrim divergence, fixed 2026-08-07).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "\u000b#set %x% = A",
+    "expect": {
+      "verdict": "valid",
+      "diagnostics": [
+        {
+          "code": "variable.undefined",
+          "severity": "warning"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/directive-check-nul-line-is-text",
+    "note": "Same trim rule, NUL flavour: U+0000 before #set is not trimmed, the line does not start with the directive keyword, nothing is checked, nothing is malformed.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "\u0000#set broken",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/directive-check-cr-does-not-split",
+    "note": "The check splits the text on LF ALONE. A lone CR is line content, so '#set broken' after it sits mid-line, is never examined as a directive line, and a valid template stays valid. Splitting on five terminators reports set.malformed here.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "x\r#set broken",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/directive-check-ls-does-not-split",
+    "note": "LF-only split, U+2028 flavour: LINE SEPARATOR does not start a new line for the malformed-directive check either.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "x #set broken",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/directive-check-cr-survivor-satisfies",
+    "note": "The shape test is DIRECTIVE_RE (/gmu) over the LF-line: under /m a well-formed directive after a CR INSIDE the line anchors and satisfies the test, so the malformed head before the CR is not reported. The render consumes the well-formed half and leaves the head as text — see the render twin in render-semantics.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set broken\r#set %x% = A\n%x%",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/definition-last-wins-drops-self-reference",
+    "note": "Definitions dedup by name with the LAST one winning (the reference builds a Map and overwrites). The surviving value of %x% is 'B', so the self-reference in the FIRST definition is gone — only the duplicate name is reported. An engine that resolves to the first occurrence invents a self-reference diagnostic here (spintax-win, fixed 2026-08-07).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = %x%\n#set %x% = B\n%x%",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "definition.duplicate-name",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/definition-last-wins-forms-cycle",
+    "note": "The mirror of the case above: the harmless first definition of %a% loses to the second, whose value closes a cycle with %b% — the cycle IS reported. First-wins resolution sees 'plain' and reports nothing, flipping the verdict.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %a% = plain\n#set %a% = %b%\n#set %b% = %a%\n%a%",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "definition.duplicate-name",
+          "severity": "error"
+        },
+        {
+          "code": "variable.circular-reference",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/permutation-key-without-equals-is-not-a-key",
+    "note": "MINSIZE_RE/MAXSIZE_RE require the equals sign. 'maxsize 2' with no '=' matches no extractor and raises no unknown-key diagnostic either — the config is just sep, and the template is valid. Treating the '=' as optional runs a maxsize the template never asked for.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<sep=\"-\" maxsize 2>a|b|c]",
+    "expect": {
+      "verdict": "valid"
+    }
   }
 ]

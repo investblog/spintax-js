@@ -794,5 +794,86 @@
     "expect": {
       "output": "bxminsize=2a"
     }
+  },
+  {
+    "id": "set/malformed-head-cr-directive-survivor",
+    "note": "Render twin of validate/directive-check-cr-survivor-satisfies: the parser's four-terminator anchors let '#set %x% = A' sit between a CR and a LF, so it is consumed as a real directive; the malformed head keeps its CR and stays text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set broken\r#set %x% = A\n%x%",
+    "postProcess": false,
+    "expect": {
+      "output": "#set broken\r\nA"
+    }
+  },
+  {
+    "id": "set/last-definition-wins",
+    "note": "Two definitions of one name: the LAST wins (Map overwrite), so %x% renders B. First-wins resolution renders the self-referential first value instead. The verdict side (definition.duplicate-name) is pinned in validate.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = %x%\n#set %x% = B\n%x%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\nB"
+    }
+  },
+  {
+    "id": "set/duplicate-cycle-renders-lenient",
+    "note": "Last-wins turns %a% into a mutual cycle with %b%, and render stays lenient (#57): the 51-hop budget starts at %a%, its parity leaves %b% as the unresolved literal. First-wins resolution renders 'plain' and never meets the cycle.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a% = plain\n#set %a% = %b%\n#set %b% = %a%\n%a%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\n%b%"
+    }
+  },
+  {
+    "id": "perm/config-key-without-equals-ignored",
+    "note": "Render twin of validate/permutation-key-without-equals-is-not-a-key: 'maxsize 2' without '=' is not a key, maxsize stays null, and all three elements render. An extractor with an optional '=' renders a 2-element subset here.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\"-\" maxsize 2>a|b|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b-c-a"
+    }
+  },
+  {
+    "id": "perm/config-ascii-ws-around-equals",
+    "note": "The \\s* around a config '=' is the full JS class: a LINE FEED between 'maxsize' and '=1' still parses, so exactly one element renders. Skipping only space and tab reads maxsize as null and renders all three.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\"-\" maxsize\n=1>a|b|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b"
+    }
+  },
+  {
+    "id": "perm/config-unterminated-quote-kills-config",
+    "note": "The closing '>' scan is QUOTE-AWARE (findConfigEnd): an unterminated quote swallows every later '>', no config end is found, and the '<…>' text falls through into the first element of a default-separator permutation. An engine that reads the config anyway invents a separator or a maxsize the reference never saw.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\"- maxsize=1>a|b|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b c <sep=\"- maxsize=1>a"
+    }
+  },
+  {
+    "id": "perm/config-sep-key-matches-inside-word",
+    "note": "SEP_RE has NO word boundary — only a (?<!last) lookbehind — so once key form is chosen (the standalone sep=\"-\" satisfies the \\b gate), the FIRST sep= match wins even inside 'xsep', and the separator is '.'. Asymmetric with the \\b in the key-form gate, and pinned as-is: an engine that requires a boundary in the extractor too picks '-'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<xsep=\".\" sep=\"-\">a|b]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b.a"
+    }
   }
 ]
