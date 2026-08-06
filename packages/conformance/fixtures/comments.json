@@ -1,0 +1,122 @@
+[
+  {
+    "id": "comments/closed-stripped",
+    "note": "A closed /# … #/ comment is removed before parsing; the spaces around it are the author's and both remain.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /# hidden #/ b",
+    "postProcess": false,
+    "expect": { "output": "a  b" }
+  },
+  {
+    "id": "comments/closed-stripped-then-postprocess",
+    "note": "Strip runs before the cosmetic stage: the double space the comment leaves is then collapsed and the first letter capitalized.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /# hidden #/ b",
+    "expect": { "output": "A b" }
+  },
+  {
+    "id": "comments/unterminated-stays-literal",
+    "note": "An unterminated /# is NOT a comment — the reference regex /\\/#[\\s\\S]*?#\\//g needs the closer, so the text stays. A port that drops from /# to end of input removed whole documents (spintax-win, fixed 2026-08-06).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /# b",
+    "postProcess": false,
+    "expect": { "output": "a /# b" }
+  },
+  {
+    "id": "comments/unterminated-url-fragment-survives",
+    "note": "The everyday shape of the unterminated-opener rule: a URL fragment starts with /# and must survive when no #/ follows anywhere.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see http://example.com/#top now",
+    "postProcess": false,
+    "expect": { "output": "see http://example.com/#top now" }
+  },
+  {
+    "id": "comments/lazy-from-first-opener-eats-url",
+    "note": "NEGATIVE guard for the case above: matching is lazy from the FIRST /# to the FIRST #/, so once a real closer exists later, the opener inside the URL starts the comment and the fragment is consumed with it. Sharp, but it is the family rule — widening it (e.g. smarter opener detection) is a contract change.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see http://example.com/#top /# note #/ end",
+    "postProcess": false,
+    "expect": { "output": "see http://example.com end" }
+  },
+  {
+    "id": "comments/two-comments-strip-independently",
+    "note": "Lazy matching ends each comment at the nearest closer, so two comments strip separately instead of one span swallowing the text between them.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x /# a #/ y /# b #/ z",
+    "postProcess": false,
+    "expect": { "output": "x  y  z" }
+  },
+  {
+    "id": "comments/no-nesting-stray-closer-literal",
+    "note": "Comments do not nest: the first closer ends the comment, the inner /# is swallowed as comment text, and the now-unpaired trailing #/ is ordinary text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/# a /# b #/ c #/",
+    "postProcess": false,
+    "expect": { "output": " c #/" }
+  },
+  {
+    "id": "comments/multiline-inner-newlines-dropped",
+    "note": "A comment may span lines; its inner newlines vanish with it, while the author's newlines around it remain.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a\n/# x\ny #/\nb",
+    "postProcess": false,
+    "expect": { "output": "a\n\nb" }
+  },
+  {
+    "id": "comments/commented-out-set-not-applied",
+    "note": "A #set inside a comment is stripped before directive extraction: the definition never exists and the reference stays an undefined %x% rendered literally.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/# #set %x% = A #/\n%x%",
+    "postProcess": false,
+    "expect": { "output": "\n%x%" }
+  },
+  {
+    "id": "validate/comment-unterminated-keeps-text",
+    "note": "Verdict half of the unterminated-opener rule: /# without a closer strips NOTHING, so the brace after it is still there to diagnose. An engine that swallows to end of input calls this valid and loses the diagnostic with the text.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "/#\n{a",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [{ "code": "bracket.unclosed", "severity": "error" }]
+    }
+  },
+  {
+    "id": "validate/comment-closed-hides-markup",
+    "note": "The mirror case: a CLOSED comment removes its content before validation, so broken markup inside it is invisible and the template is valid.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "/# {a #/",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "validate/comment-unterminated-is-plain-text",
+    "note": "An unterminated /# is ordinary text, not a syntax error of its own.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "a /# note",
+    "expect": { "verdict": "valid" }
+  },
+  {
+    "id": "extract/comment-stripped-before-extract",
+    "note": "extract() sees the comment-stripped text: a #set, an #include and a %ref% inside a closed comment contribute nothing; the live ones outside are collected.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "/#\n#set %x% = A\n#include \"frag\"\n%y%\n#/\nlive %z%\n#set %w% = B",
+    "expect": {
+      "refs": ["z"],
+      "sets": ["w"],
+      "defs": [],
+      "includes": []
+    }
+  }
+]

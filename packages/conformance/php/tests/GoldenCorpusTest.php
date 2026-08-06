@@ -109,15 +109,22 @@ final class GoldenCorpusTest extends TestCase
         $expect = $c['expect'];
         $asserted = false;
 
+        // Every real entry point of both PHP engines (Parser::parse, Validator::validate,
+        // Renderer::process_template) strips /# … #/ comments BEFORE extracting directives.
+        // This harness calls the extraction primitives directly, so it must replicate that
+        // order itself — on the raw template a commented-out #set/#include would be reported,
+        // which no public surface of any engine does.
+        $text = $parser->strip_comments($c['template']);
+
         if (array_key_exists('sets', $expect)) {
-            $sets = array_keys($parser->extract_set_directives($c['template'])['variables']);
+            $sets = array_keys($parser->extract_set_directives($text)['variables']);
             $this->assertSameSet($expect['sets'], $sets, "sets for {$c['id']}");
             $asserted = true;
         }
         if (array_key_exists('includes', $expect)) {
             $includes = array_map(
                 static fn(array $d): string => $d['slug'],
-                $parser->find_include_directives($c['template'])
+                $parser->find_include_directives($text)
             );
             $this->assertSameSet($expect['includes'], $includes, "includes for {$c['id']}");
             $asserted = true;
@@ -125,7 +132,7 @@ final class GoldenCorpusTest extends TestCase
         if (array_key_exists('refs', $expect)) {
             // Refs aren't a public engine API; replicate the Validator regexes
             // (%(\w+)% + {?[!]VAR?}) over the #set-stripped body.
-            $body = $parser->extract_set_directives($c['template'])['body'];
+            $body = $parser->extract_set_directives($text)['body'];
             $this->assertSameSet($expect['refs'], $this->extractRefs($body), "refs for {$c['id']}");
             $asserted = true;
         }
