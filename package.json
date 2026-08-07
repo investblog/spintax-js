@@ -10,6 +10,9 @@
     "packages/*",
     "examples/*"
   ],
+  "overrides": {
+    "isolated-vm": "file:./stubs/isolated-vm"
+  },
   "engines": {
     "node": ">=18"
   },

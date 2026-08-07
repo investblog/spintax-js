@@ -1,0 +1,6 @@
+{
+  "name": "isolated-vm",
+  "version": "6.2.0",
+  "description": "Dev-tree stub. isolated-vm is a native transitive dep of n8n-workflow (via @n8n/expression-runtime) that requires Node >= 22 and a C++ toolchain, which breaks `npm ci` on the CI matrix's Node 18/20. Nothing in this repo evaluates n8n expressions, so the real module is never loaded at dev/test time; the published n8n-nodes-spintax tarball has zero runtime deps and is unaffected. See root package.json `overrides`.",
+  "main": "index.js"
+}

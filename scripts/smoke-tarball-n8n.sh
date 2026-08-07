@@ -20,7 +20,10 @@ cp "$TARBALL" "$TMP/pkg.tgz"
 cd "$TMP"
 npm init -y >/dev/null 2>&1
 # n8n-workflow is the peer the host provides; everything else must be inside.
-npm install ./pkg.tgz n8n-workflow >/dev/null 2>&1
+# Pinned to 1.82.0 — the last line with no native transitive deps (2.x and late
+# 1.x pull isolated-vm, which needs Node >= 22 and a compiler; the CI matrix
+# still covers Node 18). The dist only needs NodeOperationError from it.
+npm install ./pkg.tgz n8n-workflow@1.82.0 >/dev/null 2>&1
 
 node -e "
 const assert = require('node:assert');
