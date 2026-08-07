@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-spintax",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for spintax templates — render, validate, generate N variants, and build LLM authoring/repair prompts. Use AI to create the template once; use spintax to generate safely and cheaply forever.",
   "keywords": [
     "n8n-community-node-package",
@@ -17,7 +17,11 @@
     "llm"
   ],
   "license": "MIT",
-  "author": "301st (https://301.st)",
+  "author": {
+    "name": "301st",
+    "email": "contact@spintax.net",
+    "url": "https://301.st"
+  },
   "homepage": "https://spintax.net",
   "repository": {
     "type": "git",
