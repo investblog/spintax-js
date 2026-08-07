@@ -1,0 +1,26 @@
+name: Scan n8n package
+
+# Runs n8n's official community-package scanner against a PUBLISHED release of
+# n8n-nodes-spintax (it verifies npm provenance and lints the attested source,
+# so it cannot run pre-publish or in regular CI — see RELEASING.md).
+# Runs on Linux deliberately: the scanner's tar invocation mishandles Windows
+# paths (treats "C:" as a remote host), so a local Windows run fails on
+# extraction regardless of the package's health.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published version to scan (e.g. 0.1.0)'
+        required: true
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Scan n8n-nodes-spintax@${{ inputs.version }}
+        run: npx -y @n8n/scan-community-package "n8n-nodes-spintax@${{ inputs.version }}"
