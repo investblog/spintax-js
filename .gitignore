@@ -43,3 +43,6 @@ GEMINI.md
 .cursor/
 .cursorrules
 .github/copilot-instructions.md
+
+# Local marketing drafts and scratch — never committed
+/temp/
