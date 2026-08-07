@@ -15,7 +15,12 @@ written yet; the build plan is §7.
 > with all five actions, Render executed (`{Dr|Prof} Ada` T1 markup drew correctly under seed),
 > and Validate's dynamic two-output routing sent a broken template to the Invalid branch with
 > the full structured payload (cleanedTemplate, diagnostics with spans + data, counts, locale).
-> Release awaits the Trusted Publisher entry (RELEASING.md); N2 unchanged.
+> **RELEASED: `n8n-nodes-spintax@0.1.1` is on npm** (0.1.0 bootstrapped via a one-off token —
+> a Trusted Publisher entry cannot precede the first publish; 0.1.1 fixed the scanner's two
+> author-field findings; the Trusted Publisher entry is live and the workflow is back to
+> OIDC-only). n8n's official scanner passes ALL checks on 0.1.1 — run it via the
+> `scan-n8n.yml` workflow (Linux; the scanner's tar breaks on Windows paths). N2 is next:
+> eligibility ask (R1), gallery templates, forum post, hub obvyazka.
 Owner: 301st
 Tracking issue: [#44](https://github.com/investblog/spintax-js/issues/44).
 Channel strategy: [spintax.net ADR 0007](https://github.com/investblog/spintax.net/blob/main/docs/decisions/0007-workflow-channels.md)

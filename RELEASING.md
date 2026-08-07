@@ -77,6 +77,13 @@ git push origin main && git push origin n8n-node-vX.Y.Z
 ```
 
 After each publish, run the exact-version community scan (it needs the PUBLISHED
-release — it verifies npm provenance, so it cannot run pre-publish or in CI):
-`npx @n8n/scan-community-package n8n-nodes-spintax@X.Y.Z`. A green scan gates the
-n8n verification submission (see `docs/spec-n8n-node.md` §4).
+release — it verifies npm provenance, so it cannot run pre-publish or in CI) via the
+**`Scan n8n package` workflow** (Actions → workflow_dispatch, input = version).
+Not locally on Windows: the scanner's tar treats the `C:` drive prefix as a remote
+host and dies on extraction — that cost a false red on 0.1.0. A green scan gates the
+n8n verification submission (see `docs/spec-n8n-node.md` §4). Scanner facts learned
+on 0.1.x: it lints BOTH the tarball and the attested source checkout with n8n's own
+ruleset (stricter than `eslint-plugin-n8n-nodes-base` — e.g. `author` must be an
+object with a non-empty `email`), and the first publish of a NEW package cannot use
+Trusted Publishing (the entry requires an existing package) — bootstrap with a
+granular token in the `NPM_TOKEN` repo secret, then flip to OIDC.
