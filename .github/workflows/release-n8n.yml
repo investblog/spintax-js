@@ -78,13 +78,11 @@ jobs:
       - name: n8n node tarball smoke (require + bundled engine)
         run: npm run smoke:pack:n8n
 
-      # TEMPORARY bootstrap: a Trusted Publisher entry cannot be created for a
-      # package that has never been published, so the FIRST publish authenticates
-      # with the NPM_TOKEN secret (granular token). Provenance still attaches —
-      # it needs GitHub Actions + OIDC attestation, not Trusted Publishing.
-      # ONCE n8n-nodes-spintax exists and its Trusted Publisher entry points at
-      # this workflow: delete this env block AND revoke/delete the token.
-      - name: Publish n8n-nodes-spintax (provenance)
+      # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
+      # publish token automatically, and attaches a provenance attestation.
+      # (The package's Trusted Publisher entry points at this workflow. The
+      # NPM_TOKEN repo secret still exists for a future bootstrap of a NEW
+      # package — a Trusted Publisher entry can't precede the first publish —
+      # but this workflow no longer uses it.)
+      - name: Publish n8n-nodes-spintax (provenance via OIDC)
         run: npm publish -w n8n-nodes-spintax --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
