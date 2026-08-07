@@ -8,11 +8,15 @@ and drive an LLM authoring loop — without shipping a single credential (you wi
 own LLM node).
 
 ```
-Sheets/CRM item → Build Authoring Prompt → LLM node → Validate ──Valid──→ Render / Render Many → Email/TG/CRM
-                                                          │
-                                                       Invalid
-                                                          ↓
-                                              Build Repair Prompt → LLM node ──┘ (cap the loop, e.g. 2 attempts)
+Sheets / CRM item
+  └─► Build Authoring Prompt
+        └─► your LLM node
+              └─► Validate ──Invalid──► Build Repair Prompt
+                    │            ▲              │
+                  Valid          └── LLM node ◄─┘
+                    │              (cap the loop, e.g. 2×)
+                    └─► Render / Render Many
+                          └─► Email · Telegram · CRM
 ```
 
 ## Install
