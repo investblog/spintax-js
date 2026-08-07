@@ -65,13 +65,6 @@ describe('Spintax node — execute()', () => {
   });
 
   it('validate: routes items to Valid/Invalid and carries everything repair needs', async () => {
-    const [valid, invalid] = await run(
-      { operation: 'validate', template: '={{ ignored }}', cleanModelOutput: false },
-      [],
-    );
-    expect(valid).toEqual([]);
-    expect(invalid).toEqual([]);
-
     const [ok, bad] = await run({ operation: 'validate', template: '{a|b' }, [{ n: 1 }]);
     expect(ok).toHaveLength(0);
     expect(bad).toHaveLength(1);
@@ -93,17 +86,64 @@ describe('Spintax node — execute()', () => {
     expect((item['diagnostics'] as IDataObject[])[0]!['line']).toBe(1);
   });
 
-  it('validate: spintaxMeta from the item supplies locale and known variables', async () => {
+  it('validate: spintaxMeta from the item supplies locale/knownVariables and passes through', async () => {
+    const meta = { locale: 'ru', allowedVariables: [{ name: 'name' }] };
     const [valid] = await run(
-      {
-        operation: 'validate',
-        template: '%name%',
-        spintaxMeta: { locale: 'ru', allowedVariables: [{ name: 'name' }] },
-      },
+      { operation: 'validate', template: '%name%', spintaxMeta: meta },
       [{}],
     );
     expect(valid![0]!.json['warningCount']).toBe(0);
     expect(valid![0]!.json['locale']).toBe('ru');
+    // The metadata rides the OUTPUT item too — the LLM node upstream dropped
+    // it, and downstream Render/Repair defaults read `$json.spintaxMeta`.
+    expect(valid![0]!.json['spintaxMeta']).toEqual(meta);
+  });
+
+  it('render: blank locale falls back to the spintaxMeta locale (one locale through the funnel)', async () => {
+    const params = {
+      operation: 'render',
+      template: '{plural %n%: форма|формы|форм}',
+      postProcess: false,
+      fixedVariables: { pair: [{ name: 'n', value: '2' }] },
+      locale: '',
+      spintaxMeta: { locale: 'ru', allowedVariables: [] },
+    };
+    const [main] = await run(params, [{}]);
+    // Under ru (3-form) n=2 hits the "few" bucket; under the old hard 'en'
+    // default the 3-form template was an arity mismatch and rendered with
+    // fullwidth-brace leniency instead.
+    expect(main![0]!.json['rendered']).toBe('формы');
+
+    const [explicitWins] = await run({ ...params, locale: 'en' }, [{}]);
+    expect(explicitWins![0]!.json['rendered']).not.toBe('формы');
+  });
+
+  it('renderMany: the Max Attempts parameter reaches the operation', async () => {
+    const template = '{a|b|c|d|e|f}';
+    const [main] = await run(
+      { operation: 'renderMany', template, count: 3, baseSeed: 'q', maxAttempts: 3 },
+      [{}],
+    );
+    // Budget 3 ⇒ exactly the distinct strings among seeds q:0..q:2, no more.
+    const expected = new Set<string>();
+    for (let i = 0; i < 3; i++) {
+      const [one] = await run(
+        { operation: 'render', template, seed: `q:${i}`, useIncomingItem: false },
+        [{}],
+      );
+      expected.add(one![0]!.json['rendered'] as string);
+    }
+    expect(main!.map((v) => v.json['rendered']).sort()).toEqual([...expected].sort());
+    expect(main![0]!.json['produced']).toBe(expected.size);
+  });
+
+  it('render: when cleaning is requested, audit fields are emitted even for already-clean input', async () => {
+    const [main] = await run(
+      { operation: 'render', template: '{a|a}', cleanModelOutput: true, seed: '1' },
+      [{}],
+    );
+    expect(main![0]!.json['cleanedTemplate']).toBe('{a|a}');
+    expect(main![0]!.json['rawTemplate']).toBe('{a|a}');
   });
 
   it('buildAuthoringPrompt: merges item field names into allowedVariables and stamps spintaxMeta', async () => {
@@ -154,5 +194,24 @@ describe('Spintax node — execute()', () => {
     );
     expect(main![0]!.json['error']).toMatch(/Diagnostics/);
     expect(main![0]!.pairedItem).toEqual({ item: 0 });
+  });
+
+  it('validate + continueOnFail: an operational error lands on the INVALID branch, never Valid', async () => {
+    const [valid, invalid] = await run(
+      {
+        operation: 'validate',
+        template: 'fine',
+        // Malformed metadata: allowedVariables is not an array → throws inside the op.
+        spintaxMeta: { allowedVariables: 'not-an-array' },
+      },
+      [{ source: 'kept' }],
+      { continueOnFail: true },
+    );
+    expect(valid).toHaveLength(0);
+    expect(invalid).toHaveLength(1);
+    expect(invalid![0]!.json['valid']).toBe(false);
+    expect(invalid![0]!.json['error']).toBeTruthy();
+    expect(invalid![0]!.json['source']).toBe('kept');
+    expect(invalid![0]!.pairedItem).toEqual({ item: 0 });
   });
 });

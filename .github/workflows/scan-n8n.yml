@@ -22,5 +22,14 @@ jobs:
         with:
           node-version: 22
 
+      # The input goes through env (never interpolated into shell source) and is
+      # validated as strict semver before use.
       - name: Scan n8n-nodes-spintax@${{ inputs.version }}
-        run: npx -y @n8n/scan-community-package "n8n-nodes-spintax@${{ inputs.version }}"
+        env:
+          SCAN_VERSION: ${{ inputs.version }}
+        run: |
+          if ! printf '%s' "$SCAN_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$SCAN_VERSION' is not a plain X.Y.Z version"
+            exit 1
+          fi
+          npx -y @n8n/scan-community-package "n8n-nodes-spintax@$SCAN_VERSION"

@@ -38,11 +38,20 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Safety: a pushed n8n-node-vX.Y.Z tag must match the version we're about to
-      # publish, so a stale/mismatched tag fails loudly instead of republishing.
-      - name: Verify tag matches n8n-nodes-spintax version
-        if: startsWith(github.ref, 'refs/tags/n8n-node-v')
+      # Safety: publishes happen ONLY from an n8n-node-vX.Y.Z tag ref, and the tag
+      # must match the version we're about to publish, so a stale/mismatched tag —
+      # or a workflow_dispatch pointed at a branch — fails loudly instead of
+      # publishing an untagged commit. (Dispatch from a tag ref is still allowed:
+      # `gh workflow run --ref n8n-node-vX.Y.Z`.)
+      - name: Verify ref is a release tag matching the package version
         run: |
+          case "$GITHUB_REF" in
+            refs/tags/n8n-node-v*) ;;
+            *)
+              echo "::error::Refusing to publish from '$GITHUB_REF' — run this workflow from an n8n-node-vX.Y.Z tag"
+              exit 1
+              ;;
+          esac
           TAG="${GITHUB_REF_NAME#n8n-node-v}"
           PKG="$(node -p "require('./packages/n8n-node/package.json').version")"
           if [ "$TAG" != "$PKG" ]; then
@@ -86,3 +95,29 @@ jobs:
       # but this workflow no longer uses it.)
       - name: Publish n8n-nodes-spintax (provenance via OIDC)
         run: npm publish -w n8n-nodes-spintax --provenance --access public
+
+  # The exact-version scan follows EVERY publish (RELEASING.md): it verifies the
+  # npm provenance and lints the attested source, so it can only run against the
+  # published release. Retries cover registry propagation lag.
+  scan:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Scan the published release
+        run: |
+          VERSION="$(node -p "require('./packages/n8n-node/package.json').version")"
+          for attempt in 1 2 3; do
+            if npx -y @n8n/scan-community-package "n8n-nodes-spintax@$VERSION"; then
+              exit 0
+            fi
+            echo "Scan attempt $attempt failed — retrying in 30s (registry propagation?)"
+            sleep 30
+          done
+          echo "::error::Scanner did not pass for n8n-nodes-spintax@$VERSION"
+          exit 1

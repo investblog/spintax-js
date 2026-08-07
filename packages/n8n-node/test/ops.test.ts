@@ -67,22 +67,34 @@ describe('cleanTemplate', () => {
 });
 
 describe('renderManyOp', () => {
-  it('is deterministic with a base seed (documented `${baseSeed}:${i}` derivation)', () => {
+  it('derives attempt seeds EXACTLY as `${baseSeed}:${i}` (the documented, port-portable contract)', () => {
     const template = '{a|b|c} {d|e|f} {g|h|i}';
-    const first = renderManyOp(template, { count: 5, baseSeed: 'seed' });
-    const second = renderManyOp(template, { count: 5, baseSeed: 'seed' });
-    expect(first.variants).toEqual(second.variants);
-    expect(first.produced).toBe(5);
+    const result = renderManyOp(template, { count: 5, baseSeed: 'seed' });
+
+    // Reference implementation: the same derivation spelled out with the core
+    // engine directly. A repeatability-only assertion would pass for many wrong
+    // derivations; comparing against explicit `seed:${i}` renders does not.
+    const expected: string[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; expected.length < 5 && i < 25; i++) {
+      const rendered = renderOp(template, { seed: `seed:${i}` });
+      if (seen.has(rendered)) continue;
+      seen.add(rendered);
+      expected.push(rendered);
+    }
+    expect(result.variants.map((v) => v.rendered)).toEqual(expected);
+    expect(result.produced).toBe(expected.length);
   });
 
-  it('is honest on low-cardinality templates: returns what exists, no spinning', () => {
+  it('exhausts the exact attempt budget on a low-cardinality template and returns the distinct set', () => {
     const result = renderManyOp('{a|b}', { count: 5, baseSeed: 1 });
     expect(result.requested).toBe(5);
-    expect(result.produced).toBeLessThanOrEqual(2);
-    expect(result.attempts).toBeLessThanOrEqual(25); // min(500, 5 × count)
-    expect(result.variants.map((v) => v.variantIndex)).toEqual(
-      Array.from({ length: result.produced }, (_, i) => i),
-    );
+    // Only two outcomes exist, so the budget min(500, 5 × 5) = 25 is fully spent…
+    expect(result.attempts).toBe(25);
+    // …and exactly the two distinct strings come back, in first-seen order.
+    expect(result.produced).toBe(2);
+    expect(new Set(result.variants.map((v) => v.rendered)).size).toBe(2);
+    expect(result.variants.map((v) => v.variantIndex)).toEqual([0, 1]);
   });
 
   it('deduplicates by the final rendered string', () => {

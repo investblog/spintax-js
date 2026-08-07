@@ -214,6 +214,16 @@ export class Spintax implements INodeType {
           'Optional. Attempt i renders with seed "baseSeed:i", making the whole batch reproducible. Leave empty for independent random draws.',
         displayOptions: { show: { operation: ['renderMany'] } },
       },
+      {
+        displayName: 'Max Attempts',
+        name: 'maxAttempts',
+        type: 'number',
+        typeOptions: { minValue: 0, maxValue: 500 },
+        default: 0,
+        description:
+          'Attempt budget for collecting distinct variants. 0 = automatic (5 × Count, capped at 500). Raise it when a high-variety template underproduces.',
+        displayOptions: { show: { operation: ['renderMany'] } },
+      },
 
       // ── Shared render/validate options ────────────────────────────────────
       {
@@ -221,11 +231,8 @@ export class Spintax implements INodeType {
         name: 'locale',
         type: 'string',
         default: 'en',
-        description:
-          'BCP-47 language tag; drives plural rules. For Validate it defaults to the locale stamped in spintaxMeta by Build Authoring Prompt.',
-        displayOptions: {
-          show: { operation: ['render', 'renderMany', 'buildAuthoringPrompt'] },
-        },
+        description: 'BCP-47 language tag the template is authored for; drives plural rules',
+        displayOptions: { show: { operation: ['buildAuthoringPrompt'] } },
       },
       {
         displayName: 'Locale',
@@ -233,8 +240,8 @@ export class Spintax implements INodeType {
         type: 'string',
         default: '',
         description:
-          'BCP-47 language tag; drives plural verdicts. Leave empty to use the locale from spintaxMeta (or "en").',
-        displayOptions: { show: { operation: ['validate'] } },
+          'BCP-47 language tag; drives plural rules and verdicts. Leave empty to use the locale from spintaxMeta (or "en") — one locale through the whole funnel.',
+        displayOptions: { show: { operation: ['render', 'renderMany', 'validate'] } },
       },
       {
         displayName: 'Post-Process',
@@ -253,8 +260,10 @@ export class Spintax implements INodeType {
         type: 'json',
         default: '={{ $json.spintaxMeta }}',
         description:
-          'Metadata stamped by Build Authoring Prompt (locale, allowed variables, prompt version). Supplies defaults for locale and known variables.',
-        displayOptions: { show: { operation: ['validate', 'buildRepairPrompt'] } },
+          'Metadata stamped by Build Authoring Prompt (locale, allowed variables, prompt version). Supplies the default locale and known variables; Validate passes it through on its output items.',
+        displayOptions: {
+          show: { operation: ['render', 'renderMany', 'validate', 'buildRepairPrompt'] },
+        },
       },
       {
         displayName: 'Known Variables',
@@ -392,14 +401,14 @@ export class Spintax implements INodeType {
       try {
         switch (operation) {
           case 'render': {
-            const { cleaned } = readTemplate(this, i);
+            const cleaned = readTemplate(this, i);
             const context = readContext(this, i, items[i]!.json);
             const seed = this.getNodeParameter('seed', i, '') as string;
             const outputField = (this.getNodeParameter('outputField', i, 'rendered') as string) || 'rendered';
             const rendered = renderOp(cleaned.cleanedTemplate, {
               context,
               ...(seed !== '' ? { seed } : {}),
-              locale: this.getNodeParameter('locale', i, 'en') as string,
+              locale: resolveLocale(this, i),
               postProcess: this.getNodeParameter('postProcess', i, true) as boolean,
             });
             main.push(out(i, { ...items[i]!.json, ...cleanFields(cleaned), [outputField]: rendered }));
@@ -407,14 +416,16 @@ export class Spintax implements INodeType {
           }
 
           case 'renderMany': {
-            const { cleaned } = readTemplate(this, i);
+            const cleaned = readTemplate(this, i);
             const context = readContext(this, i, items[i]!.json);
             const baseSeed = this.getNodeParameter('baseSeed', i, '') as string;
+            const maxAttempts = this.getNodeParameter('maxAttempts', i, 0) as number;
             const result = renderManyOp(cleaned.cleanedTemplate, {
               context,
               ...(baseSeed !== '' ? { baseSeed } : {}),
+              ...(maxAttempts > 0 ? { maxAttempts } : {}),
               count: this.getNodeParameter('count', i, 5) as number,
-              locale: this.getNodeParameter('locale', i, 'en') as string,
+              locale: resolveLocale(this, i),
               postProcess: this.getNodeParameter('postProcess', i, true) as boolean,
             });
             for (const variant of result.variants) {
@@ -431,7 +442,7 @@ export class Spintax implements INodeType {
           }
 
           case 'validate': {
-            const { cleaned } = readTemplate(this, i);
+            const cleaned = readTemplate(this, i);
             const meta = readMeta(this, i);
             const localeParam = this.getNodeParameter('locale', i, '') as string;
             const result = validateOp(cleaned.cleanedTemplate, {
@@ -449,6 +460,10 @@ export class Spintax implements INodeType {
               errorCount: result.errorCount,
               warningCount: result.warningCount,
               locale: result.locale,
+              // Pass the funnel metadata through so downstream Render/Repair
+              // defaults (`={{ $json.spintaxMeta }}`) keep working after the
+              // LLM node dropped it.
+              ...(meta !== undefined ? { spintaxMeta: meta as unknown as IDataObject } : {}),
             });
             (result.valid ? main : invalid).push(item);
             break;
@@ -503,7 +518,14 @@ export class Spintax implements INodeType {
         }
       } catch (error) {
         if (this.continueOnFail()) {
-          main.push(out(i, { error: error instanceof Error ? error.message : String(error) }));
+          const failure = {
+            ...items[i]!.json,
+            error: error instanceof Error ? error.message : String(error),
+          };
+          // An operational failure is NOT a valid template — for Validate it
+          // must never ride the Valid branch.
+          if (operation === 'validate') invalid.push(out(i, { ...failure, valid: false }));
+          else main.push(out(i, failure));
           continue;
         }
         if (error instanceof NodeOperationError) throw error;
@@ -521,17 +543,34 @@ function out(item: number, json: IDataObject): INodeExecutionData {
   return { json, pairedItem: { item } };
 }
 
-function readTemplate(ctx: IExecuteFunctions, i: number): { cleaned: CleanedInput } {
-  const raw = ctx.getNodeParameter('template', i) as string;
-  const clean = ctx.getNodeParameter('cleanModelOutput', i, false) as boolean;
-  return { cleaned: clean ? cleanTemplate(raw) : { cleanedTemplate: raw, rawTemplate: raw, changed: false } };
+interface ReadTemplate extends CleanedInput {
+  /** Cleaning was switched on — audit fields are emitted even if nothing changed. */
+  requested: boolean;
 }
 
-/** Only when cleaning changed something do the audit fields ride along. */
-function cleanFields(cleaned: CleanedInput): IDataObject {
-  return cleaned.changed
+function readTemplate(ctx: IExecuteFunctions, i: number): ReadTemplate {
+  const raw = ctx.getNodeParameter('template', i) as string;
+  const requested = ctx.getNodeParameter('cleanModelOutput', i, false) as boolean;
+  return requested
+    ? { ...cleanTemplate(raw), requested }
+    : { cleanedTemplate: raw, rawTemplate: raw, changed: false, requested };
+}
+
+/** When cleaning was requested, both audit fields ride along — even when the
+ * input was already clean, so downstream `cleanedTemplate` defaults always
+ * resolve (the UI promises exactly this). */
+function cleanFields(cleaned: ReadTemplate): IDataObject {
+  return cleaned.requested
     ? { cleanedTemplate: cleaned.cleanedTemplate, rawTemplate: cleaned.rawTemplate }
     : {};
+}
+
+/** Blank locale ⇒ the spintaxMeta locale ⇒ 'en' — one locale through the funnel. */
+function resolveLocale(ctx: IExecuteFunctions, i: number): string {
+  const explicit = ctx.getNodeParameter('locale', i, '') as string;
+  if (explicit !== '') return explicit;
+  const meta = readMeta(ctx, i);
+  return typeof meta?.locale === 'string' && meta.locale !== '' ? meta.locale : 'en';
 }
 
 function readContext(ctx: IExecuteFunctions, i: number, itemJson: IDataObject): Record<string, string> {
