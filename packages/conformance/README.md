@@ -1,13 +1,18 @@
 # @spintax/conformance
 
 Shared **golden corpus** for the Spintax parity contract — language-neutral JSON fixtures
-consumed **identically** by the TypeScript engine (`@spintax/core`, via vitest) and the PHP
-plugin (via a PHPUnit runner). This is what keeps two independent implementations honest
-without forcing byte-for-byte parity everywhere. See the governing spec §7 / §7.1.
+consumed **identically** by every engine in the family: the TypeScript engine (`@spintax/core`,
+via vitest), **both** PHP engines (the `spintax/core` Composer package and the WordPress plugin,
+via the PHPUnit runner in `php/`), the Python engine (`spintax-core`, whose CI checks this repo
+out) and the Object Pascal engine (`spintax-win`, via its `check-corpus.sh` gate). This is what
+keeps five independent implementations honest without forcing byte-for-byte parity everywhere.
+See the governing spec §7 / §7.1.
 
-> Status: **schema-locked, seed fixtures only.** Real parity cases are extracted from the
-> plugin's PHPUnit suite in milestone M0 (PRs 03–07). Published to npm later, once the schema
-> and cases have stabilized (spec §10 Q3).
+> Status: **the live contract.** The M0 extraction is long done; fixtures grow whenever a
+> behaviour becomes contract — recognition rules (#55–#57), the permutation-config guard (#58),
+> `/# … #/` comments, the neutralize-vs-cosmetics answer, the definition-graph emission shapes.
+> The npm publication deferred by spec §10 Q3 was never needed: every consumer reads the files
+> from a checkout of this repository.
 
 ## Layout
 

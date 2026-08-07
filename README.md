@@ -16,9 +16,10 @@ npm install @spintax/core
 [`packages/core`](./packages/core/README.md).
 
 > **Status: released & stable.** The engine (`@spintax/core`) is feature-complete — parse, render,
-> validate, extract, analyze, neutralize. Its deterministic golden corpus passes against **both**
-> the TS engine and the PHP plugin, and it's proven by a reference Cloudflare Worker (`examples/worker`, M4).
-> See the [spec](./docs/spec-npm-engine.md) and [`packages/core`](./packages/core/README.md).
+> validate, extract, analyze, neutralize. Its deterministic golden corpus passes against **every
+> engine in the family** — this one, both PHP engines (the Composer package and the WordPress
+> plugin), Python and Object Pascal — and it's proven by a reference Cloudflare Worker
+> (`examples/worker`, M4). See the [spec](./docs/spec-npm-engine.md) and [`packages/core`](./packages/core/README.md).
 
 ## Try it live 🎮
 
@@ -36,7 +37,7 @@ way round) — source in [`examples/`](./examples).
 The open-source core engine behind the Spintax ecosystem. It is a **companion** to the
 [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) — an *independent* TypeScript
 implementation that shares the same syntax and a machine-checked **parity contract**: a shared
-golden corpus that passes against **both** engines (verified, not just intended). Not a line-by-line port.
+golden corpus that passes against **every sibling engine** (verified, not just intended). Not a line-by-line port.
 
 One engine, many surfaces: the planned Cloudflare Workers API, a Telegram authoring bot, and
 a client-side playground on `spintax.net` are all consumers of this package.
