@@ -14,16 +14,20 @@ parse, render, validate, extract, analyze, and neutralize spintax templates.
 
 - **Zero runtime dependencies.** Runs unchanged on Cloudflare Workers, Node 18+, and in the browser.
 - **ESM-first, dual CJS.** Ships `.d.ts` types for both.
-- **Parity-verified against the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/).**
-  An *independent* TypeScript implementation (not a line-by-line port) held to the plugin's behavior
-  contract by a shared golden corpus — the **same** fixtures pass against both this engine and the
-  PHP plugin (deterministic verdicts, plural buckets, conditionals, `#set`/`#def` semantics,
-  post-process), with no divergence.
+- **One syntax contract, [five independent engines](https://spintax.net/spintax-engines/).**
+  This package, [`spintax/core`](https://packagist.org/packages/spintax/core) (PHP),
+  [`spintax-core`](https://pypi.org/project/spintax-core/) (Python), an Object Pascal engine, and
+  the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) are all held to the same
+  behavior contract by a **shared golden corpus of 234 fixtures** — deterministic verdicts, plural
+  buckets, conditionals, `#set`/`#def` semantics and post-processing agree everywhere, so a
+  template is an asset you can move between runtimes, not a lock-in.
 - **MIT** licensed.
 
 > **Status: released & stable.** Feature-complete — parse / render / validate / extract / analyze /
-> neutralize. The deterministic golden corpus passes against **both** this engine and the PHP
-> plugin, and the §9.2 API is proven by a reference Cloudflare Worker (`examples/worker`).
+> neutralize — with the public API proven by real consumers: a reference Cloudflare Worker, the
+> [@spintaxnetbot](https://t.me/spintaxnetbot) Telegram bot, the
+> [spintax.net playground](https://spintax.net/play/), and the
+> [n8n community node](https://www.npmjs.com/package/n8n-nodes-spintax).
 
 ## Install
 
@@ -149,6 +153,19 @@ render('%bio%', { context: { bio: neutralize('Save {50|60}% today') }, postProce
 // → "Save {50|60}% today"   (the braces stay literal, not a random pick)
 ```
 
+## Using it without writing code
+
+- **n8n** — install [`n8n-nodes-spintax`](https://www.npmjs.com/package/n8n-nodes-spintax)
+  (Settings → Community Nodes). One node, five operations: Render, Render Many, a two-output
+  Validate, and the LLM authoring/repair prompt builders — a Sheets-to-outbox personalization
+  flow or a full AI authoring loop with no code and no credentials on the node's side.
+- **Telegram** — [@spintaxnetbot](https://t.me/spintaxnetbot): validate, preview, and AI-draft
+  templates in chat.
+- **Browser** — the [spintax.net playground](https://spintax.net/play/): live validation and
+  N-variant rendering, entirely client-side (it runs this very package).
+- **Windows** — [Spintax Studio](https://apps.microsoft.com/detail/9mw3ch7b530p), a native
+  editor in the Microsoft Store (renders via the family's Object Pascal engine; same corpus).
+
 ## Determinism & RNG
 
 With a `seed`, `render` is reproducible within this engine. Cross-engine RNG-sequence parity
@@ -157,10 +174,15 @@ plural buckets, conditional truthiness, `#set`/`#def` semantics, post-process ou
 
 ## Links
 
-- 📦 npm — [`@spintax/core`](https://www.npmjs.com/package/@spintax/core)
-- 🤖 Try it — [@spintaxnetbot](https://t.me/spintaxnetbot) (Telegram: validate + preview + AI `/draft`)
+- 📦 npm — [`@spintax/core`](https://www.npmjs.com/package/@spintax/core) ·
+  [`n8n-nodes-spintax`](https://www.npmjs.com/package/n8n-nodes-spintax) (the n8n node)
+- 🧪 Try it — [playground](https://spintax.net/play/) ·
+  [@spintaxnetbot](https://t.me/spintaxnetbot) (Telegram: validate + preview + AI `/draft`)
+- 🖥️ Desktop — [Spintax Studio](https://apps.microsoft.com/detail/9mw3ch7b530p) (Microsoft Store)
+- 🧬 The family — [all five engines, one corpus](https://spintax.net/spintax-engines/)
+  (PHP · Python · Pascal · WordPress)
 - 🧩 Source — [investblog/spintax-js](https://github.com/investblog/spintax-js)
-- 🌐 Product — [spintax.net](https://spintax.net)
+- 🌐 Docs & guides — [spintax.net](https://spintax.net)
 - 🏠 Maintainer — [301.st](https://301.st)
 
 ## License

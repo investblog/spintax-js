@@ -3,6 +3,21 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.4 — 2026-08-08
+
+Docs-only release — no engine changes; every byte of `dist/` behavior is 0.3.3's.
+
+### Changed
+
+- **README catches up with the ecosystem.** The parity paragraph now states the real contract —
+  one syntax surface across five independent engines (npm / Packagist / PyPI / Object Pascal /
+  the WordPress plugin) held by the shared 234-fixture corpus — instead of the original
+  two-engine wording. New "Using it without writing code" section and refreshed links:
+  the [`n8n-nodes-spintax`](https://www.npmjs.com/package/n8n-nodes-spintax) community node
+  (released 2026-08-07), the spintax.net playground, the Telegram bot, and Spintax Studio.
+  Internal spec-section references dropped from public copy.
+- **`package.json`**: description mentions the n8n node; `n8n` added to keywords.
+
 ## 0.3.3 — 2026-08-07
 
 `validate()` scales. No output changes anywhere: a 464-document differential over every
