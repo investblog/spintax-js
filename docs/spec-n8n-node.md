@@ -11,6 +11,10 @@ written yet; the build plan is §7.
 > **Build status (2026-08-07, same day):** `packages/n8n-node/` is BUILT — N0 and the code half of
 > N1 are done (five operations, two-output Validate via a dynamic `outputs` expression, 27 tests,
 > lint/typecheck/smokes green; the smoke proved it can see breakage via a control mutation).
+> **Live-verified in a local n8n 2.33.7** (npm-linked via `~/.n8n/custom`): the node registers
+> with all five actions, Render executed (`{Dr|Prof} Ada` T1 markup drew correctly under seed),
+> and Validate's dynamic two-output routing sent a broken template to the Invalid branch with
+> the full structured payload (cleanedTemplate, diagnostics with spans + data, counts, locale).
 > Release awaits the Trusted Publisher entry (RELEASING.md); N2 unchanged.
 Owner: 301st
 Tracking issue: [#44](https://github.com/investblog/spintax-js/issues/44).
