@@ -193,16 +193,32 @@ verification is upside, not the load-bearing floor.
 Sequenced; the build (§7) gates everything below it. Hub-side execution lives in spintax.net's
 `docs/TODO.md` (`/spintax-for-n8n/` entry, already gated on this node shipping) and ADR 0007.
 
+Two positioning rules inherited from the hub's editorial line (`.claude/rules/content.md` there),
+so no surface here drifts from it:
+
+- **The pitch is the hub's core message**, not a new formulation: *"Use AI to create the template
+  once. Use Spintax to generate safely and cheaply forever."* The authoring funnel (Build Prompt →
+  LLM → Validate/Repair → Render) is that sentence operationalized — README, forum post and
+  template descriptions lead with it.
+- **Engine-level, not tool-level.** The hub spent 2026-07 scrubbing "WordPress plugin" and "GTW"
+  out of positioning copy because *WordPress is a runtime, not the product* — the same rule
+  applies here: n8n is **a runtime among many**, never "the product is now an n8n node".
+
 1. **Ship `n8n-nodes-spintax@0.1.0`** to npm with provenance (§4 release path).
-2. **README as a landing page** (English): the funnel diagram, a 60-second quickstart, the honest
-   N-variants caveat as a stated differentiator, and the ecosystem block — the same engine behind
-   the npm/Packagist/PyPI/Pascal releases, the shared 234-case conformance corpus, the live bot,
-   the MCP server in the official registry, and **Spintax Studio in the Microsoft Store** — the
-   argument that this is a maintained ecosystem, not a weekend wrapper.
+2. **README as a landing page** (English): the core message, the funnel diagram, a 60-second
+   quickstart, the honest N-variants caveat as a stated differentiator, and the ecosystem block —
+   the same engine behind the npm/Packagist/PyPI/Pascal releases, the shared 234-case conformance
+   corpus, the live bot, the MCP server in the official registry, and **Spintax Studio in the
+   Microsoft Store** — the argument that this is a maintained ecosystem, not a weekend wrapper.
 3. **Submit for n8n Cloud verification** (re-read live guidelines first; §4 risk R1 framing).
 4. **2–3 workflow templates** in the n8n gallery — each is a discovery page and the onboarding at
    once:
-   - *Personalize at scale:* Google Sheets rows → Render per row → email/CRM.
+   - *Cold-email bridge:* Google Sheets leads → Render per row → the user's sending tool
+     (Instantly / Smartlead / etc. via their own n8n nodes). This automates the
+     **render-then-upload bridge** that spintax.net's `/spintax-for-cold-email/` article teaches
+     manually (write full-syntax template → render locally / Studio XLSX → upload the column as a
+     merge field) — the article has already built the demand argument for exactly this workflow
+     (sending platforms parse flat `{a|b|c}` only; permutations/conditionals/plurals are the gap).
    - *AI authoring funnel:* brief → Build Authoring Prompt → LLM → Validate → (repair loop,
      capped) → Render Many → destination. This is the flagship — it demos the whole point.
    - Optional third: Telegram/newsletter variant of the first.
@@ -210,7 +226,10 @@ Sequenced; the build (§7) gates everything below it. Hub-side execution lives i
 6. **spintax.net obvyazka** (hub side, already queued): `/spintax-for-n8n/` article EN+RU (angle:
    the LLM-authoring funnel the node operationalizes — Build Authoring Prompt / Validate / Build
    Repair Prompt as the loop n8n users otherwise hand-roll), docs-hub card, `/spintax-engines/`
-   and landing mentions, `llms.txt` entry.
+   and landing mentions, `llms.txt` entry — **plus a section in `/spintax-for-cold-email/`**
+   ("or automate the bridge") pointing at the cold-email gallery template, and a line in the
+   landing's vendor-ask context: until a vendor adopts the syntax, the node *is* the no-code
+   route. Both gated on the node shipping, tracked in the hub's `docs/TODO.md`.
 7. **Social queue** (`spintax-social` worker, editorial order): TG RU + Bluesky/Mastodon EN.
    Ecosystem angle over feature angle — "the spintax engine that already runs on npm, Packagist,
    PyPI, a Windows Store editor and a Telegram bot now plugs into n8n".
