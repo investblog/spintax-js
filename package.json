@@ -14,12 +14,13 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "npm run build -w @spintax/core && npm run build --workspaces --if-present",
+    "build": "npm run build -w @spintax/core && npm run build -w @spintax/authoring-prompt && npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "eslint .",
-    "check:pkg": "npm run check:pkg -w @spintax/core",
+    "check:pkg": "npm run check:pkg -w @spintax/core && npm run check:pkg -w n8n-nodes-spintax",
     "smoke:pack": "bash scripts/smoke-tarball.sh",
+    "smoke:pack:n8n": "bash scripts/smoke-tarball-n8n.sh",
     "bench:postprocess": "node scripts/bench-postprocess.mjs",
     "conformance:validate": "npm run validate -w @spintax/conformance"
   },
@@ -27,6 +28,7 @@
     "@arethetypeswrong/cli": "^0.18.4",
     "@eslint/js": "^9.39.4",
     "eslint": "^9.39.4",
+    "eslint-plugin-n8n-nodes-base": "^1.16.7",
     "publint": "^0.3.21",
     "typescript-eslint": "^8.63.0"
   }

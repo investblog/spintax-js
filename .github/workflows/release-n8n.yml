@@ -1,16 +1,18 @@
-name: Release
+name: Release n8n node
 
-# Publishes @spintax/core to npm with PROVENANCE via OIDC Trusted Publishing —
-# no tokens, no OTP. One-time setup on npmjs.com is required (see RELEASING.md):
-# package @spintax/core → Settings → Trusted Publisher → GitHub Actions →
-# org/repo = investblog/spintax-js, workflow = release.yml.
+# Publishes n8n-nodes-spintax to npm with PROVENANCE via OIDC Trusted Publishing —
+# no tokens, no OTP. Provenance is not optional here: n8n requires it for community
+# nodes published after May 2026. One-time setup on npmjs.com is required (see
+# RELEASING.md): package n8n-nodes-spintax → Settings → Trusted Publisher →
+# GitHub Actions → org/repo = investblog/spintax-js, workflow = release-n8n.yml.
+# The @spintax/core entry does NOT cover this package.
 #
-# Release flow: bump packages/core/package.json → commit → tag vX.Y.Z → push tag.
-# Or run this workflow manually (workflow_dispatch) after tagging.
+# Release flow: bump packages/n8n-node/package.json → commit → tag n8n-node-vX.Y.Z
+# → push tag. The prefix keeps it out of release.yml's `v*` glob.
 
 on:
   push:
-    tags: ['v*']
+    tags: ['n8n-node-v*']
   workflow_dispatch:
 
 permissions:
@@ -36,24 +38,22 @@ jobs:
       - name: Install
         run: npm ci
 
-      # Safety: a pushed vX.Y.Z tag must match the version we're about to publish,
-      # so a stale/mismatched tag fails loudly instead of republishing.
-      - name: Verify tag matches @spintax/core version
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Safety: a pushed n8n-node-vX.Y.Z tag must match the version we're about to
+      # publish, so a stale/mismatched tag fails loudly instead of republishing.
+      - name: Verify tag matches n8n-nodes-spintax version
+        if: startsWith(github.ref, 'refs/tags/n8n-node-v')
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          PKG="$(node -p "require('./packages/core/package.json').version")"
+          TAG="${GITHUB_REF_NAME#n8n-node-v}"
+          PKG="$(node -p "require('./packages/n8n-node/package.json').version")"
           if [ "$TAG" != "$PKG" ]; then
-            echo "::error::Tag v$TAG does not match @spintax/core version $PKG"
+            echo "::error::Tag n8n-node-v$TAG does not match n8n-nodes-spintax version $PKG"
             exit 1
           fi
-          echo "Publishing @spintax/core@$PKG"
+          echo "Publishing n8n-nodes-spintax@$PKG"
 
       # A tag can point at ANY commit — main's CI passing is not a precondition for
       # publishing. So the release job re-runs the full CI gate set rather than
-      # trusting an upstream green: it must be independently sufficient to prove the
-      # artifact. Keep these steps in sync with ci.yml (build first — consumers
-      # resolve @spintax/core via its published exports, so typecheck/test need dist).
+      # trusting an upstream green. Keep these steps in sync with ci.yml.
       - name: Validate golden corpus (schema)
         run: npm run conformance:validate
 
@@ -69,8 +69,6 @@ jobs:
       - name: Test
         run: npm test
 
-      # Gates on the published artifact itself: a broken exports map or a tarball
-      # that won't import survives build+test, but not these.
       - name: Package checks (publint + attw)
         run: npm run check:pkg
 
@@ -82,5 +80,5 @@ jobs:
 
       # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
       # publish token automatically, and attaches a provenance attestation.
-      - name: Publish @spintax/core (provenance via OIDC)
-        run: npm publish -w @spintax/core --provenance --access public
+      - name: Publish n8n-nodes-spintax (provenance via OIDC)
+        run: npm publish -w n8n-nodes-spintax --provenance --access public

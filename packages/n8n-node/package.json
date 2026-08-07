@@ -1,0 +1,67 @@
+{
+  "name": "n8n-nodes-spintax",
+  "version": "0.1.0",
+  "description": "n8n community node for spintax templates — render, validate, generate N variants, and build LLM authoring/repair prompts. Use AI to create the template once; use spintax to generate safely and cheaply forever.",
+  "keywords": [
+    "n8n-community-node-package",
+    "spintax",
+    "text-spinning",
+    "text-generation",
+    "content-generation",
+    "template",
+    "email-template",
+    "cold-email",
+    "personalization",
+    "variations",
+    "ai",
+    "llm"
+  ],
+  "license": "MIT",
+  "author": "301st (https://301.st)",
+  "homepage": "https://spintax.net",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/investblog/spintax-js.git",
+    "directory": "packages/n8n-node"
+  },
+  "bugs": {
+    "url": "https://github.com/investblog/spintax-js/issues"
+  },
+  "type": "commonjs",
+  "main": "dist/nodes/Spintax/Spintax.node.js",
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "nodes": [
+      "dist/nodes/Spintax/Spintax.node.js"
+    ]
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup && node scripts/copy-icon.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "check:pkg": "publint --strict",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@spintax/authoring-prompt": "*",
+    "@spintax/core": "*",
+    "@types/node": "^20.17.6",
+    "n8n-workflow": "^2.16.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

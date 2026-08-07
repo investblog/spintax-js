@@ -7,6 +7,11 @@ the funnel carries `spintaxMeta` end-to-end, cleanup writes `cleanedTemplate` so
 neutralize follows the trust tier, Render Many has an implementable contract, the scanner runs
 post-publish, and R1 assumes verification unavailable until n8n confirms eligibility. Nothing is
 written yet; the build plan is §7.
+
+> **Build status (2026-08-07, same day):** `packages/n8n-node/` is BUILT — N0 and the code half of
+> N1 are done (five operations, two-output Validate via a dynamic `outputs` expression, 27 tests,
+> lint/typecheck/smokes green; the smoke proved it can see breakage via a control mutation).
+> Release awaits the Trusted Publisher entry (RELEASING.md); N2 unchanged.
 Owner: 301st
 Tracking issue: [#44](https://github.com/investblog/spintax-js/issues/44).
 Channel strategy: [spintax.net ADR 0007](https://github.com/investblog/spintax.net/blob/main/docs/decisions/0007-workflow-channels.md)

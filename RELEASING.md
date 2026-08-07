@@ -1,4 +1,4 @@
-# Releasing `@spintax/core`
+# Releasing `@spintax/core` (and `n8n-nodes-spintax` — see the last section)
 
 Releases publish from GitHub Actions (`.github/workflows/release.yml`) using npm
 **Trusted Publishing (OIDC)** — no npm tokens are stored anywhere, and every release
@@ -57,3 +57,26 @@ manually from the Actions tab (**workflow_dispatch**) after tagging.
 - `@spintax/*` is owned via the `spintax` npm account (username = scope). Additional
   packages (`@spintax/conformance`, `@spintax/cli`) would each need their own Trusted
   Publisher entry pointing at their publish workflow.
+
+## Releasing `n8n-nodes-spintax`
+
+Same machinery, own workflow (`.github/workflows/release-n8n.yml`), own tag prefix —
+`n8n-node-vX.Y.Z` — so it never collides with core's `v*` glob. Provenance is not
+optional here: n8n requires GitHub-Actions provenance for community nodes published
+after May 2026.
+
+One-time setup (the `@spintax/core` entry does NOT cover this package):
+**npmjs.com → `n8n-nodes-spintax` → Settings → Trusted Publisher → GitHub Actions**,
+org `investblog`, repo `spintax-js`, workflow `release-n8n.yml`.
+
+```sh
+npm version patch -w n8n-nodes-spintax
+git add -A && git commit -m "release(n8n-node): n8n-nodes-spintax X.Y.Z"
+git tag -a n8n-node-vX.Y.Z -m "n8n-nodes-spintax X.Y.Z"
+git push origin main && git push origin n8n-node-vX.Y.Z
+```
+
+After each publish, run the exact-version community scan (it needs the PUBLISHED
+release — it verifies npm provenance, so it cannot run pre-publish or in CI):
+`npx @n8n/scan-community-package n8n-nodes-spintax@X.Y.Z`. A green scan gates the
+n8n verification submission (see `docs/spec-n8n-node.md` §4).

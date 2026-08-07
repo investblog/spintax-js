@@ -1,5 +1,6 @@
 // @ts-check
 import js from '@eslint/js';
+import n8nNodesBase from 'eslint-plugin-n8n-nodes-base';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -29,5 +30,13 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
       ],
     },
+  },
+  // n8n's community-node conventions, scoped to the node implementation files.
+  // The plugin's package.json ruleset (needs jsonc-eslint-parser) is deliberately
+  // not wired — the post-publish scanner checks the manifest instead (spec §4).
+  {
+    files: ['packages/n8n-node/src/nodes/**/*.ts'],
+    plugins: { 'n8n-nodes-base': n8nNodesBase },
+    rules: n8nNodesBase.configs.nodes.rules,
   },
 );
