@@ -27,14 +27,15 @@ const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gm
 export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const text = stripComments(src);
+  const idx = buildLineIndex(text);
 
   checkBrackets(text, diagnostics);
   checkDirectives(text, diagnostics);
-  checkPermutationConfigs(text, diagnostics);
-  checkPlurals(text, opts.locale, diagnostics);
-  checkVariableReferences(text, opts.knownVariables, diagnostics);
+  checkPermutationConfigs(text, idx, diagnostics);
+  checkPlurals(text, idx, opts.locale, diagnostics);
+  checkVariableReferences(text, idx, opts.knownVariables, diagnostics);
   if (opts.knownIncludes && opts.knownIncludes.length > 0) {
-    checkIncludeTargets(text, opts.knownIncludes, diagnostics);
+    checkIncludeTargets(text, idx, opts.knownIncludes, diagnostics);
   }
 
   return diagnostics;
@@ -50,21 +51,38 @@ function warn(code: string, message: string, pos: Pos): Diagnostic {
   return { severity: 'warning', code, message, ...pos };
 }
 
-/** 1-based (line, column) of a character offset. */
-function offsetToLineCol(text: string, offset: number): { line: number; column: number } {
-  let line = 1;
-  let lineStart = 0;
-  const end = Math.min(Math.max(offset, 0), text.length);
-  for (let i = 0; i < end; i += 1) {
-    if (text.charAt(i) === '\n') { line += 1; lineStart = i + 1; }
+/**
+ * Line-start offsets of `text`, built once per validate() call. Every diagnostic
+ * position is then a binary search instead of a scan from offset 0 — the scan made
+ * a diagnostic-heavy document quadratic (each of N diagnostics re-walked the text).
+ */
+interface LineIndex { starts: number[]; length: number }
+
+function buildLineIndex(text: string): LineIndex {
+  const starts = [0];
+  for (let i = 0; i < text.length; i += 1) {
+    if (text.charCodeAt(i) === 10) starts.push(i + 1);
   }
-  return { line, column: end - lineStart + 1 };
+  return { starts, length: text.length };
+}
+
+/** 1-based (line, column) of a character offset — same clamp and column model as the old scan. */
+function offsetToLineCol(idx: LineIndex, offset: number): { line: number; column: number } {
+  const end = Math.min(Math.max(offset, 0), idx.length);
+  let lo = 0;
+  let hi = idx.starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if ((idx.starts[mid] ?? 0) <= end) lo = mid;
+    else hi = mid - 1;
+  }
+  return { line: lo + 1, column: end - (idx.starts[lo] ?? 0) + 1 };
 }
 
 /** A full [offset, offset+length) span as start + end positions. */
-function span(text: string, offset: number, length: number): Pos {
-  const s = offsetToLineCol(text, offset);
-  const e = offsetToLineCol(text, offset + length);
+function span(idx: LineIndex, offset: number, length: number): Pos {
+  const s = offsetToLineCol(idx, offset);
+  const e = offsetToLineCol(idx, offset + length);
   return { line: s.line, column: s.column, endLine: e.line, endColumn: e.column };
 }
 
@@ -158,7 +176,7 @@ function checkDirectives(text: string, out: Diagnostic[]): void {
 }
 
 /** `[<config>]` prefixes: known keys only, minsize/maxsize must be digit runs. */
-function checkPermutationConfigs(text: string, out: Diagnostic[]): void {
+function checkPermutationConfigs(text: string, idx: LineIndex, out: Diagnostic[]): void {
   for (const m of text.matchAll(/\[<([^>]*?)>/gu)) {
     const configStr = m[1] ?? '';
     if (!/\w+\s*=/.test(configStr)) continue; // not a key=value config
@@ -168,24 +186,24 @@ function checkPermutationConfigs(text: string, out: Diagnostic[]): void {
       const key = (km[1] ?? '').toLowerCase();
       if (!KNOWN_CONFIG_KEYS.has(key)) {
         out.push(err('permutation.unknown-key', `Unknown permutation config key: '${km[1]}'.`,
-          { ...span(text, configBase + (km.index ?? 0), (km[1] ?? '').length), data: { key: km[1] } }));
+          { ...span(idx, configBase + (km.index ?? 0), (km[1] ?? '').length), data: { key: km[1] } }));
       }
     }
     const min = /minsize\s*=\s*([^;>\s]+)/i.exec(configStr);
     if (min && !/^\d+$/.test(min[1] ?? '')) {
       out.push(err('permutation.minsize-not-integer', `minsize must be a positive integer, got '${min[1]}'.`,
-        { ...span(text, configBase + min.index, min[0].length), data: { value: min[1] } }));
+        { ...span(idx, configBase + min.index, min[0].length), data: { value: min[1] } }));
     }
     const max = /maxsize\s*=\s*([^;>\s]+)/i.exec(configStr);
     if (max && !/^\d+$/.test(max[1] ?? '')) {
       out.push(err('permutation.maxsize-not-integer', `maxsize must be a positive integer, got '${max[1]}'.`,
-        { ...span(text, configBase + max.index, max[0].length), data: { value: max[1] } }));
+        { ...span(idx, configBase + max.index, max[0].length), data: { value: max[1] } }));
     }
   }
 }
 
 /** `{plural …}`: no nested brackets in forms; form count matches locale arity. */
-function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[]): void {
+function checkPlurals(text: string, idx: LineIndex, locale: string | undefined, out: Diagnostic[]): void {
   // Guard on the NORMALIZED base (like the plugin): a non-empty locale that
   // normalizes to '' (e.g. "_en") skips the arity check.
   const base = locale && locale !== '' ? normalizeBaseLang(locale) : '';
@@ -194,7 +212,7 @@ function checkPlurals(text: string, locale: string | undefined, out: Diagnostic[
   const tainted = macroTaintedNames(text);
 
   for (const block of findPluralBlocks(text)) {
-    const at = span(text, block.start, block.end - block.start);
+    const at = span(idx, block.start, block.end - block.start);
 
     // A macro in the count slot: the count is still unresolved spintax when the plural is decided,
     // so the block resolves to nothing. `#def` is the fix — it freezes to a literal before the
@@ -242,21 +260,32 @@ const UNRESOLVED_AT_PLURAL_TIME = /\[|\{(?!\?)/u;
 function macroTaintedNames(text: string): Set<string> {
   const macros = extractDirectives(text).setDefs;
   const tainted = new Set<string>();
+  const queue: string[] = [];
 
   for (const [name, value] of Object.entries(macros)) {
-    if (UNRESOLVED_AT_PLURAL_TIME.test(value)) tainted.add(name);
+    if (UNRESOLVED_AT_PLURAL_TIME.test(value)) {
+      tainted.add(name);
+      queue.push(name);
+    }
   }
 
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const [name, value] of Object.entries(macros)) {
-      if (tainted.has(name)) continue;
-      for (const m of value.matchAll(/%(\w+)%/gu)) {
-        if (!tainted.has((m[1] ?? '').toLowerCase())) continue;
+  // Same closure the old fixpoint sweep computed, via reverse edges — the sweep
+  // re-parsed every value once per newly tainted name, O(n²) on a macro chain.
+  const dependents = new Map<string, string[]>();
+  for (const [name, value] of Object.entries(macros)) {
+    for (const m of value.matchAll(/%(\w+)%/gu)) {
+      const ref = (m[1] ?? '').toLowerCase();
+      const list = dependents.get(ref);
+      if (list === undefined) dependents.set(ref, [name]);
+      else list.push(name);
+    }
+  }
+  while (queue.length > 0) {
+    const source = queue.pop()!;
+    for (const name of dependents.get(source) ?? []) {
+      if (!tainted.has(name)) {
         tainted.add(name);
-        grew = true;
-        break;
+        queue.push(name);
       }
     }
   }
@@ -265,7 +294,7 @@ function macroTaintedNames(text: string): Set<string> {
 }
 
 /** Self-reference + circular definitions (errors) and undefined `%var%`/conditional refs (warnings). */
-function checkVariableReferences(text: string, known: readonly string[] | undefined, out: Diagnostic[]): void {
+function checkVariableReferences(text: string, idx: LineIndex, known: readonly string[] | undefined, out: Diagnostic[]): void {
   const knownSet = new Set((known ?? []).map((n) => n.toLowerCase()));
   // `[ \t]` (single-line), uniform with the parser's extract_set_directives and
   // extract.ts — so a malformed cross-line `#set` isn't treated as a definition.
@@ -275,7 +304,7 @@ function checkVariableReferences(text: string, known: readonly string[] | undefi
     const name = (m[1] ?? '').toLowerCase();
     defs.set(name, m[2] ?? '');
     const nameOffset = (m.index ?? 0) + m[0].indexOf('%');
-    defPos.set(name, span(text, nameOffset, name.length + 2));
+    defPos.set(name, span(idx, nameOffset, name.length + 2));
   }
 
   const somewhere: Pos = { line: 1, column: 1 };
@@ -284,8 +313,19 @@ function checkVariableReferences(text: string, known: readonly string[] | undefi
       out.push(err('variable.self-reference', `Variable '${name}' references itself.`, defPos.get(name) ?? somewhere));
     }
   }
+
+  // Each value's references, parsed once — the walk used to re-run the regex at
+  // every visit of every root.
+  const refsOf = new Map<string, string[]>();
+  for (const [name, value] of defs) {
+    const refs: string[] = [];
+    for (const m of value.matchAll(/%(\w+)%/gu)) refs.push((m[1] ?? '').toLowerCase());
+    refsOf.set(name, refs);
+  }
+
+  const reachesCycle = namesThatReachACycle(defs, refsOf);
   for (const name of defs.keys()) {
-    detectCycle(name, defs, [name], defPos.get(name) ?? somewhere, out);
+    detectCycle(name, defs, refsOf, reachesCycle, defPos.get(name) ?? somewhere, out);
   }
 
   // Blank #set lines to same-length whitespace so ref offsets still map to `text`
@@ -297,7 +337,7 @@ function checkVariableReferences(text: string, known: readonly string[] | undefi
     if (defs.has(key) || knownSet.has(key) || seen.has(key)) return;
     seen.add(key);
     out.push(warn('variable.undefined', `Variable '${name}' is not defined — may be a runtime variable.`,
-      { ...span(text, offset, length), data: { name } }));
+      { ...span(idx, offset, length), data: { name } }));
   };
   for (const m of body.matchAll(/%(\w+)%/gu)) undefinedAt(m[1] ?? '', m.index ?? 0, m[0].length);
   for (const m of body.matchAll(/\{\?!?([A-Za-z_]\w*)\?/gu)) {
@@ -305,21 +345,107 @@ function checkVariableReferences(text: string, known: readonly string[] | undefi
   }
 }
 
-function detectCycle(current: string, defs: Map<string, string>, visited: string[], rootPos: Pos, out: Diagnostic[]): void {
-  const value = defs.get(current) ?? '';
-  for (const m of value.matchAll(/%(\w+)%/gu)) {
-    const ref = (m[1] ?? '').toLowerCase();
-    if (ref === current) continue; // self-reference already reported
-    if (visited.includes(ref)) {
-      out.push(err('variable.circular-reference', `Circular variable reference: ${[...visited, ref].join(' → ')}.`, rootPos));
-      return;
+/**
+ * Names from which a cycle of length ≥ 2 is reachable, over the graph name → defined
+ * refs with self-edges excluded — exactly the edges the reporting walk can traverse
+ * (it skips `ref === current`, and a pure self-loop is `variable.self-reference`).
+ *
+ * This is the prune that makes the walk affordable, and it is output-neutral by
+ * construction: a report fires only when the walk meets a name already on its path,
+ * which is a cycle the met name lies on — so a subtree in which no name reaches any
+ * cycle cannot emit, and skipping it changes nothing. Without the prune every root
+ * re-walked its whole subgraph (a 400-definition chain took hundreds of milliseconds,
+ * and a converging diamond re-explored shared subtrees exponentially — a one-kilobyte
+ * template validate() never returned from). One iterative colour walk, computed once.
+ */
+function namesThatReachACycle(defs: Map<string, string>, refsOf: Map<string, string[]>): Set<string> {
+  const GREY = 1;
+  const BLACK = 2;
+  const color = new Map<string, number>();
+  const reaches = new Set<string>();
+
+  interface Frame { name: string; refs: string[]; i: number }
+  for (const root of defs.keys()) {
+    if (color.has(root)) continue;
+    const stack: Frame[] = [{ name: root, refs: refsOf.get(root) ?? [], i: 0 }];
+    color.set(root, GREY);
+    while (stack.length > 0) {
+      const top = stack[stack.length - 1]!;
+      if (top.i < top.refs.length) {
+        const ref = top.refs[top.i]!;
+        top.i += 1;
+        if (ref === top.name || !defs.has(ref)) continue;
+        const c = color.get(ref);
+        if (c === GREY) reaches.add(top.name); // back edge — top sits on a cycle
+        else if (c === BLACK) { if (reaches.has(ref)) reaches.add(top.name); }
+        else {
+          stack.push({ name: ref, refs: refsOf.get(ref) ?? [], i: 0 });
+          color.set(ref, GREY);
+        }
+      } else {
+        stack.pop();
+        color.set(top.name, BLACK);
+        if (stack.length > 0 && reaches.has(top.name)) reaches.add(stack[stack.length - 1]!.name);
+      }
     }
-    if (defs.has(ref)) detectCycle(ref, defs, [...visited, ref], rootPos, out);
+  }
+  return reaches;
+}
+
+/**
+ * The reporting walk, exactly the recursive one it replaces: depth-first over a
+ * value's references in order, one report per frame that meets a name already on
+ * the path (the frame then abandons its remaining references; siblings continue
+ * from the parent). Iterative so a definition chain as deep as the document cannot
+ * overflow the call stack; the shared path array is pushed/popped instead of copied
+ * per step, and membership is a Set — the array `includes` plus the per-step copy
+ * made one 1600-definition cycle cost tens of seconds.
+ */
+function detectCycle(
+  root: string,
+  defs: Map<string, string>,
+  refsOf: Map<string, string[]>,
+  reachesCycle: Set<string>,
+  rootPos: Pos,
+  out: Diagnostic[],
+): void {
+  if (!reachesCycle.has(root)) return; // the root frame could only report ref === root, which it skips
+
+  interface Frame { name: string; refs: string[]; i: number }
+  const path: string[] = [root];
+  const onPath = new Set<string>([root]);
+  const stack: Frame[] = [{ name: root, refs: refsOf.get(root) ?? [], i: 0 }];
+
+  const leave = (frame: Frame): void => {
+    stack.pop();
+    onPath.delete(frame.name);
+    path.pop();
+  };
+
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1]!;
+    if (top.i >= top.refs.length) {
+      leave(top);
+      continue;
+    }
+    const ref = top.refs[top.i]!;
+    top.i += 1;
+    if (ref === top.name) continue; // self-reference already reported
+    if (onPath.has(ref)) {
+      out.push(err('variable.circular-reference', `Circular variable reference: ${[...path, ref].join(' → ')}.`, rootPos));
+      leave(top); // the recursive walk returned from the whole frame here
+      continue;
+    }
+    if (defs.has(ref) && reachesCycle.has(ref)) {
+      stack.push({ name: ref, refs: refsOf.get(ref) ?? [], i: 0 });
+      onPath.add(ref);
+      path.push(ref);
+    }
   }
 }
 
 /** Unknown `#include` targets — only when a slug list is supplied. Raw `/m` scan. */
-function checkIncludeTargets(text: string, known: readonly string[], out: Diagnostic[]): void {
+function checkIncludeTargets(text: string, idx: LineIndex, known: readonly string[], out: Diagnostic[]): void {
   const set = new Set(known);
   INCLUDE_RE.lastIndex = 0;
   for (const m of text.matchAll(INCLUDE_RE)) {
@@ -327,7 +453,7 @@ function checkIncludeTargets(text: string, known: readonly string[], out: Diagno
     if (!set.has(ref)) {
       const refOffset = (m.index ?? 0) + m[0].indexOf('"') + 1; // inside the quotes
       out.push(err('include.unknown-target', `#include target '${ref}' does not match any known template.`,
-        { ...span(text, refOffset, ref.length), data: { target: ref } }));
+        { ...span(idx, refOffset, ref.length), data: { target: ref } }));
     }
   }
 }

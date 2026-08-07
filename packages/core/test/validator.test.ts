@@ -90,3 +90,56 @@ describe('validator — diagnostic positions (line/column/end + data)', () => {
     expect(d).toMatchObject({ line: 2, column: 10, data: { name: 'gone' } });
   });
 });
+
+describe('validator — the circular-reference walk (emission shape + the prune must stay silent)', () => {
+  const circular = (src: string) => validate(src).filter((d) => d.code === 'variable.circular-reference');
+
+  test('a 3-cycle reports once per root, message carrying the path from that root', () => {
+    const diags = circular('#set %c0% = %c1%\n#set %c1% = %c2%\n#set %c2% = %c0%');
+    expect(diags.map((d) => d.message)).toEqual([
+      'Circular variable reference: c0 → c1 → c2 → c0.',
+      'Circular variable reference: c1 → c2 → c0 → c1.',
+      'Circular variable reference: c2 → c0 → c1 → c2.',
+    ]);
+  });
+
+  test('a duplicated edge is walked per occurrence — %b% %b% in a 2-cycle reports three times', () => {
+    // The reference semantics spintax-win aligned to on 2026-08-07: references are not
+    // deduplicated, and a report abandons only the frame that made it.
+    const diags = circular('#set %a% = %b% %b%\n#set %b% = %a%');
+    expect(diags.map((d) => d.message)).toEqual([
+      'Circular variable reference: a → b → a.',
+      'Circular variable reference: a → b → a.',
+      'Circular variable reference: b → a → b.',
+    ]);
+  });
+
+  test('a converging diamond feeding a cycle keeps the per-path emission count', () => {
+    // depth 2 → 2^2 + 2^1 reports from the a-roots, one each from a2, p, q.
+    const src = '#set %a2% = %p%\n#set %a1% = %a2% %a2%\n#set %a0% = %a1% %a1%\n#set %p% = %q%\n#set %q% = %p%';
+    expect(circular(src)).toHaveLength(9);
+  });
+
+  test('an acyclic chain is silent and fast — the prune must not invent or lose a report', () => {
+    // Pre-rewrite this shape was O(n³)-ish: 2000 definitions took tens of seconds and
+    // would trip the suite timeout; the walk now skips subtrees that reach no cycle.
+    const lines = ['#set %v0% = x'];
+    for (let i = 1; i < 2000; i += 1) lines.push(`#set %v${i}% = %v${i - 1}%`);
+    expect(validate(lines.join('\n'))).toEqual([]);
+  });
+
+  test('a converging diamond with a literal leaf is silent — pre-rewrite it never returned', () => {
+    const n = 30; // 2^30 paths if actually walked
+    const lines = [`#set %a${n}% = leaf`];
+    for (let i = n - 1; i >= 0; i -= 1) lines.push(`#set %a${i}% = %a${i + 1}% %a${i + 1}%`);
+    expect(validate(lines.join('\n'))).toEqual([]);
+  });
+
+  test('duplicate-name messages still name the FIRST line (the resuming line counter)', () => {
+    const diags = validate('one\n#set %d% = a\ntwo\n#set %d% = b\n#set %d% = c')
+      .filter((d) => d.code === 'definition.duplicate-name');
+    expect(diags).toHaveLength(2);
+    for (const d of diags) expect(d.message).toContain('first on line 2');
+    expect(diags.map((d) => d.line)).toEqual([4, 5]);
+  });
+});

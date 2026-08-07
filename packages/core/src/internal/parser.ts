@@ -76,6 +76,19 @@ export function extractDirectives(text: string): {
   const defDefs: Record<string, string> = {};
   const occurrences: DirectiveOccurrence[] = [];
 
+  // Match offsets ascend (replace scans left to right), so the line number resumes
+  // from the previous match instead of recounting from the start of the text — a
+  // fresh count per occurrence made a directive-heavy document quadratic.
+  let cursorOffset = 0;
+  let cursorLine = 1;
+  const lineAt = (offset: number): number => {
+    for (let i = cursorOffset; i < offset; i += 1) {
+      if (text.charCodeAt(i) === 10) cursorLine += 1;
+    }
+    cursorOffset = offset;
+    return cursorLine;
+  };
+
   DIRECTIVE_RE.lastIndex = 0;
   const stripped = text.replace(
     DIRECTIVE_RE,
@@ -85,7 +98,7 @@ export function extractDirectives(text: string): {
         kind: kind as 'set' | 'def',
         name,
         value,
-        line: countLines(text, offset),
+        line: lineAt(offset),
       });
       if (kind === 'def') defDefs[name] = value;
       else setDefs[name] = value;
@@ -94,13 +107,6 @@ export function extractDirectives(text: string): {
   );
 
   return { body: stripped.replace(/\n{3,}/gu, '\n\n'), setDefs, defDefs, occurrences };
-}
-
-/** 1-based line number of `offset` within `text`. */
-function countLines(text: string, offset: number): number {
-  let line = 1;
-  for (let i = 0; i < offset; i += 1) if (text[i] === '\n') line += 1;
-  return line;
 }
 
 /** Remove `/# … #/` block comments (non-greedy, spans newlines). */

@@ -3,7 +3,53 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.3.2 — 2026-07-23
+## 0.3.3 — 2026-08-07
+
+`validate()` scales. No output changes anywhere: a 464-document differential over every
+definition-graph, diagnostic-position and fuzz shape is byte-identical before and after, and
+three deliberate mutations (drop the prune, shift a column, freeze the line counter) each
+turn it red — the harness can see what it guards.
+
+### Fixed
+
+- **`validate()` is no longer super-linear on definition graphs — and no longer hangs.** Four
+  independent costs, each measured before and after (Node 22, same machine):
+
+  | shape | 0.3.2 | 0.3.3 |
+  |---|---|---|
+  | chain of 1600 `#set`s | 13.1 s | 18 ms |
+  | converging diamond, 20 levels (~1 KB) | 4.8 s | <1 ms |
+  | converging diamond, 26+ levels | **never returns** | <1 ms (2000 levels: 22 ms) |
+  | one cycle of 1600 | 55.6 s | 0.8 s |
+  | 6400 duplicate definitions | 9.3 s | 29 ms |
+  | 6400 undefined references | 2.9 s | 11 ms |
+
+  The circular-reference walk re-parsed every value's references at every visit, tested the
+  path with an array `includes`, copied the path at every step, and restarted from every
+  definition with no memory of silent subtrees — on a converging diamond that re-explored
+  shared subgraphs exponentially, so a one-kilobyte template could pin a CPU forever (the
+  validator is exposed by hosts; that is a denial-of-service shape, not just a slow one).
+  References are now parsed once, the path is a Set plus a shared push/pop array, the walk is
+  iterative (a chain as deep as the document cannot overflow the call stack), and one colour
+  walk computes up front which names can reach a cycle — a subtree that cannot reach one
+  cannot report, so skipping it is output-neutral by construction. Emission order, count and
+  messages are exactly the old walk's, duplicated edges and all.
+
+  The taint sweep behind `plural.count-macro` was a fixpoint that re-read every macro once per
+  newly tainted name; it is now a reverse-edge worklist computing the same closure. Diagnostic
+  positions were each computed by scanning from offset 0; a line-start index built once per
+  call now answers them by binary search. And `extractDirectives` counted the line of each
+  occurrence from the start of the text — quadratic on directive-heavy documents, and on the
+  **render** path too, since the renderer extracts directives the same way; a resuming counter
+  fixes both surfaces.
+
+  Two boundaries stay as they are, deliberately. A giant single cycle still costs seconds at
+  6400 definitions because the output itself is quadratic — every diagnostic's message carries
+  the full cycle path, so ~300 MB of message text is the answer, not the overhead. And a
+  converging diamond that FEEDS a cycle still emits one diagnostic per path — exponentially
+  many — because that is the reference emission the corpus family just aligned on
+  (spintax-win, 2026-08-07); whether that emission should be bounded is a family question, not
+  a patch.
 
 Post-process robustness and scaling: `postProcess()` no longer emits its own U+0000 sentinel, and
 the placeholder restore is linear instead of quadratic. Output is unchanged on ordinary text; the
