@@ -1,0 +1,246 @@
+{
+  "name": "Spintax AI authoring funnel — brief → LLM → validate → repair → variants",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "fx-trigger",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fx-brief",
+              "name": "brief",
+              "type": "string",
+              "value": "Write a short cold-outreach email (3–5 sentences) for %first_name% at %company%, pitching a service that generates unique product descriptions for e-commerce catalogs. Friendly, concrete, one clear call to action."
+            }
+          ]
+        }
+      },
+      "id": "fx-brief-node",
+      "name": "Your brief",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [200, 400]
+    },
+    {
+      "parameters": {
+        "operation": "buildAuthoringPrompt",
+        "brief": "={{ $json.brief }}",
+        "useItemFieldNames": false,
+        "allowedVariables": {
+          "variable": [
+            { "name": "first_name", "case": "", "note": "recipient's first name" },
+            { "name": "company", "case": "", "note": "recipient's company" }
+          ]
+        },
+        "channel": "email",
+        "variationLevel": "balanced"
+      },
+      "id": "fx-authoring",
+      "name": "Build authoring prompt",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [400, 400]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userPrompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.systemPrompt }}"
+            }
+          ]
+        }
+      },
+      "id": "fx-llm",
+      "name": "Your LLM",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [620, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "fx-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [640, 620]
+    },
+    {
+      "parameters": {
+        "operation": "validate",
+        "template": "={{ $json.text ?? $json.template }}",
+        "cleanModelOutput": true,
+        "locale": "",
+        "spintaxMeta": "={{ $('Build authoring prompt').item.json.spintaxMeta }}"
+      },
+      "id": "fx-validate1",
+      "name": "Validate draft",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [860, 400]
+    },
+    {
+      "parameters": {
+        "operation": "buildRepairPrompt",
+        "template": "={{ $json.cleanedTemplate ?? $json.template }}",
+        "diagnostics": "={{ $json.diagnostics }}",
+        "spintaxMeta": "={{ $('Build authoring prompt').item.json.spintaxMeta }}"
+      },
+      "id": "fx-repair",
+      "name": "Build repair prompt",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [1080, 560]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userPrompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.systemPrompt }}"
+            }
+          ]
+        }
+      },
+      "id": "fx-llm2",
+      "name": "LLM (repair)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [1300, 560]
+    },
+    {
+      "parameters": {
+        "operation": "validate",
+        "template": "={{ $json.text ?? $json.template }}",
+        "cleanModelOutput": true,
+        "locale": "",
+        "spintaxMeta": "={{ $('Build authoring prompt').item.json.spintaxMeta }}"
+      },
+      "id": "fx-validate2",
+      "name": "Validate (attempt 2)",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [1520, 560]
+    },
+    {
+      "parameters": {},
+      "id": "fx-giveup",
+      "name": "Still invalid — stop (loop is capped)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1740, 700]
+    },
+    {
+      "parameters": {
+        "operation": "renderMany",
+        "template": "={{ $json.cleanedTemplate }}",
+        "count": 5,
+        "baseSeed": "demo",
+        "useIncomingItem": false,
+        "fixedVariables": {
+          "pair": [
+            { "name": "first_name", "value": "Ada", "neutralize": false },
+            { "name": "company", "value": "Brightline Gear", "neutralize": false }
+          ]
+        }
+      },
+      "id": "fx-render",
+      "name": "Render 5 variants",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [1740, 400]
+    },
+    {
+      "parameters": {
+        "content": "## The funnel\n\nBrief → **Build Authoring Prompt** → your LLM → **Validate** → (one **repair** round) → **Render Many**.\n\nConnect credentials on the OpenAI model node — or swap the chain for ANY LLM node. The Spintax nodes are provider-agnostic: they emit plain `systemPrompt`/`userPrompt` and read back plain text.",
+        "height": 280,
+        "width": 460
+      },
+      "id": "fx-note-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, 60]
+    },
+    {
+      "parameters": {
+        "content": "## spintaxMeta\n\nAuthoring stamps the locale + allowed variables into `spintaxMeta`. LLM nodes drop unknown fields, so Validate/Repair read it **straight off the authoring node** (`$('Build authoring prompt')`) — one locale and one variable list end to end. `Clean Model Output` strips the code fences models love to add; diagnostics then point into the cleaned text.",
+        "height": 280,
+        "width": 460
+      },
+      "id": "fx-note-2",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [860, 60]
+    },
+    {
+      "parameters": {
+        "content": "## The loop is capped by wiring\n\nExactly ONE repair attempt, then stop. Models usually fix a template on the first try — the repair prompt points at the exact offending token (line/column). Add a third round only deliberately.\n\n`Render 5 variants` is honest: `produced` may be < `requested` on a low-variety template — independent draws, not distinct results.",
+        "height": 280,
+        "width": 420
+      },
+      "id": "fx-note-3",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1520, 60]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [[{ "node": "Your brief", "type": "main", "index": 0 }]]
+    },
+    "Your brief": {
+      "main": [[{ "node": "Build authoring prompt", "type": "main", "index": 0 }]]
+    },
+    "Build authoring prompt": {
+      "main": [[{ "node": "Your LLM", "type": "main", "index": 0 }]]
+    },
+    "Your LLM": {
+      "main": [[{ "node": "Validate draft", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          { "node": "Your LLM", "type": "ai_languageModel", "index": 0 },
+          { "node": "LLM (repair)", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Validate draft": {
+      "main": [
+        [{ "node": "Render 5 variants", "type": "main", "index": 0 }],
+        [{ "node": "Build repair prompt", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build repair prompt": {
+      "main": [[{ "node": "LLM (repair)", "type": "main", "index": 0 }]]
+    },
+    "LLM (repair)": {
+      "main": [[{ "node": "Validate (attempt 2)", "type": "main", "index": 0 }]]
+    },
+    "Validate (attempt 2)": {
+      "main": [
+        [{ "node": "Render 5 variants", "type": "main", "index": 0 }],
+        [{ "node": "Still invalid — stop (loop is capped)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {},
+  "pinData": {}
+}

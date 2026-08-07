@@ -1,0 +1,109 @@
+{
+  "name": "Spintax cold-email bridge — unique copy per lead (and per product)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "sx-trigger",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 260]
+    },
+    {
+      "parameters": {
+        "jsCode": "// REPLACE ME with your real source: Google Sheets, Airtable, your CRM…\n// Every top-level string/number/boolean field of an item automatically\n// becomes a %variable% in the Spintax node downstream.\nreturn [\n  { json: { first_name: 'Ada',   company: 'Brightline Gear', category: 'outdoor equipment', product: 'Trekker 45L backpack',   price: '$129', in_stock: 14,  has_discount: 'yes' } },\n  { json: { first_name: 'Grace', company: 'Nordic Home',     category: 'kitchenware',       product: 'cast-iron skillet set', price: '$89',  in_stock: 1,   has_discount: '' } },\n  { json: { first_name: 'Linus', company: 'Pixelparts',      category: 'PC components',     product: 'silent GPU cooler',     price: '$59',  in_stock: 230, has_discount: 'yes' } },\n];"
+      },
+      "id": "sx-leads",
+      "name": "Sample leads (replace with your source)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 260]
+    },
+    {
+      "parameters": {
+        "operation": "render",
+        "template": "{Quick|One|Small} {question|idea} for %company% — the %product% {listing|page}",
+        "seed": "={{ $json.company }}:subject",
+        "outputField": "subject"
+      },
+      "id": "sx-subject",
+      "name": "Render subject",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [440, 260]
+    },
+    {
+      "parameters": {
+        "operation": "render",
+        "template": "{Hi|Hello|Hey} %first_name%,\n\n{We noticed|Saw that|Noticed} %company% {carries|sells|stocks} %category% — {nice|solid|great} {lineup|selection}.\n\n{Quick|One} {idea|thought} about your %product% {listing|page}: {?has_discount?with the {current|running} {promo|discount} at %price% it {deserves|warrants}|at %price% it {deserves|warrants}} {fresh|distinct} copy per {storefront|channel} — and with %in_stock% {plural %in_stock%: unit|units} in stock, {now|this week} is the {right|perfect} time.\n\n{Worth|Open to} a {quick|15-minute} {look|chat} {this|next} week?\n\n{Best|Cheers|Regards},\n{Alex|Sam} from Spintax",
+        "seed": "={{ $json.company }}:body",
+        "outputField": "body"
+      },
+      "id": "sx-body",
+      "name": "Render body",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [660, 260]
+    },
+    {
+      "parameters": {},
+      "id": "sx-send",
+      "name": "Send with YOUR tool",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [880, 260]
+    },
+    {
+      "parameters": {
+        "content": "## Cold-email bridge\n\nSending platforms parse flat `{a|b|c}` at best — so **render here, send there**. Replace the Code node with your lead source (Google Sheets, CRM export); every row field is a `%variable%` automatically. Replace the last node with your ESP / Gmail / SMTP node and map `subject` + `body`.\n\nIncoming values are **neutralized by default**: a scraped company name containing `{` stays text, never markup.",
+        "height": 300,
+        "width": 420
+      },
+      "id": "sx-note-main",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, -80]
+    },
+    {
+      "parameters": {
+        "content": "## Same pattern = product catalogs\n\nFeed a **product list** instead of leads and this exact Render-per-row flow writes a **unique description per product per storefront** — no duplicate content across your sites. Conditionals (`{?has_discount?…|…}`) switch copy on data fields; `{plural %in_stock%: unit|units}` keeps counts grammatical.",
+        "height": 300,
+        "width": 380
+      },
+      "id": "sx-note-products",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [440, -80]
+    },
+    {
+      "parameters": {
+        "content": "## Seeds\n\nThe seed is an expression per lead (`company + ':subject'`), so every lead gets a **stable, reproducible** variant — re-running the workflow does not reshuffle sent copy. Change the suffix to re-roll everyone.",
+        "height": 220,
+        "width": 340
+      },
+      "id": "sx-note-seed",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [840, -80]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [[{ "node": "Sample leads (replace with your source)", "type": "main", "index": 0 }]]
+    },
+    "Sample leads (replace with your source)": {
+      "main": [[{ "node": "Render subject", "type": "main", "index": 0 }]]
+    },
+    "Render subject": {
+      "main": [[{ "node": "Render body", "type": "main", "index": 0 }]]
+    },
+    "Render body": {
+      "main": [[{ "node": "Send with YOUR tool", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {},
+  "pinData": {}
+}

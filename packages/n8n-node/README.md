@@ -61,6 +61,18 @@ Tip for the LLM loop: enable **Clean Model Output** on Validate — models wrap 
 in code fences no matter what the prompt says. The cleaned text lands in
 `cleanedTemplate` and every position in the diagnostics refers to exactly that string.
 
+## Ready-made workflows
+
+Two importable templates, both verified against a live n8n (**⋯ → Import from URL…**):
+
+- **[Cold-email bridge](https://raw.githubusercontent.com/investblog/spintax-js/main/packages/n8n-node/templates/cold-email-bridge.json)** —
+  leads (or a *product feed*) in, a unique subject + body per row out, ready for your sending
+  tool. Shows per-row deterministic seeds, data-driven conditionals and plural agreement; the
+  same pattern writes unique product descriptions per storefront.
+- **[AI authoring funnel](https://raw.githubusercontent.com/investblog/spintax-js/main/packages/n8n-node/templates/ai-authoring-funnel.json)** —
+  brief → Build Authoring Prompt → your LLM → Validate → (one capped repair round) → Render
+  5 variants. Connect credentials on the model node, or swap in any LLM node.
+
 ## Why spintax (the 30-second argument)
 
 Sending tools that "support spintax" parse flat `{a|b|c}` and stop there. The full
