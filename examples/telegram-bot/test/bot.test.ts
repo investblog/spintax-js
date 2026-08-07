@@ -190,6 +190,13 @@ describe('the help must not teach anything the engine rejects', () => {
     }
   });
 
+  test('help offers the desktop editor for anyone outgrowing a chat window', async () => {
+    await bot.fetch(update('/help'), ENV);
+    const help: string = sent[0].text;
+    expect(help).toContain('apps.microsoft.com/detail/9mw3ch7b530p');
+    expect(help).toContain('Spintax Studio');
+  });
+
   // The help once said "#set picks once" two lines below a cheat-sheet row saying the opposite —
   // 0.3.0 swapped the semantics and the prose was left behind. Pin the attribution, not the wording.
   test('roll-once is attributed to #def, never to #set', async () => {
@@ -248,15 +255,23 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
     expect(user).not.toContain('do not use any %variable%');
   });
 
-  test('samples are rendered with demo data, not left full of raw placeholders', async () => {
+  // The old shape put the template's variables in a footnote at the very bottom — copy the
+  // template out and it arrived without its variables. Now the draft carries them as #def lines,
+  // so the copied template validates clean and renders identically in any editor or host.
+  test('a draft is self-contained: demo variables are #def-ed into the template, not footnoted', async () => {
     aiRun.mockResolvedValueOnce({ response: '{Hi|Hello} %name%, welcome to %company%!' });
     await bot.fetch(update('/draft a welcome'), ENV);
 
     const text: string = sent[0].text;
+    expect(text).toContain(
+      '📝 Template:\n#def %name% = Ada\n#def %company% = Acme\n{Hi|Hello} %name%, welcome to %company%!',
+    );
     expect(text).toMatch(/\d\. (Hi|Hello) Ada, welcome to Acme!/u); // filled in
-    expect(text).toContain('Rendered with demo data');
-    // The template itself still shows the variables — only the SAMPLES are filled.
-    expect(text).toContain('📝 Template:\n{Hi|Hello} %name%, welcome to %company%!');
+    expect(text).not.toContain('Rendered with demo data'); // nothing left to footnote
+
+    // The template as shipped must stand on its own: no undefined-variable warning, no errors.
+    const template = text.slice('📝 Template:\n'.length, text.indexOf('\n\n✨ Sample variations:'));
+    expect(validate(template, { locale: LOCALE })).toEqual([]);
   });
 
   // An unresolved count does not merely print a placeholder — the whole {plural …} block renders
@@ -532,6 +547,16 @@ describe('inline keyboard: the draft rerolls in place, because it IS the state c
     await bot.fetch(press('d:m:1:10', draftMessage(body)), ENV); // 10 lands mid-template
     expect(methods()).toEqual(['answerCallbackQuery']);
     expect(sent[0].text).toMatch(/send the template again/iu);
+  });
+
+  // Messages sent BEFORE defs were inlined still reroll through the same button. Their templates
+  // reference %name% without defining it, so the demo-data footnote is still true — and needed.
+  test('a legacy draft (no inline defs) keeps the demo-data footnote on reroll', async () => {
+    const legacy = '{Hi|Hello} %name%!';
+    const body = `📝 Template:\n${legacy}\n\n✨ Sample variations:\n1. x`;
+    await bot.fetch(press(`d:m:31:${legacy.length}`, draftMessage(body)), ENV);
+    const edited = callTo('editMessageText');
+    expect(edited.text).toContain('Rendered with demo data: %name%=Ada');
   });
 
   test('"Новый бриф" toasts the usage line without changing anything', async () => {

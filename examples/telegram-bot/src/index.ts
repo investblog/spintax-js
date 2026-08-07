@@ -144,6 +144,9 @@ const HELP = [
   '<b>AI draft</b> (beta)',
   '<code>/draft &lt;brief&gt;</code> — describe the copy in plain words and an AI writes the template.',
   '',
+  '<b>Editor</b>',
+  '🖊️ <a href="https://apps.microsoft.com/detail/9mw3ch7b530p">Spintax Studio</a> — free Windows editor with live template validation.',
+  '',
   '<b>Docs &amp; source</b>',
   '📦 <a href="https://www.npmjs.com/package/@spintax/core">npm — @spintax/core</a>',
   '💻 <a href="https://github.com/investblog/spintax-js">GitHub — source &amp; examples</a>',
@@ -164,6 +167,26 @@ function runtimeRefs(src: string): string[] {
   const { refs, sets, defs } = extract(src);
   const defined = new Set([...sets, ...defs]);
   return refs.filter((r) => !defined.has(r));
+}
+
+/**
+ * Make a draft self-contained: inline a `#def` for every demo variable it references.
+ *
+ * The old shape — template with bare `%name%`, values explained in a note at the very bottom —
+ * confused users: the template they copied out did not carry its variables, so pasted into an
+ * editor or another host it validated with warnings and rendered with holes. A `#def` (not `#set`)
+ * per variable keeps a plural count legal (`plural.count-macro` bans macros, not defs) and makes
+ * the copied template render identically anywhere.
+ *
+ * `runtimeRefs` already excludes names the model defined itself, so this never duplicates a
+ * definition; a name outside DRAFT_CONTEXT is left alone and reported by the "outside the demo
+ * set" warning instead.
+ */
+function inlineDraftDefs(template: string): string {
+  const demo = runtimeRefs(template).filter((r) => r in DRAFT_CONTEXT);
+  if (demo.length === 0) return template;
+  const defs = demo.map((v) => `#def %${v}% = ${DRAFT_CONTEXT[v]}`).join('\n');
+  return `${defs}\n${template}`;
 }
 
 /**
@@ -371,6 +394,9 @@ async function draftTemplate(
     };
   }
 
+  // Only a VALID draft is made self-contained: injecting into a broken one would shift every
+  // diagnostic's line number away from the template the user is looking at.
+  template = inlineDraftDefs(template);
   return { ...draftReply(template, 1), templateLen: template.length };
 }
 
@@ -389,7 +415,14 @@ function draftReply(template: string, startSeed: number): { text: string; nextSe
 
   let reply = `${DRAFT_PREFIX}${template}`;
   reply += `${DRAFT_SAMPLES}${variants.map((v, i) => `${i + 1}. ${v}`).join('\n')}`;
-  reply += `\n\nℹ️ Rendered with demo data: ${DRAFT_VARS.map((v) => `%${v}%=${DRAFT_CONTEXT[v] ?? ''}`).join(', ')}`;
+
+  // New drafts define their demo variables inline (see `inlineDraftDefs`), so there is nothing to
+  // explain. A demo-data ref can still reach here through the reroll button on a message sent
+  // BEFORE the defs were inlined — only then is the note both true and needed.
+  const demoFilled = runtimeRefs(template).filter((r) => r in DRAFT_CONTEXT);
+  if (demoFilled.length > 0) {
+    reply += `\n\nℹ️ Rendered with demo data: ${demoFilled.map((v) => `%${v}%=${DRAFT_CONTEXT[v] ?? ''}`).join(', ')}`;
+  }
 
   // The prompt allows exactly DRAFT_VARS. If the model reached for another name it is only a
   // `variable.undefined` WARNING, so the draft is still usable — but the samples above will carry
