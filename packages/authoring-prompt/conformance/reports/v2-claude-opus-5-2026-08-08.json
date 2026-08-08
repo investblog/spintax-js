@@ -1,0 +1,282 @@
+{
+  "promptVersion": "2",
+  "model": "claude-opus-5",
+  "samplesPerBrief": 3,
+  "ranAt": "2026-08-08T09:12:59.561Z",
+  "validRate": 1,
+  "valid": 24,
+  "total": 24,
+  "metrics": {
+    "plural": 1,
+    "lastsep": 1,
+    "conditional": 1,
+    "caseDiscipline": 1
+  },
+  "perBrief": {
+    "en-email-baseline": {
+      "valid": 3,
+      "total": 3
+    },
+    "en-email-vars-conditional": {
+      "valid": 3,
+      "total": 3
+    },
+    "en-product-plural": {
+      "valid": 3,
+      "total": 3
+    },
+    "en-landing-lastsep": {
+      "valid": 3,
+      "total": 3
+    },
+    "en-sms-conservative": {
+      "valid": 3,
+      "total": 3
+    },
+    "ru-email-light": {
+      "valid": 3,
+      "total": 3
+    },
+    "ru-strict-cased-counts": {
+      "valid": 3,
+      "total": 3
+    },
+    "ru-push-aggressive": {
+      "valid": 3,
+      "total": 3
+    }
+  },
+  "samples": [
+    {
+      "brief": "en-email-baseline",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {},
+      "template": "#set %greeting% = {Hi|Hello|Hey}\n\n%greeting% there, and welcome to FocusDesk! {We built it to help you|It's designed to help you|We made it so you can} [<minsize=2;maxsize=3;sep=\", \";lastsep=\" and \">plan your day in minutes|keep track of what actually matters|stay focused on one thing at a time]. {Your dashboard is ready whenever you are|Everything starts on your dashboard|The best place to begin is your dashboard} — open it and {add your first task|set up your first focus session}. {Glad to have you with us|Happy focusing|Great to have you on board}!"
+    },
+    {
+      "brief": "en-email-vars-conditional",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "conditional": true
+      },
+      "template": "#def %greeting% = {Hi|Hello|Hey}\n#set %team_word% = {team|crew|folks}\n#def %setup% = {get set up|get everything running|find your footing}\n\n%greeting% %first_name%,\n\n{Welcome aboard|Great to have you with us|Thanks for joining us} — your account is {ready to go|all set up|live}. {We built the first few steps to be quick, so you and the %team_word% at %company% can %setup% in a single sitting.|Everything you need to %setup% is waiting inside, and the %team_word% at %company% can jump in whenever it suits you.} {?%has_discount%?Your discount is already applied, so there's nothing else for you to do on that front.|You can explore every feature at your own pace, no rush.} {If anything looks unclear, just reply to this email and a real person will answer.|Reply to this message any time and one of us will help you out.}\n\n{Log in and take the first step today|Sign in and set up your first project|Log in whenever you're ready and start from the dashboard}.\n\n{Best|Cheers|Talk soon},\nThe Onboarding Team"
+    },
+    {
+      "brief": "en-email-baseline",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {},
+      "template": "#def %app% = FocusDesk\n#set %greeting% = {Welcome to %app%|Welcome aboard|Glad you're here}\n\n%greeting% — {we're really pleased to have you|thanks for signing up|you're all set}. %app% {is built to help you|helps you} [<minsize=2;maxsize=3;sep=\", \";lastsep=\" and \">protect your deep work time|keep your day on track|quiet the everyday distractions], so the work that matters actually gets finished. {Open your dashboard|Head over to your dashboard} to {set up your first focus session|plan your first focused hour} — it {takes about a minute|shouldn't take more than a minute}. {If anything looks confusing|If you get stuck anywhere}, just reply to this email and {we'll walk you through it|a real person will help you out}."
+    },
+    {
+      "brief": "en-email-baseline",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {},
+      "template": "#def %day% = {your day|your workday}\n#set %greeting% = {Hi|Hello|Hey there}\n\n%greeting% — welcome to FocusDesk! {We built FocusDesk to help you|FocusDesk is here to help you|We made FocusDesk so you can} [<minsize=2;maxsize=2;sep=\", \";lastsep=\" and \">cut through the noise|protect your focus|stay on top of your tasks], so you can finish %day% feeling genuinely ahead. Your dashboard is {already set up|ready and waiting|good to go}, so {all that's left is a quick look around|the only step left is a quick look around|there's nothing to configure first}. Open your dashboard now and {plan your first focused session|set your first task|see what's waiting for you} — it takes {less than a minute|about a minute|under a minute}."
+    },
+    {
+      "brief": "en-email-vars-conditional",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "conditional": true
+      },
+      "template": "#def %greeting% = {Hi|Hello|Hey}\n#set %team% = {the team here|all of us here|everyone here}\n\n%greeting% %first_name%,\n\n{Welcome aboard|Great to have you with us|Thanks for signing up} — %team% at our end {is glad|is happy|is delighted} to have %company% on board. {Your account is ready to go|Everything is set up and ready|Your workspace is live}, so the only thing left is to {take a look around|walk through the basics|get your first project started}. {?%has_discount%?Your discount is already applied, so there is nothing else for you to sort out on that side.|We have kept the first steps short, so you should be up and running in a few minutes.}\n\n{Click the button in your dashboard to finish setting up|Log in and finish setting up your account|Sign in to your dashboard and finish the setup} whenever it suits you — {it takes about five minutes|it should not take long|five minutes is plenty}.\n\n{Speak soon|Talk soon|All the best},\nThe Team"
+    },
+    {
+      "brief": "en-email-vars-conditional",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "conditional": true
+      },
+      "template": "#def %greeting% = {Hi|Hello|Hey}\n#set %team_word% = {team at %company%|crew at %company%|folks at %company%}\n\n%greeting% %first_name%,\n\n{Welcome aboard|Great to have you with us|Thanks for signing up} — your account is {ready to go|all set up|live}. {We built the setup flow to be quick|Getting started takes just a few minutes|The first steps are short and simple}, so you and the %team_word% can [<minsize=2;maxsize=3;sep=\", \";lastsep=\" and \">invite your teammates|import your existing data|set up your first project]. {?%has_discount%?Your discount is already applied to the account, so there is nothing extra to enter.|}\n\n{Click below to finish setting up|Hit the button below to pick up where you left off|Use the link below to complete your setup} whenever you are ready.\n\n{Talk soon|Speak soon|See you inside},\nThe Onboarding Team"
+    },
+    {
+      "brief": "en-product-plural",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "#def %hook% = {Meet %product% — yours for just %price%|%product% is here, and it's %price%|Say hello to %product%, priced at %price%}\n#set %nudge% = {so don't wait around|so grab yours before they're gone|so now is the moment}\n\n%hook%. {Only|Just} %in_stock% {plural %in_stock%: unit|units} {plural %in_stock%: is|are} {left in stock|still available}, %nudge%."
+    },
+    {
+      "brief": "en-product-plural",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "#def %intro% = {Meet|Introducing|Say hello to}\n#set %nudge% = {order now|claim yours today|add it to your cart}\n\n%intro% %product% — {yours for|now just|priced at} %price%.\n\n{Only|Just} %in_stock% {plural %in_stock%: unit is|units are} {left in stock|still available}, so %nudge% {while you can|before it's too late}."
+    },
+    {
+      "brief": "en-product-plural",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "#def %cta% = {order|claim|grab}\n{Meet %product%|Say hello to %product%|%product% is here} — {yours for|now just|just} %price%.\n\nWe {have|currently have} %in_stock% {plural %in_stock%: unit|units} in stock, so %cta% yours {today|while you can|before stock runs out}."
+    },
+    {
+      "brief": "en-landing-lastsep",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "lastsep": true
+      },
+      "template": "#def %tone% = {built for teams that move fast|made for teams that ship|designed for teams that hate waiting}\n\n{Chat that keeps up with your team|Team chat, without the clutter|Finally, a team chat your work can keep up with|Team chat that gets out of the way}\n\n{Get your whole team talking in one place|Bring every conversation into one place|Give your team one place to talk}, %tone%, with [<minsize=3;maxsize=4;sep=\", \";lastsep=\" and \">search that returns results instantly|thread summaries that catch you up in seconds|an offline mode that keeps working on the train|granular permissions you can set channel by channel] — {so nothing gets lost and nobody gets locked out|so the right people see the right things, always|so your team spends less time hunting and more time doing}."
+    },
+    {
+      "brief": "en-sms-conservative",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "%first_name%, your trial ends in %days_left% {plural %days_left%: day|days}. {Upgrade|Renew} here to keep your access: %link%"
+    },
+    {
+      "brief": "en-sms-conservative",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "%first_name%, your trial ends in %days_left% {plural %days_left%: day|days}. {Upgrade|Renew} here to keep your access: %link%"
+    },
+    {
+      "brief": "en-sms-conservative",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "Hi %first_name%, your trial ends in %days_left% {plural %days_left%: day|days}. {Upgrade|Renew} here to keep your access: %link%"
+    },
+    {
+      "brief": "en-landing-lastsep",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "lastsep": true
+      },
+      "template": "#def %app% = {team chat|team messaging|workplace chat}\n#set %verb% = {Get|Enjoy|Give your team}\n\n{Chat that keeps up with your team|%app% that actually keeps up|Finally, %app% that works the way you do}.\n\n{We built|We designed} {our|this} %app% {app|tool} {for teams who|for people who|around the way real teams} {move fast|work|get things done}, so you {get|can count on} [<minsize=3;maxsize=4;sep=\", \";lastsep=\" and \">search that returns answers in {milliseconds|an instant}|thread summaries that {catch you up in seconds|save you the scrollback}|an offline mode that {keeps working on the train|never leaves you stranded}|granular permissions you can {tune channel by channel|set exactly how you need them}] — {without the setup headache|without a week of onboarding|from day one}."
+    },
+    {
+      "brief": "en-landing-lastsep",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "lastsep": true
+      },
+      "template": "#def %product% = {team chat|team messaging|group chat}\n#set %team% = {team|crew|whole company}\n\n{The %product% app your %team% will actually stick with.|Finally, %product% that keeps up with your %team%.|%product% built for the way your %team% really works.}\n\n{Everything stays|Every conversation stays|Your day stays} {clear|organised|easy to follow} {thanks to|because of|with} [<minsize=3;maxsize=4;sep=\", \";lastsep=\" and \">search that {surfaces|finds} the right message in {milliseconds|a heartbeat}|thread summaries that catch you up in {seconds|a glance}|an offline mode that keeps working {on the train|in the air|with no signal}|granular permissions that keep {the right people|exactly the right people} in the loop] — {no setup marathon required|and none of it takes a weekend to set up|so you can get back to the actual work}."
+    },
+    {
+      "brief": "ru-email-light",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {},
+      "template": "#def %doc% = {отчёт|итоговый отчёт|аналитический отчёт}\n#set %greeting% = {Здравствуйте|Добрый день|Приветствуем}\n\n%greeting%, %Name%!\n\n%doc% %CompanyGen% {готов к просмотру|готов — можно смотреть|собран и готов к просмотру}: {мы свели все данные и перепроверили цифры|данные сведены, цифры перепроверены|все показатели собраны и сверены}. Внутри вы найдёте [<minsize=2;maxsize=3;sep=\", \";lastsep=\" и \">ключевые показатели за период|наглядные графики|краткие выводы и рекомендации]. {Если что-то останется непонятным|Если появятся вопросы|Если понадобятся пояснения}, {просто ответьте на это письмо|напишите нам в ответ} — {разберём вместе|поможем разобраться}.\n\n{Открыть %doc%|Откройте %doc% по кнопке ниже|Нажмите на кнопку ниже, чтобы открыть %doc%}."
+    },
+    {
+      "brief": "ru-email-light",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {},
+      "template": "#set %greet% = {Здравствуйте|Добрый день|Приветствую}\n#def %doc% = {отчёт|итоговый отчёт|готовый отчёт}\n\n%greet%, %Name%!\n\n%doc% %CompanyGen% {готов|уже готов} — мы {закончили|завершили} {проверку данных|сверку цифр} и {собрали всё в одном документе|свели всё в один документ}. Внутри вы найдёте [<minsize=2;maxsize=3;sep=\", \";lastsep=\" и \">ключевые показатели за период|динамику по основным направлениям|короткие выводы и рекомендации]. {На чтение уйдёт|Займёт} не больше пяти минут, а {все детали|подробные таблицы} останутся под рукой.\n\n{Откройте отчёт|Открыть отчёт можно} по ссылке ниже — {и напишите нам, если что-то потребует уточнения|если возникнут вопросы, просто ответьте на это письмо}."
+    },
+    {
+      "brief": "ru-email-light",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {},
+      "template": "{Привет|Здравствуйте}, %Name%!\n\n{Отчёт|Ваш отчёт} компании %CompanyGen% {готов к просмотру|уже готов}. Мы [<minsize=2;maxsize=3;sep=\", \";lastsep=\" и \">свели все данные в одну таблицу|отметили ключевые изменения за период|добавили короткие выводы по каждому разделу]. {Чтение займёт пару минут|На просмотр уйдёт минут пять, не больше}.\n\n{Откройте отчёт по ссылке ниже|Нажмите на ссылку ниже, чтобы открыть отчёт}."
+    },
+    {
+      "brief": "ru-strict-cased-counts",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true,
+        "caseDiscipline": true
+      },
+      "template": "%Brand% — {понятная аналитика|вся аналитика} для %VisitorsGen%\n\nМы создали %Brand% для %VisitorsGen% — {и для команд, которые каждый день работают с %VisitorsInstr%|и для всех, кто ежедневно работает с %VisitorsInstr%}. {Сервис|Платформа} собирает [<minsize=2;maxsize=3;sep=\", \";lastsep=\" и \">путь каждого визита|источники трафика|поведение на страницах] и показывает всё это в одном отчёте. Данные о %VisitorsLoc% {обновляются в реальном времени|приходят без задержек}, поэтому решения вы принимаете {сегодня, а не через неделю|сразу, а не в конце месяца}. Сейчас в %Brand% уже %visitor_count% {plural %visitor_count%: посетитель|посетителя|посетителей} — {подключайтесь|присоединяйтесь}."
+    },
+    {
+      "brief": "ru-strict-cased-counts",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true,
+        "caseDiscipline": true
+      },
+      "template": "#def %tool% = {сервис|инструмент}\n#def %audience% = {ваших %VisitorsGen%|ваших %VisitorsGen%}\n\n%Brand% — %tool% аналитики, который {создан для %VisitorsGen%|создан ради %VisitorsGen%|начинается с %VisitorsGen%}.\n\nМы {собрали|сделали} %tool%, который {помогает работать с %VisitorsInstr%|учит работать с %VisitorsInstr% осмысленно}, а не просто {считает клики|рисует графики}. С %Brand% вы [<minsize=2;maxsize=3;sep=\", \";lastsep=\" и \">видите путь каждого визита|понимаете, что важно вашей аудитории|находите точки роста без догадок]. Все данные о %VisitorsLoc% {собраны в одном отчёте|лежат в одном понятном отчёте}, и его {не нужно расшифровывать|поймёт вся команда}. {?visitor_count?Нам уже доверяют %visitor_count% {plural %visitor_count%: посетитель|посетителя|посетителей} — {присоединяйтесь|начните сегодня}.|{Присоединяйтесь|Начните сегодня} — первые отчёты будут готовы уже завтра.}"
+    },
+    {
+      "brief": "ru-strict-cased-counts",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true,
+        "caseDiscipline": true
+      },
+      "template": "{Аналитика, созданная для %VisitorsGen%|Всё о %VisitorsLoc% — в одном окне|Знайте своих %VisitorsGen% в лицо}\n\n%Brand% — сервис аналитики, {созданный для %VisitorsGen%|который создан для %VisitorsGen% и их привычек}. Он помогает {выстраивать работу с %VisitorsInstr%|каждый день работать с %VisitorsInstr%|понимать, что действительно нужно %VisitorsDat%}. Внутри — [<minsize=2;maxsize=3;sep=\", \";lastsep=\" и \">понятные отчёты о %VisitorsLoc%|сегменты и воронки|уведомления в реальном времени]. Сегодня в %Brand% уже %visitor_count% {plural %visitor_count%: посетитель|посетителя|посетителей}, и {каждый из них на виду|данные по каждому обновляются в реальном времени}. {Подключайтесь|Начните прямо сейчас} — {настройка занимает несколько минут|первые данные вы увидите уже сегодня}."
+    },
+    {
+      "brief": "ru-push-aggressive",
+      "sample": 1,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "#def %noun% = {plural %unread_count%: сообщение|сообщения|сообщений}\n#def %unread% = {plural %unread_count%: непрочитанное|непрочитанных|непрочитанных}\n#set %cta% = [<minsize=1;maxsize=2;sep=\" \";lastsep=\" \">{Загляните в чат|Откройте приложение}.|{Не пропустите ничего важного|Ответьте прямо сейчас}.]\n{У вас %unread_count% %unread% %noun%|Вам пришло %unread_count% %noun%|Вас ждёт %unread_count% %unread% %noun%|Накопилось %unread_count% %unread% %noun%}{.|!} %cta%"
+    },
+    {
+      "brief": "ru-push-aggressive",
+      "sample": 0,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "#def %count_msgs% = %unread_count% {plural %unread_count%: непрочитанное сообщение|непрочитанных сообщения|непрочитанных сообщений}\n#set %cta% = {Загляните в чат|Откройте приложение|Самое время прочитать|Не пропустите важное|Скорее [<minsize=1;maxsize=2;sep=\", \";lastsep=\" и \">проверьте входящие|загляните в чат]}\n\n{?unread_count?{Привет! |Эй! |}{У вас|Вам пришло|Накопилось|Вас ждёт} %count_msgs%. %cta%.|Загляните в чат — там могут быть новые сообщения.}"
+    },
+    {
+      "brief": "ru-push-aggressive",
+      "sample": 2,
+      "valid": true,
+      "reasons": [],
+      "metrics": {
+        "plural": true
+      },
+      "template": "#def %unread% = %unread_count% {plural %unread_count%: непрочитанное сообщение|непрочитанных сообщения|непрочитанных сообщений}\n#def %plain% = %unread_count% {plural %unread_count%: сообщение|сообщения|сообщений}\n#set %cta% = {Загляните|Загляните в чат|Откройте приложение|Не пропустите|Посмотрите, что там|Самое время [<minsize=1;maxsize=2;sep=\" и \">открыть чат|ответить]}\n{?unread_count?{У вас %unread%|У вас накопилось %unread%|Непрочитано: %plain%|В чате — %plain%|Пока вас не было, пришло %plain%}. %cta%!|Есть новые сообщения. %cta%!}"
+    }
+  ]
+}

@@ -31,6 +31,9 @@ const flag = (name, fallback) => {
 };
 const MODEL = flag('model', 'claude-opus-5');
 const SAMPLES = Number(flag('samples', '3'));
+// On Claude Opus 5 thinking is on by default and max_tokens caps thinking +
+// response TOGETHER — 2048 truncated the richer Russian drafts mid-{plural}.
+const MAX_TOKENS = Number(flag('max-tokens', '8192'));
 const THRESHOLD = flag('threshold', null);
 const ONLY = flag('briefs', null)?.split(',');
 const CONCURRENCY = 4;
@@ -57,7 +60,7 @@ async function runSample(brief, sampleIndex) {
 
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: MAX_TOKENS,
     system: built.systemPrompt,
     messages: [{ role: 'user', content: built.userPrompt }],
   });
@@ -86,6 +89,13 @@ async function runSample(brief, sampleIndex) {
     .join('');
   const template = cleanModelTemplate(text);
   result.template = template;
+
+  // An empty draft validates trivially (zero diagnostics) — that is a failure,
+  // not a pass; the first run let one through exactly this way.
+  if (template.trim() === '') {
+    result.reasons.push('empty template after cleaning');
+    return result;
+  }
 
   // Primary gate 1: zero error-severity diagnostics under the brief's locale.
   const knownVariables = brief.allowedVariables.map((v) => v.name);
