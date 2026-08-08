@@ -25,7 +25,8 @@
     "smoke:pack": "bash scripts/smoke-tarball.sh",
     "smoke:pack:n8n": "bash scripts/smoke-tarball-n8n.sh",
     "bench:postprocess": "node scripts/bench-postprocess.mjs",
-    "conformance:validate": "npm run validate -w @spintax/conformance"
+    "conformance:validate": "npm run validate -w @spintax/conformance",
+    "prompt:conformance": "npm run conformance -w @spintax/authoring-prompt"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.4",

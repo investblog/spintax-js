@@ -1,0 +1,124 @@
+{
+  "$comment": "Prompt-conformance briefs (#47). Each brief runs through buildAuthoringPrompt() against a live model; the draft is cleaned, validated under the brief's OWN locale, and rendered with sampleContext. `expects` drives the secondary metrics — did the prompt teach the hard parts? — and caseRules pins Russian case discipline (declared case wins over what the variable NAME suggests).",
+  "briefs": [
+    {
+      "id": "en-email-baseline",
+      "brief": "Write a short, friendly welcome email (3-4 sentences) for a productivity app called FocusDesk. One clear call to action: open the dashboard.",
+      "locale": "en",
+      "channel": "email",
+      "variationLevel": "balanced",
+      "allowedVariables": [],
+      "sampleContext": {},
+      "expects": {}
+    },
+    {
+      "id": "en-email-vars-conditional",
+      "brief": "Write a short onboarding email for %first_name% at %company%. If %has_discount% is set, mention their discount is already applied; otherwise do not mention pricing at all. 3-5 sentences, one call to action.",
+      "locale": "en",
+      "channel": "email",
+      "variationLevel": "balanced",
+      "allowedVariables": [
+        { "name": "first_name", "note": "recipient's first name" },
+        { "name": "company", "note": "recipient's company" },
+        { "name": "has_discount", "note": "optional — empty when the account has no discount" }
+      ],
+      "sampleContext": { "first_name": "Ada", "company": "Brightline Gear", "has_discount": "yes" },
+      "expects": { "conditional": true }
+    },
+    {
+      "id": "en-product-plural",
+      "brief": "Write a two-sentence e-commerce product blurb for %product% priced at %price%. Mention that there are %in_stock% units in stock — the sentence must stay grammatical whether it is 1 or many.",
+      "locale": "en",
+      "channel": "landing",
+      "variationLevel": "balanced",
+      "allowedVariables": [
+        { "name": "product" },
+        { "name": "price" },
+        { "name": "in_stock", "note": "a count — an integer number of units" }
+      ],
+      "sampleContext": { "product": "Trekker 45L backpack", "price": "$129", "in_stock": "1" },
+      "expects": { "plural": true }
+    },
+    {
+      "id": "en-landing-lastsep",
+      "brief": "Write a one-paragraph landing-page intro for a team chat app. In one sentence, list three to four of these selling points in varying order: fast search, thread summaries, offline mode, granular permissions. The list must read naturally in prose (with a proper 'and' before the last item).",
+      "locale": "en",
+      "channel": "landing",
+      "variationLevel": "aggressive",
+      "allowedVariables": [],
+      "sampleContext": {},
+      "expects": { "lastsep": true }
+    },
+    {
+      "id": "en-sms-conservative",
+      "brief": "Write an SMS (max ~2 short sentences) reminding %first_name% that their trial ends in %days_left% days. Include a short link placeholder %link%. Keep wording variation minimal.",
+      "locale": "en",
+      "channel": "sms",
+      "variationLevel": "conservative",
+      "allowedVariables": [
+        { "name": "first_name" },
+        { "name": "days_left", "note": "a count of days" },
+        { "name": "link", "note": "already a complete URL — do not wrap or spin it" }
+      ],
+      "sampleContext": { "first_name": "Ada", "days_left": "3", "link": "https://ex.io/r" },
+      "expects": { "plural": true }
+    },
+    {
+      "id": "ru-email-light",
+      "brief": "Напиши короткое письмо (3-4 предложения) для %Name% о том, что отчёт компании %CompanyGen% готов к просмотру. Один призыв к действию: открыть отчёт.",
+      "locale": "ru",
+      "channel": "email",
+      "variationLevel": "balanced",
+      "allowedVariables": [
+        { "name": "Name", "case": "nominative", "note": "имя получателя" },
+        { "name": "CompanyGen", "case": "genitive", "note": "название компании в родительном падеже" }
+      ],
+      "sampleContext": { "Name": "Анна", "CompanyGen": "«Брайтлайн»" },
+      "expects": {}
+    },
+    {
+      "id": "ru-strict-cased-counts",
+      "brief": "Напиши абзац (3-5 предложений) для лендинга сервиса аналитики посетителей. Расскажи, что сервис создан для %VisitorsGen%, помогает работать с %VisitorsInstr% и уже обслуживает %visitor_count% посетителей — число должно оставаться грамматичным при любом значении. Название бренда %Brand% не склоняется и не изменяется.",
+      "locale": "ru",
+      "channel": "landing",
+      "variationLevel": "balanced",
+      "allowedVariables": [
+        { "name": "Visitors", "case": "nominative", "note": "посетители — именительный" },
+        { "name": "VisitorsGen", "case": "genitive", "note": "посетителей — родительный" },
+        { "name": "VisitorsDat", "case": "dative", "note": "посетителям — дательный" },
+        { "name": "VisitorsInstr", "case": "instrumental", "note": "посетителями — творительный" },
+        { "name": "VisitorsLoc", "case": "prepositional", "note": "о посетителях — предложный" },
+        { "name": "Brand", "note": "название бренда — не склоняется, вставлять как есть" },
+        { "name": "visitor_count", "note": "число посетителей — счётчик" }
+      ],
+      "sampleContext": {
+        "Visitors": "посетители",
+        "VisitorsGen": "посетителей",
+        "VisitorsDat": "посетителям",
+        "VisitorsInstr": "посетителями",
+        "VisitorsLoc": "посетителях",
+        "Brand": "Tracklight",
+        "visitor_count": "21"
+      },
+      "expects": {
+        "plural": true,
+        "caseRules": [
+          { "trigger": "для", "bare": "Visitors", "reason": "после «для» требуется родительный — %VisitorsGen%, не %Visitors%" },
+          { "trigger": "с", "bare": "Visitors", "reason": "после «с» требуется творительный — %VisitorsInstr%, не %Visitors%" }
+        ]
+      }
+    },
+    {
+      "id": "ru-push-aggressive",
+      "brief": "Напиши короткий пуш (1-2 предложения) о том, что у пользователя %unread_count% непрочитанных сообщений — грамматично при любом числе. Вариативность максимальная.",
+      "locale": "ru",
+      "channel": "push",
+      "variationLevel": "aggressive",
+      "allowedVariables": [
+        { "name": "unread_count", "note": "число непрочитанных сообщений — счётчик" }
+      ],
+      "sampleContext": { "unread_count": "2" },
+      "expects": { "plural": true }
+    }
+  ]
+}
