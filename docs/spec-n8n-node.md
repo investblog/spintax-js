@@ -1,12 +1,11 @@
 # n8n community node — `n8n-nodes-spintax` (spec)
 
-Status: **DESIGNED + REVIEWED — ready to build (2026-08-07).** The draft's open questions are
-resolved (§5), n8n's live verification constraints are folded into the packaging design (§4),
-and the launch/marketing plan is pinned (§6). Codex review (same day, 10 findings) is applied:
+Status: **RELEASED (2026-08-07); N2 launch tail in progress (2026-08-09).** The draft's open
+questions are resolved (§5), n8n's live verification constraints are folded into the packaging
+design (§4), and the launch/marketing plan is pinned (§6). Codex review (10 findings) is applied:
 the funnel carries `spintaxMeta` end-to-end, cleanup writes `cleanedTemplate` so spans match,
 neutralize follows the trust tier, Render Many has an implementable contract, the scanner runs
-post-publish, and R1 assumes verification unavailable until n8n confirms eligibility. Nothing is
-written yet; the build plan is §7.
+post-publish, and R1 assumes verification unavailable until n8n confirms eligibility.
 
 > **Build status (2026-08-07, same day):** `packages/n8n-node/` is BUILT — N0 and the code half of
 > N1 are done (five operations, two-output Validate via a dynamic `outputs` expression, 27 tests,
@@ -18,9 +17,19 @@ written yet; the build plan is §7.
 > **RELEASED: `n8n-nodes-spintax@0.1.1` is on npm** (0.1.0 bootstrapped via a one-off token —
 > a Trusted Publisher entry cannot precede the first publish; 0.1.1 fixed the scanner's two
 > author-field findings; the Trusted Publisher entry is live and the workflow is back to
-> OIDC-only). n8n's official scanner passes ALL checks on 0.1.1 — run it via the
-> `scan-n8n.yml` workflow (Linux; the scanner's tar breaks on Windows paths). N2 is next:
-> eligibility ask (R1), gallery templates, forum post, hub obvyazka.
+> OIDC-only). n8n's official scanner passes ALL checks — run it via the
+> `scan-n8n.yml` workflow (Linux; the scanner's tar breaks on Windows paths).
+>
+> **N2 status (2026-08-09):** current release is **`0.1.4`** (scanner green). Both gallery
+> templates live in `packages/n8n-node/templates/`; the *cold-email bridge* was **submitted to
+> the n8n gallery 2026-08-08** (manual review, 3–5 business days — the second template waits for
+> the first to clear, the Creator Portal would not accept it earlier). Demo assets for the AI
+> authoring funnel are in `temp/marketing/` (gitignored): `spintax-ai-funnel-result.png` is a
+> real end-to-end run through `claude-opus-5` (valid on the first attempt, repair branch unused —
+> consistent with the 100% prompt-conformance baseline in
+> `packages/authoring-prompt/conformance/reports/`). Remaining N2 order: template 1 clears
+> moderation → submit template 2 → forum Show & Tell post + verification submission via the
+> Creator Portal (drafts in `temp/marketing/`). Hub obvyazka tracks separately.
 Owner: 301st
 Tracking issue: [#44](https://github.com/investblog/spintax-js/issues/44).
 Channel strategy: [spintax.net ADR 0007](https://github.com/investblog/spintax.net/blob/main/docs/decisions/0007-workflow-channels.md)
@@ -230,13 +239,17 @@ Mechanics:
 
 **Risk R1 — assume Cloud verification is unavailable until n8n says otherwise.** The current
 rules want each package to "integrate exactly one third-party service" and exclude logic/flow
-nodes; a bundled local library is **not** a third-party service, and framing it as *the*
-integration for the Spintax ecosystem changes positioning, not the technical category. So: **ask
-n8n for eligibility feedback before N2** rather than discovering the answer at submission. If
-refused, distribution is npm + the self-hosted instances *whose admin policy permits unverified
-community packages* (not "every instance"), and discovery shifts to the gallery templates, the
-article and the forum post (§6) rather than the Cloud node picker. Cloud verification is upside,
-not the load-bearing floor.
+nodes (both re-verified against the live guidelines 2026-08-09); a bundled local library is
+**not** a third-party service, and framing it as *the* integration for the Spintax ecosystem
+changes positioning, not the technical category. **There is no pre-submission ask channel
+anymore** — the original "ask n8n for eligibility feedback first" step died when submission
+moved to the Creator Portal (`creators.n8n.io/nodes`), which has no contact for questions. So
+the verdict is obtained *by submitting through the portal*; a rejection there is cheap and comes
+with a stated reason (the submission text should pre-empt the category question — draft in
+`temp/marketing/verification-eligibility.md`). If refused, distribution is npm + the self-hosted
+instances *whose admin policy permits unverified community packages* (not "every instance"), and
+discovery shifts to the gallery templates, the article and the forum post (§6) rather than the
+Cloud node picker. Cloud verification is upside, not the load-bearing floor.
 
 ## 5. Resolved design questions (were §5 open questions)
 
@@ -275,8 +288,9 @@ so no surface here drifts from it:
    Microsoft Store** — a maintained ecosystem, not a weekend wrapper. Plus the SVG icon, package
    metadata, packed-file list, clean-install smoke test.
 2. **Ship `n8n-nodes-spintax@0.1.0`** to npm with provenance (§4 release path).
-3. **Run the exact-version scan, then submit for n8n Cloud verification** — with the eligibility
-   feedback from §4 risk R1 already in hand, re-reading the live guidelines at submission time.
+3. **Run the exact-version scan, then submit for n8n Cloud verification via the Creator Portal**
+   (`creators.n8n.io/nodes`) — there is no pre-submission ask channel (§4 risk R1); the portal
+   verdict *is* the eligibility answer. Re-read the live guidelines at submission time.
 4. **2–3 workflow templates** in the n8n gallery — each is a discovery page and the onboarding at
    once:
    - *Cold-email bridge:* Google Sheets leads → Render per row → the user's sending tool
@@ -319,8 +333,8 @@ so no surface here drifts from it:
 - **N1 — Build Authoring Prompt + Build Repair Prompt + Render Many.** The funnel is complete;
   README + icon land *before* the publish; `0.1.0` released, then the exact-version scan
   (§6 steps 1–3).
-- **N2 — templates + submission.** Gallery templates, verification submission (eligibility
-  feedback per R1 first), forum post; hub obvyazka unblocks on its own gate.
+- **N2 — templates + submission.** Gallery templates, verification submission via the Creator
+  Portal (no pre-ask exists — R1), forum post; hub obvyazka unblocks on its own gate.
 
 ## 8. Adjacent surfaces (same argument, not yet filed)
 
