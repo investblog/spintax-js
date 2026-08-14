@@ -107,6 +107,29 @@ describe('renderManyOp', () => {
     expect(renderManyOp('{a|b}', { count: 0 }).requested).toBe(1);
     expect(renderManyOp('{a|b}', { count: 1000 }).requested).toBe(100);
   });
+
+  it('reports the seed that produced each variant — it drifts from variantIndex after a collision (#60)', () => {
+    // Capacity 3 × 2 = 6, asking for all 6: collisions are arithmetic (coupon
+    // collector), not luck, so the drift is guaranteed rather than sampled.
+    const template = '{a|b|c} {d|e}';
+    const result = renderManyOp(template, { count: 6, baseSeed: 'demo' });
+
+    expect(result.attempts).toBeGreaterThan(result.produced);
+    // Every reported seed really rebuilds its own variant…
+    for (const variant of result.variants) {
+      expect(renderOp(template, { seed: variant.attemptSeed! })).toBe(variant.rendered);
+    }
+    // …and at least one of them is NOT `demo:${variantIndex}` — the exact case
+    // where a host that kept only the index has lost the document.
+    const drifted = result.variants.filter((v) => v.attemptSeed !== `demo:${v.variantIndex}`);
+    expect(drifted.length).toBeGreaterThan(0);
+  });
+
+  it('omits attemptSeed on unseeded draws — there is no seed to report', () => {
+    const result = renderManyOp('{a|b}', { count: 2 });
+    expect(result.variants.length).toBeGreaterThan(0);
+    for (const variant of result.variants) expect(variant.attemptSeed).toBeUndefined();
+  });
 });
 
 describe('validateOp', () => {

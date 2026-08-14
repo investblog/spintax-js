@@ -44,9 +44,26 @@ const mock = {
   continueOnFail: () => false,
   getNode: () => ({ name: 'Spintax' }),
 };
-node.execute.call(mock).then((r) => {
+// Every operation the docs promise is really registered in the shipped artifact.
+const operations = node.description.properties.find((p) => p.name === 'operation').options.map((o) => o.value).sort();
+assert.deepStrictEqual(operations, [
+  'buildAuthoringPrompt', 'buildRepairPrompt', 'lint', 'protectPlaceholders',
+  'render', 'renderMany', 'uniqueness', 'validate',
+], 'the published node must expose every documented operation');
+// A routing operation end-to-end from the tarball: two outputs, second branch used.
+const lintMock = {
+  getInputData: () => [{ json: {} }],
+  getNodeParameter: (k, i, d) => ({ operation: 'lint', text: 'winter boots, winter boots' })[k] ?? d,
+  continueOnFail: () => false,
+  getNode: () => ({ name: 'Spintax' }),
+};
+node.execute.call(mock).then(async (r) => {
   assert.strictEqual(r[0][0].json.rendered, 'A Ada');
   console.log('  CJS require + bundled engine ok');
+  const [clean, defective] = await node.execute.call(lintMock);
+  assert.strictEqual(clean.length, 0);
+  assert.strictEqual(defective[0].json.findings[0].code, 'repeat.word');
+  console.log('  operations registered + two-output routing ok');
 });
 "
 

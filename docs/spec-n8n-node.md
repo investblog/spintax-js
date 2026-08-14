@@ -8,8 +8,9 @@ neutralize follows the trust tier, Render Many has an implementable contract, th
 post-publish, and R1 assumes verification unavailable until n8n confirms eligibility.
 
 > **Build status (2026-08-07, same day):** `packages/n8n-node/` is BUILT — N0 and the code half of
-> N1 are done (five operations, two-output Validate via a dynamic `outputs` expression, 27 tests,
-> lint/typecheck/smokes green; the smoke proved it can see breakage via a control mutation).
+> N1 are done (five operations at the time — eight since 0.2.0 — two-output Validate via a
+> dynamic `outputs` expression, 27 tests, lint/typecheck/smokes green; the smoke proved it can
+> see breakage via a control mutation).
 > **Live-verified in a local n8n 2.33.7** (npm-linked via `~/.n8n/custom`): the node registers
 > with all five actions, Render executed (`{Dr|Prof} Ada` T1 markup drew correctly under seed),
 > and Validate's dynamic two-output routing sent a broken template to the Invalid branch with
@@ -30,6 +31,23 @@ post-publish, and R1 assumes verification unavailable until n8n confirms eligibi
 > `packages/authoring-prompt/conformance/reports/`). Remaining N2 order: template 1 clears
 > moderation → submit template 2 → forum Show & Tell post + verification submission via the
 > Creator Portal (drafts in `temp/marketing/`). Hub obvyazka tracks separately.
+>
+> **0.2.0 — the four field-report issues (2026-08-14).** Building a 1000-article pool on top of
+> the node produced four issues, all now closed in code: **#60** Render Many emits `attemptSeed`
+> (the seed that produced a variant is not derivable from its index after a collision), and three
+> new operations — **#61 Lint** (defects in the combination of choices; 2% → 100% clean on a real
+> pool), **#62 Uniqueness** (near-dup drop + shared-skeleton footprint; one template 0.962, six
+> 0.017), **#63 Protect Placeholders** (foreign `%macros%` survive the parser AND the typographer).
+> Reference implementations came from `admin/content-gen` (zero-dep CJS, 141 tests, green on a real
+> campaign); ported here with their measurements kept as the rationale. New gallery template
+> `templates/product-copy-pool.json` runs the whole lane. Node suite: 101 tests.
+>
+> **Gallery status (2026-08-14):** the cold-email bridge (17930) was **rejected** — "too basic",
+> after a first round about sticky-note overlap. The layout fix never reached the reviewer (the
+> Creator Portal locked the submission with the old JSON), but the verdict is about substance, not
+> layout, so that submission stays closed. The product-copy-pool template is the answer to it and
+> is submitted **after** 0.2.0 is published, since it uses operations that do not exist before it.
+
 Owner: 301st
 Tracking issue: [#44](https://github.com/investblog/spintax-js/issues/44).
 Channel strategy: [spintax.net ADR 0007](https://github.com/investblog/spintax.net/blob/main/docs/decisions/0007-workflow-channels.md)
@@ -83,12 +101,22 @@ prompts the node produces* are in whatever language the user works in, that is c
 The funnel the operations are designed around:
 
 ```
-Sheets/CRM item → Build Authoring Prompt → LLM node → Validate ──Valid──→ Render / Render Many → Email/TG/CRM
-                                                          │
-                                                       Invalid
-                                                          ↓
-                                              Build Repair Prompt → LLM node ──┘ (capped, e.g. 2 attempts)
+Sheets/CRM item → Build Authoring Prompt → LLM node → Validate ──Valid──→ Render / Render Many
+                                                          │                        │
+                                                       Invalid                     ↓
+                                                          ↓                Lint ──Defective──→ drop, draw again
+                                              Build Repair Prompt                  │ Clean
+                                                          ↓                        ↓
+                                                      LLM node ──┘         Uniqueness ──Dropped──→ near-dups out
+                                              (capped, e.g. 2 attempts)            │ Kept
+                                                                                   ↓
+                                                                            Email / TG / CRM / files
 ```
+
+**Validate judges the template, Lint judges the render, Uniqueness judges the pool.** Three
+different questions, and only the first one is answerable from the source — which is why the
+second and third had to become operations rather than advice (#61, #62). `Protect Placeholders`
+sits outside this lane: it wraps the render when the text has a *second* engine downstream (#63).
 
 **One `locale` through the whole funnel.** Every operation takes the same `locale` option
 (explicit default `en`); Build Authoring Prompt stamps it into `spintaxMeta` on the item, and
@@ -128,9 +156,18 @@ concern) — with an implementable contract, not a sketch: inputs `count` (defau
 `parse()` handle for all attempts). With `baseSeed`, attempt *i* uses the documented derivation
 `` `${baseSeed}:${i}` `` — deterministic, and portable as-is to the Activepieces/Node-RED ports;
 without it, unseeded independent renders. Dedupe by the final rendered string. Emit one item per
-variant — `{ rendered, variantIndex, requested, produced }` — **with `pairedItem` set to the
-source input index** on every emitted item (n8n's item-linking requirement; unlinked fan-out
+variant — `{ rendered, variantIndex, attemptSeed?, requested, produced }` — **with `pairedItem` set
+to the source input index** on every emitted item (n8n's item-linking requirement; unlinked fan-out
 breaks downstream field access to the source row). Never claim exact cardinality.
+
+> **`attemptSeed` is the accepted variant's own seed, and it is not derivable from the index**
+> (#60). The seed counts *attempts*, `variantIndex` counts *accepted variants*; while nothing
+> collides the two numbers agree, and after the first collision they diverge permanently. Emitting
+> only the index means a persisted pool cannot rebuild one document — cannot repair a torn file,
+> cannot top up without re-rendering everything, cannot prove it is reproducible at all. Since
+> reproducibility is what spintax offers over "ask the model again", the batching operation is the
+> last place to lose it. The field is present only when a `baseSeed` was given: an unseeded draw
+> has no seed, and inventing one would be a lie.
 
 > **Carry the honest caveat from the README into the node's UI copy.** Distinct seeds are
 > *independent draws, not distinct results* — a low-cardinality template will repeat, and may
@@ -157,6 +194,195 @@ breaks downstream field access to the source row). Never claim exact cardinality
   `knownIncludes` (unknown-`#include` checking is opt-in, matching `ValidateOptions`), and
   `knownVariables` — defaulted from `spintaxMeta.allowedVariables` names, so the allow-listed
   runtime variables don't surface as avoidable unresolved-`%var%` warnings.
+
+### Operation: Lint (#61)
+
+`validate()` judges the **template**. Lint judges the **render** — because a template can be
+flawless and still emit broken text: two adjacent slots pick the same word, a noun from one slot
+meets a relative pronoun from another and they disagree in gender, an unlucky join leaves a space
+before a comma. None of that is visible in the source and none of it survives a human reading of
+the source; it appears only in *some* renders. Measured on a real pool: the first lint run over
+200 renders came out **2% clean**, and 100% after the slots the lint pointed at were fixed — while
+one defect that shipped before the linter existed ("сюжет, в которой") sat in **18% of the pool**
+and was caught by a human noticing a screenshot. That last number is the argument: a thousand
+articles cannot be proofread, so the failure mode is not "we make mistakes" but "we cannot see
+them".
+
+- **Two outputs, `Clean` / `Defective`** — same reasoning as Validate: the corrective loop (drop
+  the render, draw another) is one wire. An operational failure under `continueOnFail` rides
+  **Defective**, never Clean.
+- **Two sources.** `Rendered Text` lints one document from the item (default field `rendered`,
+  so it drops straight onto Render / Render Many). `Template Sample` renders `sampleSize`
+  documents itself and reports `checked` / `cleanCount` / `cleanRatio` / `issues[]` (tallied,
+  worst first) — the authoring-time loop that produced the 2% → 100% numbers. Attempt *i* uses
+  the Render Many seed derivation `` `${baseSeed}:${i}` ``, so a report is reproducible.
+- **Findings are structured** — `{ code, message, fragment, data }` with codes `repeat.word`,
+  `agreement.relative`, `punctuation.{double-space,space-before,duplicated,empty-pair}`. As
+  everywhere else in this node, `message` is *not* a contract; branch on `code`/`data`.
+- **The repeat window is a tuning knob, and 6 is the measured number.** At 9, 82% of the hits
+  were ordinary cohesion — a heading saying "Обучение и стратегии" followed by "ветка стратегий"
+  in the body is not a defect. Configurable, conservative by default.
+- **Rules are locale-scoped, and a locale we have not studied gets only the neutral rules.** The
+  gender/relative-pronoun rule is Russian (a closed pronoun class, high precision); repeats and
+  punctuation are language-neutral. Two consequences worth stating: a locale with no stop-word
+  table falls back to the length filter alone rather than inheriting another language's function
+  words, and `fr` is exempt from *space-before-punctuation* for `; : ! ?`, where that spacing is
+  correct typography — complaining about correct text is how a linter gets ignored.
+- **Skip what cannot be judged.** Russian gender is guessed from the ending, and a soft sign is
+  ambiguous (`путь` masculine, `тень` feminine), so those words are skipped, not guessed. Same
+  reasoning retires the reference implementation's `..`-run rule for `...`: an ellipsis is
+  something an author means, `..` is debris.
+- **Honest boundary, in the docs and the UI:** case agreement *inside* a slot is not
+  machine-checkable and stays the author's job (grammar-safe synonymization). Lint removes the
+  mechanical half, not the craft.
+
+> **Not ported from the reference implementation:** its noun+participle agreement rule
+> ("раздел посвящена") drew its precision from a campaign-specific noun list. A generic version
+> would need a lexicon to tell a short-form participle from a feminine noun in `-ена` (`цена`,
+> `смена`, `страна`), and guessing there produces exactly the wrong complaints this operation is
+> built to avoid. Filed here so it is not silently rediscovered as an omission.
+
+### Operation: Uniqueness (#62)
+
+Render Many answers "are these variants different?" with exact-string dedupe. Necessary, not
+sufficient: a pool can contain zero duplicates and still be trivially clusterable, because every
+document shares one sentence skeleton. Measured on real pools of the same size — **1 template →
+0.962**, 5 templates → 0.103, 6 templates → **0.017**, where the footprint is the share of the
+pool's unique 5-word shingles that appear in more than 20% of its documents after normalisation.
+
+- **The one POOL operation.** "Are these actually different?" is not answerable per item, so this
+  operation consumes the whole input before the per-item loop and reads its settings from row 0.
+  Every incoming item is one document; the same items come back out, each carrying a `uniqueness`
+  verdict, routed **`Kept` / `Dropped`**. The drop list is *applied*, not reported as indices —
+  handing back `drop: [3, 7]` would push the mechanical half into a Code node. It carries the
+  same `continueOnFail` contract as the per-item loop: a failure routes the whole pool to
+  `Dropped` with `pairedItem` intact, never aborting a workflow that asked to carry on.
+- **`Kept` means publishable, which is per-document AND pool-level.** A document that duplicates
+  nothing can still belong to a pool that shares one skeleton, and shipping it is exactly what the
+  footprint exists to catch — so when the footprint is exceeded, *nothing* is kept. The routing
+  flag is `footprintExceeded`, deliberately **not** `ok`: `ok` is also false when a single
+  near-duplicate was dropped, and routing on that would empty the Kept branch every time the
+  operation did its ordinary job. `Footprint Limit = 1` makes the pool verdict advisory.
+- **Documents are dropped greedily, in input order, against what is still RETAINED** — not
+  pairwise. On a chain `A≈B`, `B≈C`, `A≉C`, dropping the later member of every pair discards both
+  B and C, though once B is gone C duplicates nothing that remains; and the reported `nearDupOf`
+  would point at a document that is no longer in the pool. The greedy pass keeps A and C, and
+  every `nearDupOf` names a survivor.
+- **A document is a non-empty STRING, and nothing is coerced.** An item with no value there is not
+  an empty document, and an object stringified to `"[object Object]"` is not a document at all —
+  either would add itself to `poolSize` and shift every other item's footprint cutoff. Both leave on
+  `Dropped` with `measured: false`, so the measured pool is exactly the items that carried text.
+- **The normalisation is an ordered algorithm, not a description**: exact macro strings out
+  (longest first, so a nested macro cannot eat the one enclosing it) → tags with attributes →
+  NFC → locale-aware lowercase → punctuation and symbols to **space** → whitespace collapse →
+  words → 5-word shingle set. Every skipped choice makes the metric irreproducible: deleting a
+  hyphen joins two words, replacing it with a space splits them — different shingles, different
+  number. The locale-aware lowercase is the shared funnel `locale` (the Turkish dotless ı).
+- **Refuses to report on a tiny pool.** With share 0.2 and three documents, "appears in more than
+  0.6 documents" means "appears at all" and the value is 1 by construction, so below
+  `minPoolForFootprint` (default 5) the footprint comes back `null` with a `footprintReason`.
+  "Not measured" beats an impressive number that means nothing.
+- **Near-dup candidates come from an inverted index over shingles**, not an O(n²) scan: at
+  J ≥ threshold a shared shingle is guaranteed, so nothing is lost — asserted against a
+  brute-force pass in the tests rather than argued. That guarantee holds only for a *positive*
+  threshold and *non-empty* documents (two empty sets score 1 while sharing nothing, and at
+  threshold 0 every pair qualifies), so both cases fall back to the full scan instead of quietly
+  losing pairs the docstring promises are kept.
+- **The failure text says what will not work.** The intuitive reaction to "not unique enough" is
+  to ask for more variants, and that is precisely the one move that cannot help: the skeleton is
+  fixed by the template, so re-rendering dilutes nothing. Only new templates — or denser
+  variation — move the number. Related and worth knowing at the same moment: **seeds do not
+  guarantee uniqueness** either; 30 independent seeds on a template of ~108 outputs gave 25
+  distinct documents, ordinary birthday collisions that users read as a bug.
+
+### Operation: Protect Placeholders (#63)
+
+A rendered template is often not the final consumer of its own text: it goes on to Mailchimp merge
+tags, Shopify Liquid, a CRM, GSA Search Engine Ranker. Those systems have their own `%placeholder%`
+vocabulary, and the two syntaxes collide — whoever reaches the string first consumes it. Three
+failure modes, all measured against `@spintax/core` and pinned by tests that call the real engine:
+
+1. **A variable silently eats the recipient's macro.** Our lookup is case-INsensitive; the
+   recipient may treat case as *meaning* (`%random_anchor_text%` as-is, `%Random_Anchor_Text%`
+   capitalised, `%RANDOM_ANCHOR_TEXT%` upper). One `#set %Random_Anchor_Text%` hijacks the whole
+   family. Names overlap unexpectedly too — `%link%` is a GSA built-in, so a variable named `link`
+   breaks both engines at once and produces plausible-looking output.
+2. **Brackets are destroyed.** `[…]` is permutation syntax here, so `#file_links[D:\path,1,S]#`
+   comes out without them and `[URL='%url%']x[/URL]` renders as `URL='%url%'x/URL`. There is no
+   author-level escape.
+3. **The cosmetic pass edits macro parameters.** With `postProcess: true`, `D:` becomes `D: ` and
+   `,1,S` becomes `,1, S` inside what is supposed to be an opaque token. `neutralize()` shields a
+   value against the *parser*, not against the *typographer* — the distinction the conformance
+   fixture `neutralize/postprocess-off-roundtrips-byte-exact` already documents.
+
+The operation is the **post-injection** mechanism, generalised away from any one recipient: the
+registry of what a given platform's macros *are* stays with the user, what ships here is the
+mechanism and the checks. One operation, two modes:
+
+- **Protect (before render)** — replaces each listed placeholder with a marker, longest first so a
+  nested placeholder cannot eat the enclosing one, and emits `protectedTemplate` + `placeholderMap`
+  onto the item. It also runs the collision check for free, because this is where the template is
+  in hand: the names it declares via `#set`/`#def` (read with the engine's own `extract()`, not a
+  private regex) **plus the incoming item's scalar field names** — which is exactly what Render
+  turns into `%variables%` — are compared case-insensitively against the foreign names.
+- **Restore (after render)** — puts the placeholders back and verifies: case-mangled markers,
+  orphaned markers, typographer damage inside a restored macro, leftover braces, and stray `%…%`
+  that are neither restored nor allow-listed. `Fail on Problems` defaults **on**; refusing loudly
+  rather than corrupting quietly is the whole stance. An **empty** placeholder map is refused
+  outright, because a custom marker is unrecognisable once its mapping is gone: "nothing to
+  restore" and "the map was lost" look identical from the document, and only one of them is safe.
+
+Two implementation points that are contract, not detail:
+
+- **The marker grammar is `^[A-Z0-9_]+$`** because a lowercase marker at a sentence start gets
+  capitalised (`spxtoken0` → `Spxtoken0`) and the exact-match restore then misses **silently**,
+  shipping raw markers to the platform. A marker that violates the grammar, repeats, or already
+  occurs in the template prose is refused before anything is rendered — and that last check is
+  **case-insensitive**, because the render is what creates the collision: a marker `I` is absent
+  from "i agree" as typed and present in "I agree." after the cosmetic pass, at which point the
+  restore would rewrite a word of real copy and report success. (In the node UI the field is called
+  *Marker*: n8n's community-node lint reads a parameter named `token` as a credential.)
+- **Matching is plain substring, deliberately not `\b`-anchored, and BOTH directions are ONE pass.**
+  A placeholder sitting right before a word leaves the marker glued to it (`SPXTOKEN0click`), which
+  a boundary-anchored restore skips — and a boundary-sharing check would not see the miss either. A
+  *key-at-a-time loop* has the mirror-image hole in both directions: restoring `TAG` before `TAG1`
+  eats the prefix of the second and leaves no whole marker behind to flag; protecting `[LONG]`
+  before `SPX` writes `SPXTOKEN0` and then rewrites the marker it just inserted. So each direction
+  is a single alternation pass ordered longest-first — what it writes, it never reads again. A
+  corollary worth stating because it looks like a missing check: there is **no `residual` field**.
+  A marker "left behind" is not a state a single pass can produce, and a naive after-the-fact scan
+  reports the marker-shaped text *inside a substituted value* as residual, failing a restore that
+  was correct. Both divergences from the reference implementation are deliberate.
+- **The exact-string lists are one entry PER LINE, not comma-separated** (Shared Strings on
+  Uniqueness, Allowed Placeholders on Restore). They carry literal foreign strings, and a real macro
+  contains commas — `#file_links[D:\path,1,S]#` comma-split becomes three entries, one of which is
+  the string `1`, and the normalisation then strips every standalone `1` from every document.
+- **Two things that must not fail open**: a document still carrying auto-assigned markers with no
+  map entry is a lost map, not a clean document (reported by the reserved prefix, scanned on the
+  ORIGINAL text so a restored value that happens to be marker-shaped is not mistaken for one); and
+  the leftover-brace check covers the fullwidth `｛ ｝` the engine emits for markup it could not
+  parse, not only the ASCII pair a recipient might re-spin.
+- **A marker is checked against the DATA as well as the template.** The rendered document is
+  template plus substituted values, so a marker `VIP` is nowhere in `%segment% *|CODE|*` and is in
+  the output the moment `segment` is `"VIP"` — the node passes the incoming item's scalar values in
+  alongside its field names. And because the map arrives as item JSON, its keys are validated
+  against the marker grammar before use: an empty key would contribute an empty regex alternative,
+  which matches between every pair of characters and rewrites the whole document.
+
+> **The boundary this mechanism cannot cross: a PARTIALLY lost map with custom markers.** Auto-
+> assigned markers are recoverable by their reserved prefix, and a wholly missing map is refused —
+> but if a map arrives naming some markers and not others, a custom marker left raw in the text is
+> indistinguishable from ordinary uppercase copy, and Restore will report success. Detecting it
+> would need a marker manifest travelling beside the map. Until there is a consumer-driven reason
+> to add one, the answer is the default: leave the markers auto-assigned, and treat a hand-edited
+> map as the unverifiable thing it is.
+
+> Prior art worth reusing on the import side: `spintax-win`'s `SpGsaToSpintax` solves the opposite
+> direction with the right contract — it lifts unconvertible constructs into variables the caller
+> **must** merge, and refuses what it cannot express. Its v0.4.0 defect is instructive for exactly
+> this operation: lifted values were keyed case-**insensitively**, so `#file[A.txt]` and
+> `#file[a.txt]` collapsed into one variable and a template pulling from two lists silently pulled
+> twice from one.
 
 ### Operation: Build Authoring Prompt
 

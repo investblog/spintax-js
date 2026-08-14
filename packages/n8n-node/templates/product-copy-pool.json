@@ -1,0 +1,575 @@
+{
+  "id": "spintax-product-copy-pool",
+  "name": "Generate a pool of unique product descriptions from one AI-written spintax template",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "pool-trigger",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "pool-brief-value",
+              "name": "brief",
+              "type": "string",
+              "value": "Write a product description (3-4 sentences) for %product% by %brand%, aimed at %audience%. Mention %feature% and end with a concrete reason to buy today. Warm and specific, no superlatives, no exclamation marks."
+            }
+          ]
+        }
+      },
+      "id": "pool-brief",
+      "name": "Your brief",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "buildAuthoringPrompt",
+        "brief": "={{ $json.brief }}",
+        "locale": "en",
+        "useItemFieldNames": false,
+        "allowedVariables": {
+          "variable": [
+            {
+              "name": "product",
+              "case": "",
+              "note": "the listing title, e.g. Trail Runner 3"
+            },
+            {
+              "name": "brand",
+              "case": "",
+              "note": "manufacturer name"
+            },
+            {
+              "name": "audience",
+              "case": "",
+              "note": "who it is for, e.g. weekend hikers"
+            },
+            {
+              "name": "feature",
+              "case": "",
+              "note": "the one detail worth naming"
+            }
+          ]
+        },
+        "channel": "landing",
+        "variationLevel": "aggressive"
+      },
+      "id": "pool-authoring",
+      "name": "Build authoring prompt",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        440,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userPrompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.systemPrompt }}"
+            }
+          ]
+        }
+      },
+      "id": "pool-llm",
+      "name": "Your LLM",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        660,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {}
+      },
+      "id": "pool-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        660,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "validate",
+        "template": "={{ $json.text ?? $json.template }}",
+        "cleanModelOutput": true,
+        "locale": "",
+        "spintaxMeta": "={{ $('Build authoring prompt').item.json.spintaxMeta }}"
+      },
+      "id": "pool-validate1",
+      "name": "Validate draft",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        880,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "buildRepairPrompt",
+        "template": "={{ $json.cleanedTemplate ?? $json.template }}",
+        "diagnostics": "={{ $json.diagnostics }}",
+        "spintaxMeta": "={{ $('Build authoring prompt').item.json.spintaxMeta }}"
+      },
+      "id": "pool-repair",
+      "name": "Build repair prompt",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userPrompt }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "={{ $json.systemPrompt }}"
+            }
+          ]
+        }
+      },
+      "id": "pool-llm2",
+      "name": "LLM (repair)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        1320,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "validate",
+        "template": "={{ $json.text ?? $json.template }}",
+        "cleanModelOutput": true,
+        "locale": "",
+        "spintaxMeta": "={{ $('Build authoring prompt').item.json.spintaxMeta }}"
+      },
+      "id": "pool-validate2",
+      "name": "Validate (attempt 2)",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        620
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "pool-giveup",
+      "name": "Still invalid - stop (loop is capped)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1540,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "renderMany",
+        "template": "={{ $json.cleanedTemplate }}",
+        "count": 12,
+        "baseSeed": "pool-2026-08",
+        "locale": "en",
+        "useIncomingItem": false,
+        "fixedVariables": {
+          "pair": [
+            {
+              "name": "product",
+              "value": "Trail Runner 3",
+              "neutralize": false
+            },
+            {
+              "name": "brand",
+              "value": "Brightline Gear",
+              "neutralize": false
+            },
+            {
+              "name": "audience",
+              "value": "weekend hikers",
+              "neutralize": false
+            },
+            {
+              "name": "feature",
+              "value": "a 240 g upper that dries overnight",
+              "neutralize": false
+            }
+          ]
+        }
+      },
+      "id": "pool-render",
+      "name": "Render 12 variants",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "lint",
+        "lintSource": "text",
+        "text": "={{ $json.rendered }}",
+        "lintWindow": 6,
+        "locale": "en"
+      },
+      "id": "pool-lint",
+      "name": "Lint each variant",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        260
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "pool-lint-out",
+      "name": "Defective - draw another",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1980,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "uniqueness",
+        "textField": "rendered",
+        "dedupJaccard": 0.6,
+        "locale": "en",
+        "uniquenessOptions": {
+          "footprintMax": 0.15,
+          "minPoolForFootprint": 5,
+          "macros": "Trail Runner 3\nBrightline Gear\nweekend hikers\na 240 g upper that dries overnight"
+        }
+      },
+      "id": "pool-uniq",
+      "name": "Check pool uniqueness",
+      "type": "n8n-nodes-spintax.spintax",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        260
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "pool-uniq-out",
+      "name": "Near-duplicates - dropped",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        460
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "pool-ready",
+      "name": "Ready to publish",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2420,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## One template, a whole pool - and proof that the pool is actually different\n\n### What this does\n\nAn LLM writes **one spintax template** from your brief; the Spintax node then generates a pool\nof variants from it forever, offline and for free. The interesting half is what comes after\ngenerating: two checks that answer questions a template cannot.\n\n**Validate** judges the template. **Lint** judges the *render* - a flawless template still emits\nbroken text when two adjacent slots pick the same word or an unlucky join leaves a space before a\ncomma. None of that is visible in the source, and a pool of a thousand documents cannot be\nproofread.\n\n**Uniqueness** judges the *pool*. Exact-string dedupe says \"all different\"; the footprint asks\nwhether they are different or just one skeleton wearing twelve hats. Measured on real pools of\nthe same size: one template scores **0.962**, six templates score **0.017**. And more variants of\nthe same template cannot fix it - the skeleton is fixed by the template, so re-rendering dilutes\nnothing.\n\n### Set up\n\n1. Connect credentials on the **OpenAI Chat Model** node - or swap the chain for any LLM node you\n   already use. The Spintax operations exchange plain text and do not care about the provider.\n2. Edit the brief in **Your brief** and the four values in **Render 12 variants**.\n3. Execute. Everything after the LLM is deterministic: same base seed, same twelve documents.\n\n### Cost\n\nThe LLM runs **once**, when the template is written. Every future run of the pool costs nothing.\n\nNode: `n8n-nodes-spintax` (community) - no credentials, no network calls.",
+        "width": 640,
+        "height": 1000
+      },
+      "id": "Sticky Note",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -784,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1 - Author the template\n\nYour brief plus the four allowed variables become the canonical authoring prompt for **your** LLM\nnode. `spintaxMeta` is stamped onto the item here, so authoring, validation, repair and rendering\nall share ONE locale and ONE variable list.\n\nVariation level is **aggressive** on purpose: the fewer unchanged words in a row, the lower the\nfootprint at the far end of this workflow.",
+        "width": 856,
+        "height": 1000,
+        "color": 7
+      },
+      "id": "Sticky Note1",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2 - Validate, and repair once\n\nValid means: no error-severity diagnostics. Diagnostics carry `code`, line/column spans and\nstructured `data`, so the repair prompt points at the exact offending token instead of asking the\nmodel to look again.\n\n**The loop is capped by wiring** - exactly one repair attempt, then stop. Models usually fix a\ntemplate on the first try.\n\n`Clean Model Output` is on: LLMs wrap replies in code fences no matter what the prompt says, and\nevery diagnostic position then refers to the cleaned string.",
+        "width": 856,
+        "height": 1000,
+        "color": 7
+      },
+      "id": "Sticky Note2",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        832,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 3 - Generate the pool\n\nTwelve distinct variants from one template, deduplicated by the final string.\n\nDistinct seeds are **independent draws, not distinct results**: a low-variety template may not\nhave twelve documents to give, and the node says so (`produced` vs `requested`) instead of\nretrying forever. Each variant carries `attemptSeed` - the seed that actually produced it - so any\nsingle document can be rebuilt later.",
+        "width": 196,
+        "height": 1000,
+        "color": 7
+      },
+      "id": "Sticky Note3",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1712,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4 - Check what actually came out\n\n**Lint** reads each rendered document: repeated words in a window, a noun and a pronoun\ndisagreeing, punctuation debris from an unlucky join. Defective variants leave on the second\noutput rather than being silently shipped.\n\n**Uniqueness** reads the whole surviving pool at once: near-duplicates leave, and the footprint\nsays whether the pool is genuinely varied. Under 0.15 is healthy; above it the fix is a second\ntemplate or denser variation, NOT more variants of this one.\n\n**Shared Strings matters more than it looks.** The product name, the brand and the feature phrase\nare identical in all twelve documents, so left in they count as \"shared\" and the metric ends up\njudging your product name instead of your writing. These exact twelve documents score **0.209**\nwith them and **0.107** without.",
+        "width": 416,
+        "height": 1000,
+        "color": 7
+      },
+      "id": "Sticky Note4",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1932,
+        -96
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 5 - Ship it\n\nReplace this node with whatever consumes the copy: a marketplace API, Google Sheets, a file per\ndocument, an email tool.\n\nOnly documents that passed BOTH gates arrive here.",
+        "width": 196,
+        "height": 1000,
+        "color": 7
+      },
+      "id": "Sticky Note5",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2372,
+        -96
+      ]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "node": "Your brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Your brief": {
+      "main": [
+        [
+          {
+            "node": "Build authoring prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build authoring prompt": {
+      "main": [
+        [
+          {
+            "node": "Your LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Your LLM": {
+      "main": [
+        [
+          {
+            "node": "Validate draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Your LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "LLM (repair)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate draft": {
+      "main": [
+        [
+          {
+            "node": "Render 12 variants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build repair prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build repair prompt": {
+      "main": [
+        [
+          {
+            "node": "LLM (repair)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM (repair)": {
+      "main": [
+        [
+          {
+            "node": "Validate (attempt 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate (attempt 2)": {
+      "main": [
+        [
+          {
+            "node": "Render 12 variants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Still invalid - stop (loop is capped)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render 12 variants": {
+      "main": [
+        [
+          {
+            "node": "Lint each variant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lint each variant": {
+      "main": [
+        [
+          {
+            "node": "Check pool uniqueness",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Defective - draw another",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check pool uniqueness": {
+      "main": [
+        [
+          {
+            "node": "Ready to publish",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Near-duplicates - dropped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "pinData": {}
+}

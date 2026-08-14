@@ -4,8 +4,8 @@
 
 An [n8n](https://n8n.io) community node for [spintax](https://spintax.net) templates:
 render personalized copy at scale, validate templates, generate N distinct variants,
-and drive an LLM authoring loop — without shipping a single credential (you wire your
-own LLM node).
+check what actually came out, and drive an LLM authoring loop — without shipping a
+single credential (you wire your own LLM node).
 
 ```
 Sheets / CRM item
@@ -16,7 +16,13 @@ Sheets / CRM item
                   Valid          └── LLM node ◄─┘
                     │              (cap the loop, e.g. 2×)
                     └─► Render / Render Many
-                          └─► Email · Telegram · CRM
+                          └─► Lint ──Defective──► drop it, draw another
+                                │
+                              Clean
+                                └─► Uniqueness ──Dropped──► near-duplicates out
+                                      │
+                                    Kept
+                                      └─► Email · Telegram · CRM
 ```
 
 ## Install
@@ -45,10 +51,31 @@ is bundled in — the package has zero runtime dependencies.
 - **Render Many** — N distinct variants with honesty built in: distinct seeds are
   *independent draws, not distinct results*. A low-cardinality template may simply not
   have N variants to give; the node returns what exists (`produced` vs `requested`)
-  instead of retrying forever or silently under-delivering.
+  instead of retrying forever or silently under-delivering. With a base seed each
+  variant carries `attemptSeed` — the seed that actually produced it, which after a
+  collision is no longer `baseSeed:variantIndex`, so a persisted pool can rebuild any
+  single document later.
 - **Validate** — routes each item to a **Valid** or **Invalid** output (valid ⇔ no
   error-severity diagnostics — warnings ride along). Diagnostics carry structured
   `code`, `line`/`column` spans and `data`, so downstream logic never parses messages.
+- **Lint** — checks the *render*, not the template. A perfectly valid template still
+  emits broken text when two adjacent slots pick the same word, a noun from one slot
+  meets a pronoun from another, or an unlucky join leaves a space before a comma —
+  none of it visible in the source. Routes **Clean** / **Defective**, or samples N
+  renders from a template and reports how many came out clean. On a real pool that
+  number was 2% before the slots it pointed at were fixed, and 100% after.
+- **Uniqueness** — the pool question exact-string dedupe cannot answer: *are these
+  documents actually different, or is it one skeleton wearing N hats?* Reads every
+  incoming item as one pool, drops near-duplicates (**Kept** / **Dropped**) and
+  reports the shared-shingle footprint. Measured: one template scores **0.962**, six
+  templates of the same pool size score **0.017** — and more variants of the same
+  template cannot fix it, because the skeleton is fixed by the template.
+- **Protect Placeholders** — for text that goes on to *another* engine (Mailchimp
+  merge tags, Liquid, CRM or SEO macros). `%name%` means one thing here and another
+  there, `[…]` is permutation syntax so bracketed macros lose their brackets, and the
+  cosmetic pass edits `D:` into `D: ` inside a macro parameter. Protect swaps them for
+  markers before the render and puts them back after, verifying the result — and
+  refuses loudly instead of corrupting quietly.
 - **Build Authoring Prompt** — emits `systemPrompt`/`userPrompt` for *your* LLM node,
   from a brief + the allowed variables (with grammatical case for inflected
   languages). Provider-agnostic by construction; `spintaxMeta` rides the item so the
@@ -63,8 +90,12 @@ in code fences no matter what the prompt says. The cleaned text lands in
 
 ## Ready-made workflows
 
-Two importable templates, both verified against a live n8n (**⋯ → Import from URL…**):
+Importable templates, verified against a live n8n (**⋯ → Import from URL…**):
 
+- **[Product-copy pool](https://raw.githubusercontent.com/investblog/spintax-js/main/packages/n8n-node/templates/product-copy-pool.json)** —
+  the whole pipeline: brief → LLM writes one template → validate (+ one capped repair round) →
+  12 variants → **Lint** each one → **Uniqueness** across the pool. The LLM runs once; every
+  future run costs nothing.
 - **[Cold-email bridge](https://raw.githubusercontent.com/investblog/spintax-js/main/packages/n8n-node/templates/cold-email-bridge.json)** —
   leads (or a *product feed*) in, a unique subject + body per row out, ready for your sending
   tool. Shows per-row deterministic seeds, data-driven conditionals and plural agreement; the

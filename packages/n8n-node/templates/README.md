@@ -20,6 +20,23 @@ ESP/Gmail/SMTP node. Feed it a product list instead of leads and the same patter
 unique product description per product per storefront — no duplicate content across sites.
 No credentials required by the Spintax node; everything runs locally in your n8n.
 
+## product-copy-pool.json
+
+**Title:** Generate a pool of unique product descriptions from one AI-written spintax template
+
+**Description:** The full pipeline, including the half that usually gets skipped: an LLM writes
+ONE spintax template from your brief (validated, with a single capped repair round), Render Many
+turns it into 12 documents, and then two checks say whether they are any good. **Lint** reads
+each rendered document for the defects that live in the *combination of choices* and never in the
+template — two adjacent slots picking the same word, a noun and a pronoun disagreeing, punctuation
+debris from an unlucky join — and routes defective drafts away. **Uniqueness** reads the surviving
+pool as a whole: it drops near-duplicates and reports the shared-shingle footprint, the number
+that distinguishes "twelve different documents" from "one skeleton wearing twelve hats" (measured
+on real pools: one template 0.962, six templates 0.017). The LLM runs once; every future run of
+the pool costs nothing. No credentials on the Spintax side.
+
+**Requires:** `n8n-nodes-spintax` ≥ 0.2.0 (the Lint and Uniqueness operations).
+
 ## ai-authoring-funnel.json
 
 **Title:** AI writes the spintax template once — validate, repair, render N variants

@@ -64,6 +64,312 @@ describe('Spintax node — execute()', () => {
     }
   });
 
+  it('renderMany: each output item carries the seed that rebuilds it (#60)', async () => {
+    const template = '{a|b|c} {d|e}';
+    const [main] = await run(
+      { operation: 'renderMany', template, count: 6, baseSeed: 'demo', useIncomingItem: false },
+      [{}],
+    );
+    for (const item of main!) {
+      const [one] = await run(
+        {
+          operation: 'render',
+          template,
+          seed: item.json['attemptSeed'] as string,
+          useIncomingItem: false,
+        },
+        [{}],
+      );
+      expect(one![0]!.json['rendered']).toBe(item.json['rendered']);
+    }
+  });
+
+  it('lint: routes rendered text to Clean/Defective and attaches structured findings', async () => {
+    const [clean, defective] = await run(
+      { operation: 'lint', text: 'футбол, хоккей, теннис, теннис', locale: 'ru' },
+      [{ id: 7 }],
+    );
+    expect(clean).toHaveLength(0);
+    expect(defective).toHaveLength(1);
+    const item = defective![0]!.json;
+    expect(item['lintClean']).toBe(false);
+    expect(item['findingCount']).toBe(1);
+    expect((item['findings'] as IDataObject[])[0]!['code']).toBe('repeat.word');
+    // The source row rides along — Lint annotates an item, it does not replace it.
+    expect(item['id']).toBe(7);
+    expect(defective![0]!.pairedItem).toEqual({ item: 0 });
+
+    const [ok] = await run(
+      { operation: 'lint', text: 'футбол, хоккей и киберспорт', locale: 'ru' },
+      [{}],
+    );
+    expect(ok![0]!.json['lintClean']).toBe(true);
+  });
+
+  it('lint: a template sample is Clean only when every drawn document was', async () => {
+    const params = {
+      operation: 'lint',
+      lintSource: 'template',
+      template: '{разборы|прогнозы} по {дисциплинам|видам}, всё по дисциплинам',
+      sampleSize: 12,
+      baseSeed: 's',
+      locale: 'ru',
+      useIncomingItem: false,
+    };
+    const [clean, defective] = await run(params, [{}]);
+    expect(clean).toHaveLength(0);
+    const report = defective![0]!.json;
+    expect(report['checked']).toBe(12);
+    expect(report['cleanCount']).toBeLessThan(12);
+    expect((report['issues'] as IDataObject[])[0]!['code']).toBe('repeat.word');
+
+    const [allClean] = await run(
+      { ...params, template: '{Привет|Здравствуйте}, {друзья|коллеги}!' },
+      [{}],
+    );
+    expect(allClean![0]!.json['cleanCount']).toBe(12);
+    expect(allClean![0]!.json['cleanRatio']).toBe(1);
+  });
+
+  it('lint: an operational failure never rides the Clean branch', async () => {
+    const [clean, defective] = await run(
+      // A non-string `text` makes the operation throw inside the item loop.
+      { operation: 'lint', text: 42 },
+      [{}],
+      { continueOnFail: true },
+    );
+    expect(clean).toHaveLength(0);
+    expect(defective![0]!.json['lintClean']).toBe(false);
+    expect(defective![0]!.json['error']).toBeTypeOf('string');
+  });
+
+  it('uniqueness: measures the whole input as ONE pool and routes Kept/Dropped', async () => {
+    const skeleton = 'ставки на спорт принимаются круглосуточно на любой матч сезона';
+    const items = [
+      { id: 0, rendered: `Первый ${skeleton}` },
+      { id: 1, rendered: 'совсем другая статья про рыбалку в северных реках летом' },
+      { id: 2, rendered: `Первый ${skeleton}` },
+      { id: 3, rendered: 'третий текст о погоде в горах и снегопадах зимой' },
+      { id: 4, rendered: 'четвёртая заметка про городской транспорт и его расписание' },
+    ];
+    // Footprint Limit 1 isolates the dedupe behaviour from the pool-level verdict,
+    // which the next test covers on its own.
+    const [kept, dropped] = await run(
+      { operation: 'uniqueness', locale: 'ru', uniquenessOptions: { footprintMax: 1 } },
+      items,
+    );
+
+    // The duplicate is the LATER document; the first occurrence always survives.
+    expect(dropped).toHaveLength(1);
+    expect(dropped![0]!.json['id']).toBe(2);
+    const verdict = dropped![0]!.json['uniqueness'] as IDataObject;
+    expect(verdict['kept']).toBe(false);
+    expect(verdict['nearDupOf']).toBe(0);
+    expect(verdict['nearDupJaccard']).toBe(1);
+    expect(dropped![0]!.pairedItem).toEqual({ item: 2 });
+
+    expect(kept!.map((i) => i.json['id'])).toEqual([0, 1, 3, 4]);
+    // The pool-level verdict rides every item, so either branch can read it.
+    const keptVerdict = kept![0]!.json['uniqueness'] as IDataObject;
+    expect(keptVerdict['poolSize']).toBe(5);
+    expect(keptVerdict['ok']).toBe(false);
+    expect(typeof keptVerdict['footprint']).toBe('number');
+  });
+
+  it('uniqueness: a pool below the minimum reports the footprint as not measured', async () => {
+    const [kept] = await run({ operation: 'uniqueness' }, [
+      { rendered: 'one distinct document about trains' },
+      { rendered: 'another one about the weather in spring' },
+    ]);
+    const verdict = kept![0]!.json['uniqueness'] as IDataObject;
+    expect(verdict['footprint']).toBeNull();
+    expect(verdict['footprintReason']).toMatch(/below minPool/);
+    // Nothing measured, nothing duplicated — the pool passes rather than failing blind.
+    expect(verdict['ok']).toBe(true);
+  });
+
+  it('uniqueness: a missing text field is a named error, not a pool of empty strings', async () => {
+    await expect(
+      run({ operation: 'uniqueness', textField: 'body' }, [{ rendered: 'x' }, { rendered: 'y' }]),
+    ).rejects.toThrow(/"body"/);
+  });
+
+  it('protectPlaceholders: restoring without the map is refused, not reported clean', async () => {
+    await expect(
+      run(
+        { operation: 'protectPlaceholders', protectMode: 'restore', text: 'Hello TAG', placeholderMap: {} },
+        [{}],
+      ),
+    ).rejects.toThrow(/Placeholder Map is empty/);
+  });
+
+  it('protectPlaceholders: a map whose keys are not markers is rejected as not ours', async () => {
+    await expect(
+      run(
+        {
+          operation: 'protectPlaceholders',
+          protectMode: 'restore',
+          text: 'abc',
+          placeholderMap: { '': 'X' },
+        },
+        [{}],
+      ),
+    ).rejects.toThrow(/is not a marker/);
+  });
+
+  it('uniqueness: a non-string field is not a document either', async () => {
+    const items = [
+      { id: 0, rendered: 'первый текст о поездах и расписании' },
+      { id: 1, rendered: { nested: 'object' } },
+      { id: 2, rendered: 'вторая заметка про погоду весной в горах' },
+      { id: 3, rendered: 'третий материал о городском транспорте и билетах' },
+      { id: 4, rendered: 'четвёртый разбор про велосипеды и дорожки' },
+      { id: 5, rendered: 'пятая история о лодках и реках летом' },
+    ];
+    const [kept, dropped] = await run({ operation: 'uniqueness', locale: 'ru' }, items);
+    // "[object Object]" is not a document: it never joins the pool.
+    expect(dropped!.map((i) => i.json['id'])).toEqual([1]);
+    expect((kept![0]!.json['uniqueness'] as IDataObject)['poolSize']).toBe(5);
+  });
+
+  it('uniqueness: a shared string containing commas survives as ONE exact string', async () => {
+    // Comma-splitting would turn `#file_links[D:\path,1,S]#` into three entries and
+    // then strip every standalone "1" from every document.
+    const macro = String.raw`#file_links[D:\path,1,S]#`;
+    const items = Array.from({ length: 6 }, (_, i) => ({
+      id: i,
+      rendered: `${['поезда', 'погода', 'транспорт', 'велосипеды', 'лодки', 'горы'][i]} — заметка номер 1 и ${macro}`,
+    }));
+    const [kept] = await run(
+      {
+        operation: 'uniqueness',
+        locale: 'ru',
+        uniquenessOptions: { macros: macro, footprintMax: 1 },
+      },
+      items,
+    );
+    expect(kept).toHaveLength(6);
+  });
+
+  it('uniqueness: a pool that fails the footprint keeps nothing — Kept means publishable', async () => {
+    // Zero duplicates at the threshold, one skeleton underneath: dropping only
+    // near-dups would send every item to Kept and the workflow would publish a pool
+    // that failed its own gate.
+    const skeleton =
+      'ставки на спорт принимаются круглосуточно на любой матч регулярного сезона без заявок';
+    const items = Array.from({ length: 6 }, (_, i) => ({ id: i, rendered: `Вариант${i} ${skeleton}` }));
+    const [kept, dropped] = await run(
+      { operation: 'uniqueness', locale: 'ru', dedupJaccard: 0.99 },
+      items,
+    );
+    const verdict = dropped![0]!.json['uniqueness'] as IDataObject;
+    expect(verdict['ok']).toBe(false);
+    expect(verdict['nearDupPairs']).toBe(0);
+    expect(kept).toHaveLength(0);
+    expect(dropped).toHaveLength(6);
+  });
+
+  it('uniqueness: an item with no document is dropped WITHOUT joining the measurement', async () => {
+    const items = [
+      { id: 0, rendered: 'первый текст о поездах и расписании' },
+      { id: 1, rendered: 'вторая заметка про погоду весной в горах' },
+      { id: 2 },
+      { id: 3, rendered: 'третий материал о городском транспорте и билетах' },
+      { id: 4, rendered: 'четвёртый разбор про велосипеды и дорожки' },
+      { id: 5, rendered: 'пятая история о лодках и реках летом' },
+    ];
+    const [kept, dropped] = await run({ operation: 'uniqueness', locale: 'ru' }, items);
+
+    expect(dropped!.map((i) => i.json['id'])).toEqual([2]);
+    const bad = dropped![0]!.json['uniqueness'] as IDataObject;
+    expect(bad['measured']).toBe(false);
+    expect(bad['kept']).toBe(false);
+    expect(dropped![0]!.pairedItem).toEqual({ item: 2 });
+    // Five documents were measured, not six — the empty item never shifted the cutoff.
+    expect((kept![0]!.json['uniqueness'] as IDataObject)['poolSize']).toBe(5);
+    expect(((kept![0]!.json['uniqueness'] as IDataObject)['problems'] as string[]).join(' ')).toMatch(
+      /without being measured/,
+    );
+  });
+
+  it('uniqueness: continueOnFail routes the whole pool to Dropped instead of aborting', async () => {
+    const [kept, dropped] = await run(
+      { operation: 'uniqueness', textField: 'body' },
+      [{ rendered: 'x' }, { rendered: 'y' }],
+      { continueOnFail: true },
+    );
+    expect(kept).toHaveLength(0);
+    expect(dropped).toHaveLength(2);
+    expect(dropped![0]!.json['error']).toMatch(/"body"/);
+    expect(dropped![1]!.pairedItem).toEqual({ item: 1 });
+  });
+
+  it('uniqueness: a blank locale falls back to spintaxMeta, as the Locale field promises', async () => {
+    // Turkish folds I → ı; a locale-blind lowercase gives "i" and the two documents
+    // stop matching. The pool must see them as the duplicate they are.
+    const items = [
+      { id: 0, rendered: 'IŞIK lambaları bahçe için uygun fiyatlı ve dayanıklı' },
+      { id: 1, rendered: 'ışık lambaları bahçe için uygun fiyatlı ve dayanıklı' },
+      { id: 2, rendered: 'tamamen farklı bir metin havalar hakkında kısa not' },
+    ];
+    const [, dropped] = await run(
+      { operation: 'uniqueness', locale: '', spintaxMeta: { locale: 'tr' } },
+      items,
+    );
+    expect(dropped!.map((i) => i.json['id'])).toEqual([1]);
+  });
+
+  it('protectPlaceholders: protect → render → restore round-trips a bracketed macro', async () => {
+    const macro = String.raw`#file_links[D:\path,1,S]#`;
+    const [protectedItems] = await run(
+      {
+        operation: 'protectPlaceholders',
+        template: `Read more: ${macro} — {enjoy|have fun}!`,
+        placeholders: { placeholder: [{ value: macro, marker: '' }] },
+      },
+      [{}],
+    );
+    const carried = protectedItems![0]!.json;
+    expect(carried['protectOk']).toBe(true);
+
+    const [rendered] = await run(
+      {
+        operation: 'render',
+        template: carried['protectedTemplate'] as string,
+        seed: '7',
+        useIncomingItem: false,
+      },
+      [{}],
+    );
+    const [restored] = await run(
+      {
+        operation: 'protectPlaceholders',
+        protectMode: 'restore',
+        text: rendered![0]!.json['rendered'] as string,
+        placeholderMap: carried['placeholderMap'],
+      },
+      [{}],
+    );
+    expect(restored![0]!.json['restored']).toContain(macro);
+    expect(restored![0]!.json['restoreOk']).toBe(true);
+  });
+
+  it('protectPlaceholders: refuses loudly, and the incoming item fields count as variables', async () => {
+    // A lead field named `name` becomes %name% at render time, so a foreign %Name%
+    // would be eaten by our engine before the recipient ever sees it.
+    const params = {
+      operation: 'protectPlaceholders',
+      template: 'Hello %name%',
+      placeholders: { placeholder: [{ value: '%Name%', marker: '' }] },
+    };
+    await expect(run(params, [{ name: 'Ada' }])).rejects.toThrow(/foreign placeholder/);
+
+    // Turning the switch off collects the problem instead of stopping the item.
+    const [collected] = await run({ ...params, failOnProblems: false }, [{ name: 'Ada' }]);
+    expect(collected![0]!.json['protectOk']).toBe(false);
+    expect((collected![0]!.json['problems'] as string[]).join(' ')).toMatch(/Rename the variable/);
+  });
+
   it('validate: routes items to Valid/Invalid and carries everything repair needs', async () => {
     const [ok, bad] = await run({ operation: 'validate', template: '{a|b' }, [{ n: 1 }]);
     expect(ok).toHaveLength(0);

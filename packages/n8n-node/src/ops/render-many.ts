@@ -18,8 +18,21 @@ export interface RenderManyOptions extends Omit<RenderOpOptions, 'seed'> {
   maxAttempts?: number;
 }
 
+export interface RenderManyVariant {
+  rendered: string;
+  variantIndex: number;
+  /**
+   * The seed that actually produced this variant, present only when a base
+   * seed was given (an unseeded draw has no seed to report). It is derived
+   * from the ATTEMPT counter, while `variantIndex` counts accepted variants —
+   * the two diverge permanently after the first collision, so the index alone
+   * cannot rebuild a specific document (#60).
+   */
+  attemptSeed?: string;
+}
+
 export interface RenderManyResult {
-  variants: Array<{ rendered: string; variantIndex: number }>;
+  variants: RenderManyVariant[];
   /** Honesty fields: distinct seeds are independent draws, not distinct
    * results — a low-cardinality template may not have `requested` variants
    * to give, and `produced` says how many actually exist(ed) within the
@@ -44,14 +57,19 @@ export function renderManyOp(template: string, opts: RenderManyOptions = {}): Re
   let attempts = 0;
 
   while (variants.length < requested && attempts < maxAttempts) {
+    const attemptSeed = opts.baseSeed !== undefined ? `${opts.baseSeed}:${attempts}` : undefined;
     const rendered = renderOp(ast, {
       ...opts,
-      ...(opts.baseSeed !== undefined ? { seed: `${opts.baseSeed}:${attempts}` } : {}),
+      ...(attemptSeed !== undefined ? { seed: attemptSeed } : {}),
     });
     attempts += 1;
     if (seen.has(rendered)) continue;
     seen.add(rendered);
-    variants.push({ rendered, variantIndex: variants.length });
+    variants.push({
+      rendered,
+      variantIndex: variants.length,
+      ...(attemptSeed !== undefined ? { attemptSeed } : {}),
+    });
   }
 
   return { variants, requested, produced: variants.length, attempts };
