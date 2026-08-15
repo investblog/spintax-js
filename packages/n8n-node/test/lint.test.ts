@@ -44,6 +44,48 @@ describe('lintOp — repetition', () => {
     expect(sameRoot('игра', 'игла')).toBe(false);
   });
 
+  it('does not blame the author for a value the render substituted twice', () => {
+    // Found on a live run: 8 of 12 documents were flagged, and the hits were the brand
+    // and the product name. A brand appearing twice in a paragraph is data the author
+    // did not write and often cannot avoid.
+    const text = 'Our Trail Runner 3, designed by Brightline Gear. The team at Brightline Gear built it.';
+    expect(lintOp(text, { locale: 'en' }).findings.map((f) => f.code)).toContain('repeat.word');
+    expect(lintOp(text, { locale: 'en', ignore: ['Brightline Gear', 'Trail Runner 3'] }).clean).toBe(
+      true,
+    );
+  });
+
+  it('keeps the distance an ignored value occupied — the live false positive', () => {
+    // "built" twice, ten words apart in the real document: outside the window, and a
+    // deliberate `#def` word at that. Erasing the values between them pulled the pair
+    // three words apart and failed the whole pool.
+    const text =
+      'Trail Runner 3 by Brightline Gear, built for weekend hikers. Meet Trail Runner 3, ' +
+      'built by Brightline Gear with weekend hikers in mind.';
+    const ignore = ['Trail Runner 3', 'Brightline Gear', 'weekend hikers'];
+    expect(lintOp(text, { locale: 'en', ignore }).clean).toBe(true);
+
+    // …while a real repeat at a real distance is still caught with the same values ignored.
+    expect(
+      lintOp('Trail Runner 3 is sturdy and sturdy enough', { locale: 'en', ignore }).findings.map(
+        (f) => f.code,
+      ),
+    ).toContain('repeat.word');
+  });
+
+  it('does not glue the words an ignored value sat between', () => {
+    expect(lintOp('the Gear boots and the Gear again', { locale: 'en', ignore: ['Gear'] }).clean)
+      .toBe(true);
+  });
+
+  it('reads punctuation on the ORIGINAL text, not the blanked copy', () => {
+    // Otherwise the gap left by a removed value reads as debris the render never made.
+    expect(lintOp('Our Trail Runner 3, designed today', {
+      locale: 'en',
+      ignore: ['Trail Runner 3'],
+    }).clean).toBe(true);
+  });
+
   it('works without a stop-word table for the locale — the length filter still applies', () => {
     // No table for `de`: the repetition is still visible, and nothing was invented
     // about a language we have not looked at.

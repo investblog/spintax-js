@@ -312,6 +312,16 @@ export class Spintax implements INodeType {
         displayOptions: { show: { operation: ['lint'], lintSource: ['template'] } },
       },
       {
+        displayName: 'Ignored Strings',
+        name: 'lintIgnore',
+        type: 'string',
+        typeOptions: { rows: 3 },
+        default: '',
+        description:
+          'EXACT strings the render substituted — a product name, a brand, a merge tag — ONE PER LINE. They are blanked before the check, because a brand name appearing twice in a paragraph is data the author did not write and often cannot avoid; judging it is the wrong complaint.',
+        displayOptions: { show: { operation: ['lint'] } },
+      },
+      {
         displayName: 'Repeat Window',
         name: 'lintWindow',
         type: 'number',
@@ -802,6 +812,7 @@ export class Spintax implements INodeType {
           case 'lint': {
             const window = this.getNodeParameter('lintWindow', i, 6) as number;
             const locale = resolveLocale(this, i);
+            const ignore = splitLines(this.getNodeParameter('lintIgnore', i, '') as string);
             if ((this.getNodeParameter('lintSource', i, 'text') as string) === 'template') {
               const cleaned = readTemplate(this, i);
               const baseSeed = this.getNodeParameter('baseSeed', i, '') as string;
@@ -809,6 +820,7 @@ export class Spintax implements INodeType {
                 context: readContext(this, i, items[i]!.json),
                 count: this.getNodeParameter('sampleSize', i, 50) as number,
                 ...(baseSeed !== '' ? { baseSeed } : {}),
+                ...(ignore.length > 0 ? { ignore } : {}),
                 locale,
                 window,
               });
@@ -825,7 +837,11 @@ export class Spintax implements INodeType {
               // fifty is exactly the case the operation exists to surface.
               (report.cleanCount === report.checked ? main : rejected).push(item);
             } else {
-              const result = lintOp(this.getNodeParameter('text', i) as string, { locale, window });
+              const result = lintOp(this.getNodeParameter('text', i) as string, {
+                locale,
+                window,
+                ...(ignore.length > 0 ? { ignore } : {}),
+              });
               const item = out(i, {
                 ...items[i]!.json,
                 lintClean: result.clean,

@@ -43,6 +43,16 @@ export interface LintOpOptions {
   /** BCP-47 tag. Only the language-neutral rules run for a locale with no rule table. */
   locale?: string;
   /**
+   * EXACT strings to blank out before checking — the values the render substituted.
+   *
+   * A brand name appearing twice in one paragraph is a repetition the author did not
+   * write and often cannot avoid: it is data, not writing. Judging it produces exactly
+   * the wrong complaint, and the same reasoning already shapes Uniqueness's shared
+   * strings. Measured on a live run: 8 of 12 documents were flagged, and every hit
+   * outside one parallel construction was the product name or the brand.
+   */
+  ignore?: readonly string[];
+  /**
    * WIDTH of the scanned word window, so 6 catches repeats up to 5 words apart. Six is
    * the number that worked on a real pool: at nine, 82% of the hits were ordinary
    * cohesion ("Обучение и стратегии" in a heading and "ветка стратегий" in the body is
@@ -57,6 +67,9 @@ export interface LintOpResult {
   locale: string;
   window: number;
 }
+
+/** Stands in for a word of an ignored value: keeps the position, never compares. */
+const IGNORED = 'spxignoredword';
 
 export const LINT_DEFAULT_WINDOW = 6;
 export const LINT_SAMPLE_DEFAULT_COUNT = 50;
@@ -79,7 +92,7 @@ const STOP_WORDS: Record<string, readonly string[]> = {
     'that', 'this', 'with', 'from', 'have', 'has', 'had', 'will', 'would', 'could',
     'should', 'they', 'them', 'their', 'there', 'these', 'those', 'your', 'yours',
     'about', 'which', 'when', 'what', 'were', 'been', 'into', 'than', 'then', 'some',
-    'more', 'most', 'just', 'like', 'also', 'only', 'even', 'very', 'much', 'each',
+    'more', 'most', 'less', 'fewer', 'just', 'like', 'also', 'only', 'even', 'very', 'much', 'each',
     'over', 'after', 'before', 'while', 'because', 'here',
   ],
 };
@@ -144,11 +157,31 @@ export function lintOp(text: string, opts: LintOpOptions = {}): LintOpResult {
   const language = languageOf(locale);
   const window = Math.max(2, Math.trunc(opts.window ?? LINT_DEFAULT_WINDOW));
   const stop = new Set(STOP_WORDS[language] ?? []);
-  const words = lintWords(text);
+  // An ignored value is replaced by AS MANY filler words as it contained, not by a
+  // space. Collapsing "Trail Runner 3" to nothing pulls the words on either side of it
+  // three positions closer, and a pair that sat comfortably outside the window lands
+  // inside it — the live run that motivated this option failed its whole pool that way,
+  // on a `#def` word the author deliberately repeats a sentence apart. Longest value
+  // first, so one containing another cannot be half-erased. The filler is in the stop
+  // set, so it is never itself compared.
+  const words = lintWords(
+    [...(opts.ignore ?? [])]
+      .filter((s) => s !== '')
+      .sort((a, b) => b.length - a.length)
+      .reduce(
+        (acc, value) =>
+          acc.split(value).join(` ${Array(lintWords(value).length).fill(IGNORED).join(' ')} `),
+        text,
+      ),
+  );
+  stop.add(IGNORED);
 
   const findings: LintFinding[] = [];
   findings.push(...repeatFindings(words, window, stop));
   if (language === 'ru') findings.push(...relativeAgreementFindings(words, stop));
+  // Punctuation runs on the ORIGINAL text: blanking a value leaves the gap where it was,
+  // and a document reading "Our  , designed by" would be reported for debris the render
+  // never produced.
   findings.push(...punctuationFindings(text, language));
 
   return { clean: findings.length === 0, findings: dedupe(findings), locale, window };
@@ -300,6 +333,7 @@ export function lintSampleOp(template: string, opts: LintSampleOptions = {}): Li
   const lintOptions: LintOpOptions = {
     ...(opts.locale !== undefined ? { locale: opts.locale } : {}),
     ...(opts.window !== undefined ? { window: opts.window } : {}),
+    ...(opts.ignore !== undefined ? { ignore: opts.ignore } : {}),
   };
 
   const tally = new Map<string, LintIssueTally>();
