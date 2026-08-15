@@ -3,6 +3,42 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.1
+
+The release exists because the published pool template got ahead of the published node: the
+gallery workflow already passes **Ignored Strings** to Lint, and an option a template uses
+before the node ships it is a template that arrives broken. Everything here came out of running
+that template end to end on a live n8n against the published 0.2.0 — three runs, three
+findings, all real.
+
+### Added
+
+- **Ignored Strings on the Lint operation** (`lintIgnore`) — one exact string per line. A value
+  the render substituted is data the author did not write and often cannot avoid; on the live
+  pool, every hit outside one parallel construction was the brand or the product name. The same
+  reasoning already shapes Uniqueness's Shared Strings.
+  - An ignored value is replaced by **as many filler words as it contained**, not blanked and
+    not collapsed: the first version substituted a single space, pulled a deliberately
+    sentence-apart `#def` repeat inside the six-word window, and failed all twelve documents on
+    the next run. Distances survive the ignore.
+  - Punctuation rules still read the original text — blanking would leave gaps that read as
+    debris the render never produced.
+- **`less` and `fewer` join the English stop list** beside `more`/`most`: the same quantifier
+  class, and a parallel "less to fuss with and less to go wrong" is style, not a defect.
+
+### Changed
+
+- **The pool template configures in ONE node** ("Your brief and product"), per n8n's own Best
+  Practices line about grouping user-configured variables in a Set node; downstream nodes read
+  the five values by expression, and Uniqueness's Shared Strings reads the same fields instead
+  of repeating their literals — editing the Set node can no longer leave the metric measuring a
+  product name nobody updated elsewhere.
+- **The pool template's stickies obey the published numeric rules** read off the Creator hub:
+  one yellow overview (293 words, their "### How it works" / "### Setup" headings), three grey
+  sections of 27–31 words each stretched across several nodes.
+- The template passes its configured values into both Lint and Uniqueness, so the two
+  operations judge the author's text rather than the author's data.
+
 ## 0.2.0
 
 Everything here came out of building a 1000-article pool on top of the node — four issues filed
