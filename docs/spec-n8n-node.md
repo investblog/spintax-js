@@ -1,8 +1,15 @@
 # n8n community node — `n8n-nodes-spintax` (spec)
 
-Status: **RELEASED (2026-08-07); N2 launch tail in progress (2026-08-09).** The draft's open
-questions are resolved (§5), n8n's live verification constraints are folded into the packaging
-design (§4), and the launch/marketing plan is pinned (§6). Codex review (10 findings) is applied:
+Status: **RELEASED; 0.2.1 on npm, gallery submission 18308 under review (2026-08-16).**
+
+> **Read [§6.1](#61-where-it-actually-stands--2026-08-16-and-how-to-resume) first.** It carries the
+> current state and everything needed to resume — what is published, what is submitted where, which
+> portal behaviours were measured rather than documented, and what comes next. The rest of this file
+> is design and plan, and the dated status blocks below are history: where they disagree with §6.1,
+> §6.1 wins.
+
+The draft's open questions are resolved (§5), n8n's live verification constraints are folded into
+the packaging design (§4), and the launch/marketing plan is pinned (§6). Codex review (10 findings) is applied:
 the funnel carries `spintaxMeta` end-to-end, cleanup writes `cleanedTemplate` so spans match,
 neutralize follows the trust tier, Render Many has an implementable contract, the scanner runs
 post-publish, and R1 assumes verification unavailable until n8n confirms eligibility.
@@ -42,7 +49,8 @@ post-publish, and R1 assumes verification unavailable until n8n confirms eligibi
 > campaign); ported here with their measurements kept as the rationale. New gallery template
 > `templates/product-copy-pool.json` runs the whole lane. Node suite: 101 tests.
 >
-> **Gallery status (2026-08-14):** the cold-email bridge (17930) was **rejected** — "too basic",
+> **Gallery status (2026-08-14) — SUPERSEDED by §6.1:** the cold-email bridge (17930) was
+> **rejected** — "too basic",
 > after a first round about sticky-note overlap. The layout fix never reached the reviewer (the
 > Creator Portal locked the submission with the old JSON), but the verdict is about substance, not
 > layout, so that submission stays closed. The product-copy-pool template is the answer to it and
@@ -548,6 +556,89 @@ so no surface here drifts from it:
    prompt-conformance quality gate) follows the node and must not block its skeleton, then M6,
    then the runtime ports (#43) — while this *channel track* (Activepieces / Node-RED / Pipedream)
    follows the node per the later #44 decision (ADR 0007) and does not gate on #47/M6.
+
+### 6.1 Where it actually stands — 2026-08-16, and how to resume
+
+The plan above is the intent; this is the state, written to survive a lost session. Anything not
+listed here is unchanged from the plan.
+
+**Published.** `n8n-nodes-spintax@0.2.1` on npm (provenance via OIDC; the release workflow's own
+`scan` job reports "passed all security checks", so no separate scanner dispatch is needed since
+0.1.4). 0.2.0 closed #60–#63; 0.2.1 added Lint's **Ignored Strings**, which a live run turned up —
+see below. The node is at eight operations; `docs` and the site say so.
+
+**Gallery — two records, one live.**
+
+- **17930** (cold-email bridge) — rejected 2026-08-14 as "too basic", and the record is now stuck:
+  `PUT https://api.n8n.io/api/workflows/17930` answers **400** on *Upload new version* ("Could not
+  upload new version"), and *Delete* fails as well. Nothing on our side clears it; only a mail to
+  the reviewer would. It costs one of the two pending slots and nothing else — leave it.
+- **18308 — "Generate unique product description pools with OpenAI and Spintax", submitted
+  2026-08-16, status Under review** (their stated turnaround: 3–5 business days). The JSON is ours
+  (`templates/product-copy-pool.json`); the title and the Quick overview / How it works / Setup
+  copy were written by the portal's AI review and are accurate; we filled Requirements,
+  Customization and Additional info by hand. To revisit it: `creators.n8n.io/workflows/18308/edit`.
+
+**How the portal actually behaves** (measured, because the documented rules are not the whole
+story):
+
+- Submitting is a POST and it **worked while 17930 was still pending**, despite the Creator hub's
+  "one template at a time" rule. With two pending, the *Share new template* button then greys out —
+  the limit is enforced on the button, after the fact.
+- The flow is now: upload JSON → **instant AI review** → a `/workflows/<id>/edit` "Finalize your
+  submission" page. The description there is a **structured form** (Quick overview 10–50 words,
+  How it works 50+, Setup 50+, then optional Requirements / Customization / Additional info lists) —
+  the free-form Markdown description is gone, so a prepared Markdown blob no longer pastes in as
+  one piece. The workflow image goes in Additional info.
+- The whole AI verdict — `suggestedTitle`, `suggestedDescription`, `suggestedJson`, scores — is
+  readable from `window.__NUXT__.data['workflow-edit-<id>'].workflow.aiFeedback` (a JSON string).
+  Faster and more complete than reading the DOM.
+- **We declined the AI's suggested JSON, deliberately.** It leaves the graph and every operation
+  setting untouched and renames all sixteen nodes (updating the expression references correctly),
+  but: it calls the model node "OpenAI GPT-4 Model" while the node runs `gpt-4o-mini`; its own
+  Setup text still references *our* node name ("Your brief and product"), so adopting the JSON
+  would break the description it wrote; and our layout is verified on a live canvas while its is
+  not. Sticky-note overlap is what got the first template bounced, so that last point decides it.
+
+**Template rules that were paid for and now hold.** A template using a community node must carry a
+**workflow image at the top of the description** — the gallery preview does not render for one, so
+without it a reviewer never sees the canvas (the likeliest reason 17930 read as "too basic"). The
+image lives in this repo at `templates/product-copy-pool.png` and is referenced by its raw GitHub
+URL. Sticky rules are numeric: exactly one yellow overview, top-left, 100–300 words, carrying
+`### How it works` and `### Setup`; grey section stickies under 50 words each, stretched across
+several nodes. And n8n renders a lone newline inside a sticky paragraph as a line break, so each
+paragraph is emitted on one physical line by the generator.
+
+**Live verification (2026-08-15/16).** n8n 2.34.6 installed under `temp/n8n-local` (removed
+afterwards), the published node installed into `~/.n8n/nodes`, the workflow imported with
+`n8n import:workflow` (a UI-saved workflow is lost on restart) and executed headless with
+`n8n execute --id …`; when a server is already up, the CLI needs
+`N8N_RUNNERS_BROKER_PORT=5681` or it dies on the busy broker port. The final run: valid on the
+first attempt → 12 variants → 11 clean, 1 genuine defect ("place" twice, one word apart) → 11 kept,
+footprint 0.347. Two measurements from those runs shaped the template and the node:
+
+- a pool from ONE template about one product scores a footprint near **0.49**, so a 0.15 gate
+  condemns it wholesale — the demo therefore ships `Footprint Limit = 1` (report, not gate) and the
+  sticky says so;
+- the same twelve documents score **0.209** with the product name, brand and feature phrase inside
+  the measurement and **0.107** with them excluded — which is why Lint gained Ignored Strings and
+  why both checks are fed the configured values from the one Set node.
+
+**Site.** spintax.net carries the 0.2.0 facts and is deployed (`8030ed2`): `/spintax-for-n8n/` in
+EN/RU/ZH gained the Lint / Uniqueness / Protect sections and `attemptSeed`, and `llms.ts` plus the
+engines SKILL say eight operations. Two follow-ups are deliberately open there and tracked in that
+repo's `docs/TODO.md`: the third template is not linked yet (the two that are carry a "verified
+against a live n8n" claim), and the template links still point at raw GitHub until gallery URLs
+exist.
+
+**Next, in order.** 18308 verdict → on publish, submit `ai-authoring-funnel` → a third template
+(three approved = verified creator: batches of four, a badge, paid templates) → forum Show & Tell,
+which needs live gallery pages → node verification. The verification form is only an npm URL plus
+two checkboxes (no notes field, so a prepared cover letter has nowhere to go); `npx @n8n/node-cli
+lint` passes on the package (a control mutation makes it fail, so the check is real). Two risks
+there stay human-judged: the "exactly one third-party service" rule against a node that integrates
+none, and "n8n isn't accepting Logic or Flow control nodes at the moment" against our three
+two-output routing operations.
 
 ## 7. Build plan
 
