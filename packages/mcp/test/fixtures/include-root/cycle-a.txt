@@ -1,0 +1,2 @@
+A says:
+#include "cycle-b.txt"

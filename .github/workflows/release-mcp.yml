@@ -1,0 +1,103 @@
+name: Release MCP server
+
+# Publishes @spintax/mcp to npm with PROVENANCE.
+#
+# FIRST PUBLISH IS DIFFERENT, and this is the trap of a new package: a Trusted
+# Publisher entry cannot precede the first publish — there is no package to attach it
+# to — so 0.1.0 goes out with the NPM_TOKEN repo secret (provenance still works: it
+# comes from `id-token: write` + `--provenance`, not from trusted publishing). After
+# that first release:
+#   1. npmjs.com → @spintax/mcp → Settings → Trusted Publisher → GitHub Actions →
+#      org/repo = investblog/spintax-js, workflow = release-mcp.yml
+#   2. delete the `env: NODE_AUTH_TOKEN` block from the publish step below
+# The @spintax/core entry does NOT cover this package; every package needs its own.
+#
+# Release flow: bump packages/mcp/package.json (and src/version.ts — a test enforces
+# it) → CHANGELOG → commit → tag mcp-vX.Y.Z → push tag. The prefix keeps it out of
+# release.yml's `v*` glob.
+
+on:
+  push:
+    tags: ['mcp-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required: OIDC token for provenance (and later for trusted publishing)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing / provenance needs npm >= 11.5.1 — newer than the npm
+      # bundled with the Node runtime, so upgrade it.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Install
+        run: npm ci
+
+      # Safety: publishes happen ONLY from an mcp-vX.Y.Z tag ref, and the tag must
+      # match the version we're about to publish, so a stale/mismatched tag — or a
+      # workflow_dispatch pointed at a branch — fails loudly instead of publishing an
+      # untagged commit. (Dispatch from a tag ref is still allowed:
+      # `gh workflow run --ref mcp-vX.Y.Z`.)
+      - name: Verify ref is a release tag matching the package version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/mcp-v*) ;;
+            *)
+              echo "::error::Refusing to publish from '$GITHUB_REF' — run this workflow from an mcp-vX.Y.Z tag"
+              exit 1
+              ;;
+          esac
+          TAG="${GITHUB_REF_NAME#mcp-v}"
+          PKG="$(node -p "require('./packages/mcp/package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag mcp-v$TAG does not match @spintax/mcp version $PKG"
+            exit 1
+          fi
+          echo "Publishing @spintax/mcp@$PKG"
+
+      # A tag can point at ANY commit — main's CI passing is not a precondition for
+      # publishing. So the release job re-runs the full CI gate set rather than
+      # trusting an upstream green. Keep these steps in sync with ci.yml.
+      - name: Validate golden corpus (schema)
+        run: npm run conformance:validate
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Package checks (publint + attw)
+        run: npm run check:pkg
+
+      - name: Tarball smoke (install + ESM/CJS import)
+        run: npm run smoke:pack
+
+      - name: n8n node tarball smoke (require + bundled engine)
+        run: npm run smoke:pack:n8n
+
+      - name: MCP server tarball smoke (bin over stdio + engine as a dependency)
+        run: npm run smoke:pack:mcp
+
+      - name: Publish @spintax/mcp (provenance)
+        run: npm publish -w @spintax/mcp --provenance --access public
+        env:
+          # DELETE THIS BLOCK once the Trusted Publisher entry exists (see the header).
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

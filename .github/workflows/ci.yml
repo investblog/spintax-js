@@ -61,6 +61,9 @@ jobs:
       - name: n8n node tarball smoke (require + bundled engine)
         run: npm run smoke:pack:n8n
 
+      - name: MCP server tarball smoke (bin over stdio + engine as a dependency)
+        run: npm run smoke:pack:mcp
+
   # The TS suite proves this corpus is green in TypeScript — which only proves TypeScript agrees
   # with our own reading of the contract. Running the SAME fixtures, as changed by this very PR,
   # through the PHP engines closes the loop in the other direction: a fixture cannot land here

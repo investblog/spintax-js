@@ -31,6 +31,15 @@ export default tseslint.config(
       ],
     },
   },
+  // A stdio MCP server MUST NOT write anything to stdout that is not a protocol
+  // message, and `console.log` goes to stdout. One stray call breaks every client at
+  // once, invisibly to any test that does not spawn the binary — so the rule is a lint
+  // error in the server's source. `console.error` is stderr, which the spec leaves
+  // free-form for diagnostics.
+  {
+    files: ['packages/mcp/src/**/*.ts'],
+    rules: { 'no-console': ['error', { allow: ['error'] }] },
+  },
   // n8n's community-node conventions, scoped to the node implementation files.
   // The plugin's package.json ruleset (needs jsonc-eslint-parser) is deliberately
   // not wired — the post-publish scanner checks the manifest instead (spec §4).

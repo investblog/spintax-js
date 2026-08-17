@@ -1,4 +1,4 @@
-# Releasing `@spintax/core` (and `n8n-nodes-spintax` — see the last section)
+# Releasing `@spintax/core` (plus `n8n-nodes-spintax` and `@spintax/mcp` — see the last two sections)
 
 Releases publish from GitHub Actions (`.github/workflows/release.yml`) using npm
 **Trusted Publishing (OIDC)** — no npm tokens are stored anywhere, and every release
@@ -87,3 +87,38 @@ ruleset (stricter than `eslint-plugin-n8n-nodes-base` — e.g. `author` must be 
 object with a non-empty `email`), and the first publish of a NEW package cannot use
 Trusted Publishing (the entry requires an existing package) — bootstrap with a
 granular token in the `NPM_TOKEN` repo secret, then flip to OIDC.
+
+## Releasing `@spintax/mcp`
+
+Same machinery, own workflow (`.github/workflows/release-mcp.yml`), own tag prefix —
+`mcp-vX.Y.Z`.
+
+**The version lives in two files.** `packages/mcp/src/version.ts` is a build-time
+constant, deliberately not a runtime read of the manifest (that would drag `node:fs`
+toward the entry the Cloudflare Function imports). `test/artifact.test.ts` asserts the
+two agree, so forgetting one fails the suite rather than shipping a server that
+misreports itself in `initialize` and in every result's `_meta`.
+
+```sh
+npm version patch -w @spintax/mcp   # then edit packages/mcp/src/version.ts to match
+# update packages/mcp/CHANGELOG.md
+git add -A && git commit -m "release(mcp): @spintax/mcp X.Y.Z"
+git tag -a mcp-vX.Y.Z -m "@spintax/mcp X.Y.Z"
+git push origin main && git push origin mcp-vX.Y.Z
+```
+
+**First publish is the exception, and it is the same trap the n8n node hit:** a
+Trusted Publisher entry cannot precede the first publish, so `0.1.0` goes out with the
+`NPM_TOKEN` repo secret. Provenance still applies — it comes from `id-token: write` +
+`--provenance`, not from trusted publishing. Immediately after that release:
+
+1. **npmjs.com → `@spintax/mcp` → Settings → Trusted Publisher → GitHub Actions**,
+   org `investblog`, repo `spintax-js`, workflow `release-mcp.yml`;
+2. delete the `env: NODE_AUTH_TOKEN` block from the publish step in
+   `release-mcp.yml`.
+
+Verify with the client, not just the registry: the tarball smoke
+(`npm run smoke:pack:mcp`) installs the package and drives the real `bin` over stdio,
+which is the only check that covers the shebang, the `bin` field, the exports map and
+resolution of `@spintax/core` as a dependency from the published artifact — the four
+things a first-`bin` package actually breaks on.

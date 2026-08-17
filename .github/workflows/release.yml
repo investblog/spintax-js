@@ -80,6 +80,9 @@ jobs:
       - name: n8n node tarball smoke (require + bundled engine)
         run: npm run smoke:pack:n8n
 
+      - name: MCP server tarball smoke (bin over stdio + engine as a dependency)
+        run: npm run smoke:pack:mcp
+
       # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
       # publish token automatically, and attaches a provenance attestation.
       - name: Publish @spintax/core (provenance via OIDC)

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    // test/fixtures/site-tools.json is imported by the schema-freeze test.
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test"]
+}

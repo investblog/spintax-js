@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The bin-side modules (stdio/args/bin/include-root) legitimately use process,
+    // Buffer and node:fs. `types: []` in the base config keeps those OUT of the
+    // shared entry's reach at type level — but only for files that never import a
+    // node: specifier. `src/index.ts` must stay node-free at RUNTIME too, which no
+    // compiler flag can express: that is what test/no-node-imports.test.ts is for.
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
