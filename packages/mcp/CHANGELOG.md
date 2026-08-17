@@ -3,6 +3,25 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.1.1 — 2026-08-17
+
+Metadata only — `dist/` is byte-identical to 0.1.0.
+
+### Added
+
+- **`mcpName: "net.spintax/mcp"` in the manifest.** The MCP Registry verifies ownership of an npm
+  package by checking that field against the server name, so it is the precondition for listing
+  this package on the existing `net.spintax/mcp` entry — one registry record, two ways to run the
+  same tools: the hosted endpoint over HTTP and this package over stdio.
+
+  Note what does *not* change: the local server still reports `serverInfo.name` as
+  `spintax-local`, not `spintax-net`. They are genuinely different deployments — different caps,
+  and only one of them can read your filesystem — and a client is better off seeing which door it
+  is on. The registry validates the manifest field, not `serverInfo`.
+
+- First release published through OIDC Trusted Publishing; 0.1.0 needed the token bootstrap
+  because a Trusted Publisher entry cannot precede a package's first publish.
+
 ## 0.1.0 — 2026-08-17
 
 First release. A local MCP server for spintax templates over stdio, and the shared module the
