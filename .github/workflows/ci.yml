@@ -102,11 +102,16 @@ jobs:
           coverage: none
           tools: composer
 
-      # COMPOSER_AUTH is not optional here, it is what stops a recurring false red:
-      # `--prefer-dist` fetches every PHPUnit dependency from codeload.github.com, and
-      # ANONYMOUS requests from a shared runner IP hit GitHub's rate limit — this job
-      # failed twice in a row with HTTP 429 on 2026-08-17 while nothing about the PHP
-      # side had changed. The workflow's own token lifts the limit and needs no secret.
+      # COMPOSER_AUTH: `--prefer-dist` fetches every PHPUnit dependency from
+      # codeload.github.com, and anonymous requests from a shared runner IP are the
+      # first thing GitHub rate-limits. Authenticating with the workflow's own token
+      # costs nothing and needs no secret.
+      #
+      # It did NOT fix the 2026-08-17 failures it was added for: those 429s kept coming
+      # WITH the token, alongside 503s from api.github.com and a 504 from the runs API —
+      # a GitHub-side incident, not our rate limit. Keeping the hardening, recording
+      # that its mechanism is unproven here, so nobody reads a green run afterwards as
+      # evidence this was the cause.
       - name: Install the runner
         run: composer install --no-progress --prefer-dist
         working-directory: packages/conformance/php
