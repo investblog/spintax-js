@@ -131,18 +131,43 @@ describe('validate_spintax', () => {
     expect(out.structured).toMatchObject({ warningCount: 1 });
   });
 
-  it('is locale-sensitive about plural arity, and silent without a locale', () => {
-    // The trap worth knowing: with NO locale the engine files no arity verdict at
-    // all, so a 3-form block "validates" and then renders through the 2-form default.
-    // An agent that wants the check has to name the locale — which is why the tool
-    // description spells out what omitting it means.
-    const threeForm = '{plural %n%: one|few|many}';
-    expect(ok('validate_spintax', { template: threeForm }).structured).toMatchObject({ valid: true });
+  it('is locale-sensitive about plural arity, and warns rather than staying silent', () => {
+    // The trap this used to hide: with NO locale the engine files no arity VERDICT, so a
+    // 3-form block "validates" and then renders through the 2-form default — straight into
+    // finished text as ｛plural …｝. Since core 0.4.0 (issue #65) that case carries a
+    // `plural.locale-missing` WARNING: the verdict still does not move, but an agent
+    // reading the diagnostics can see the risk before it ships.
+    const threeForm = '{plural 3: one|few|many}';
+
+    const noLocale = ok('validate_spintax', { template: threeForm }).structured as {
+      valid: boolean;
+      warningCount: number;
+      diagnostics: { code: string; severity: string }[];
+    };
+    expect(noLocale.valid).toBe(true);
+    expect(noLocale.warningCount).toBe(1);
+    expect(noLocale.diagnostics[0]).toMatchObject({
+      code: 'plural.locale-missing',
+      severity: 'warning',
+    });
+
+    // A 2-form block resolves at the default, so it stays silent.
+    expect(ok('validate_spintax', { template: '{plural 3: one|many}' }).structured).toEqual({
+      valid: true,
+      errorCount: 0,
+      warningCount: 0,
+      diagnostics: [],
+    });
+
+    // Naming the locale replaces the warning with the real verdict, either way.
     expect(ok('validate_spintax', { template: threeForm, locale: 'en' }).structured).toMatchObject({
       valid: false,
     });
-    expect(ok('validate_spintax', { template: threeForm, locale: 'ru' }).structured).toMatchObject({
+    expect(ok('validate_spintax', { template: threeForm, locale: 'ru' }).structured).toEqual({
       valid: true,
+      errorCount: 0,
+      warningCount: 0,
+      diagnostics: [],
     });
   });
 });

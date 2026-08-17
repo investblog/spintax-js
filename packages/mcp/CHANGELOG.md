@@ -3,6 +3,27 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 — 2026-08-18
+
+Minor rather than patch: `validate_spintax` returns a diagnostic it did not return before, on
+templates that used to come back clean.
+
+### Changed
+
+- **Requires `@spintax/core` ^0.4.0**, which adds `plural.locale-missing` — a warning on a
+  `{plural …}` block whose form count is not the 2 that `render` defaults to, when no locale was
+  supplied (issue [#65](https://github.com/investblog/spintax-js/issues/65), reported from a
+  pipeline rendering ~1000 articles per campaign that shipped `｛plural …｝` to live pages).
+
+  Nothing in this package changed to make that happen — the tools pass diagnostics through — but
+  the consequence is worth stating: **"no error" was never the whole answer, and now the missing
+  half is machine-readable.** `valid` still means "no error-severity diagnostic", a template that
+  validated clean still validates clean, and a 2-form block stays silent because the default
+  resolves it.
+
+  The README's tools table said "No `error` ⇒ safe to render". It now says what the engine
+  actually delivers.
+
 ## 0.1.1 — 2026-08-17
 
 Metadata only — `dist/` is byte-identical to 0.1.0.
