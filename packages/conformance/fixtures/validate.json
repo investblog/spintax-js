@@ -47,6 +47,22 @@
     }
   },
   {
+    "id": "validate/plural-no-locale-arity-mismatch-warns",
+    "note": "#65: without a locale there is no arity VERDICT — the template may be right for the locale it will be rendered with — but render defaults to 2 forms, so a non-2-form block would silently reach finished text as the fullwidth-brace fallback. A WARNING, so the verdict is unchanged. NOTE: the runner asserts diagnostics as a SUBSET, so the mirror rule (a 2-form block with no locale stays SILENT) cannot be expressed here; each engine pins that in its own suite.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: одна|две|много}",
+    "expect": {
+      "verdict": "valid",
+      "diagnostics": [
+        {
+          "code": "plural.locale-missing",
+          "severity": "warning"
+        }
+      ]
+    }
+  },
+  {
     "id": "validate/undefined-variable-is-warning-not-error",
     "note": "Parity gate: an unresolved %var% is a WARNING, so the template stays VALID (valid ⇔ no severity:error).",
     "kind": "deterministic",
@@ -630,7 +646,7 @@
     "note": "The verdict half of the class question: the gap is an escaped U+00A0 NBSP, so the line is plain text, NOT an include with an unknown target — include.unknown-target must not fire. Before the class was spelled out on the PHP side, its UCP-widened whitespace shorthand read this as an include and the engines returned opposite verdicts for the same template (spintax-js#55).",
     "kind": "deterministic",
     "op": "validate",
-    "template": "#include\u00a0\"nope\"",
+    "template": "#include \"nope\"",
     "knownIncludes": [
       "ok"
     ],

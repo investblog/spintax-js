@@ -83,6 +83,15 @@ export function pluralArity(baseLang: string): number {
 }
 
 /**
+ * How many forms `render` resolves against when the host supplies no locale.
+ *
+ * Derived from the table rather than written as `2`, so the validator's
+ * `plural.locale-missing` warning cannot come to disagree with what render actually
+ * does — the disagreement between those two is the whole of issue #65.
+ */
+export const DEFAULT_PLURAL_ARITY = pluralArity('');
+
+/**
  * Pick the plural form for a count by the locale's grammar.
  * - Slavic 3-form (ru/uk/be + sr/hr/bs): one (1,21,31… not 11), few (2-4,22-24…
  *   not 12-14), many (rest, incl. 0).

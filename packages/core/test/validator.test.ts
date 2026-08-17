@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { parse, validate } from '../src/index';
+import { parse, render, validate } from '../src/index';
 
 const codes = (src: string, opts?: Parameters<typeof validate>[1]): string[] =>
   validate(src, opts).map((d) => d.code);
@@ -49,6 +49,60 @@ describe('validator — regression guards (beyond the corpus)', () => {
   test('validate accepts a parsed Ast (string|Ast)', () => {
     const ast = parse('{a|b');
     expect(validate(ast).some((d) => d.code === 'bracket.unclosed')).toBe(true);
+  });
+});
+
+/**
+ * Issue #65, reported from a pipeline that shipped `｛plural …｝` to live pages.
+ *
+ * With no locale the engine files no arity VERDICT — deliberately, because the template
+ * may be correct for the locale it will actually be rendered with, and failing a good
+ * template for a fact the caller never claimed is worse than silence. But `render` has no
+ * such luxury: it defaults to 2 forms, so a 3-form block with no locale lands in finished
+ * text as the fullwidth-brace fallback. The warning is the seam between those two truths.
+ */
+describe('validator — plural.locale-missing (#65)', () => {
+  const warnings = (src: string, opts?: Parameters<typeof validate>[1]): string[] =>
+    validate(src, opts).filter((d) => d.severity === 'warning').map((d) => d.code);
+
+  test('a non-2-form block with no locale warns, and the template stays VALID', () => {
+    expect(warnings('{plural 3: одна|две|много}')).toEqual(['plural.locale-missing']);
+    expect(isValid('{plural 3: одна|две|много}')).toBe(true);
+  });
+
+  test('a 2-form block with no locale is silent — the default resolves it', () => {
+    expect(validate('{plural 3: one|many}')).toEqual([]);
+  });
+
+  test('supplying ANY locale replaces the warning with the real verdict', () => {
+    // ru: 3 forms are right, so nothing at all.
+    expect(validate('{plural 3: одна|две|много}', { locale: 'ru' })).toEqual([]);
+    // en: 3 forms are wrong, and that is an error, not this warning.
+    expect(codes('{plural 3: одна|две|много}', { locale: 'en' })).toEqual(['plural.arity']);
+  });
+
+  test('the warning agrees with what render will actually do', () => {
+    const src = '{plural 3: a|b|c}';
+    const d = validate(src).find((x) => x.code === 'plural.locale-missing');
+    expect(d?.data).toEqual({ got: 3, defaultArity: 2 });
+    // The claim in the message, checked against the engine rather than asserted:
+    // the block really does fail to resolve at the default.
+    expect(render(src, { seed: 1 })).toContain('｛');
+    expect(render(src, { locale: 'ru', seed: 1 })).not.toContain('｛');
+  });
+
+  test('a structurally broken block reports only that — no second, invented problem', () => {
+    // The nested-brackets branch `continue`s, and the new check inherits that guard.
+    expect(codes('{plural 3: {a|b}|c|d}')).toEqual(['plural.nested-brackets']);
+  });
+
+  test('an unnormalizable locale behaves like no locale at all, warning included', () => {
+    expect(warnings('{plural 1: a|b|c}', { locale: '_en' })).toEqual(['plural.locale-missing']);
+  });
+
+  test('every block is judged on its own', () => {
+    const src = '{plural 1: a|b} and {plural 2: x|y|z}';
+    expect(warnings(src)).toEqual(['plural.locale-missing']);
   });
 });
 

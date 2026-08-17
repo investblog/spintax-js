@@ -3,6 +3,33 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- **`plural.locale-missing` — a warning where `validate` used to be silent** (issue #65, reported
+  from a pipeline rendering ~1000 articles per campaign).
+
+  `validate` files no arity *verdict* without a locale, and that stays: the template may well be
+  correct for the locale the host will render with, so failing it here would fail a good template
+  for a fact the caller never claimed. But `render` has no such luxury — it resolves against the
+  2-form default — so a `{plural …}` block with any other form count reached finished text as the
+  fullwidth-brace fallback `｛plural …｝`, with nothing said upfront. Downstream checks that scan
+  for `{`/`}` do not see those braces.
+
+  The warning fires only where the risk is: **no locale normalized, and the form count is not the
+  render default**. A 2-form block stays silent, because the default resolves it. `valid` is
+  unchanged in every case (`valid ⇔ no error-severity diagnostic`), and supplying any locale
+  replaces the warning with the real verdict — nothing for `ru`, `plural.arity` for `en`.
+
+  Carries `data: { got, defaultArity }`. The default arity is derived from the same table `render`
+  uses rather than written as a literal, so the two cannot come to disagree.
+
+  Mirrored into `spintax/core`, the WordPress plugin and `spintax-core` (Python) in the same
+  change, and pinned by a corpus fixture. Note the gate's shape: the shared corpus asserts
+  diagnostics as a SUBSET, so it can pin that the warning IS emitted but not that it is absent on
+  a 2-form block — that negative control lives in each engine's own suite.
+
 ## 0.3.4 — 2026-08-08
 
 Docs-only release — no engine changes; every byte of `dist/` behavior is 0.3.3's.

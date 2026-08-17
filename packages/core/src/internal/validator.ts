@@ -12,7 +12,7 @@
  */
 import type { Diagnostic, ValidateOptions } from '../index';
 import { DIRECTIVE_RE, extractDirectives, stripComments } from './parser';
-import { findPluralBlocks, normalizeBaseLang, pluralArity } from './plurals';
+import { DEFAULT_PLURAL_ARITY, findPluralBlocks, normalizeBaseLang, pluralArity } from './plurals';
 
 const KNOWN_CONFIG_KEYS = new Set(['minsize', 'maxsize', 'sep', 'lastsep']);
 // The gap class is spelled out because no dialect's `\s` is this set — PHP's under /u is
@@ -231,12 +231,26 @@ function checkPlurals(text: string, idx: LineIndex, locale: string | undefined, 
       out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets. Extract via #def first — a #set is substituted verbatim and would put the brackets straight back.', at));
       continue;
     }
+    const count = block.formsRaw.split('|').length;
     if (arity > 0) {
-      const count = block.formsRaw.split('|').length;
       if (count !== arity) {
         out.push(err('plural.arity', `{plural ...}: expected ${arity} forms, got ${count}.`,
           { ...at, data: { expected: arity, got: count } }));
       }
+    } else if (count !== DEFAULT_PLURAL_ARITY) {
+      // No locale ⇒ no arity VERDICT: the template may well be correct for the locale it
+      // will be rendered with, and calling it invalid here would fail a good template for
+      // a fact the caller never claimed. But `render` has no such luxury — it defaults to
+      // 2 forms — so silence sends a 3-form block straight to the fullwidth-brace
+      // fallback in finished text (issue #65: a pipeline shipped ｛plural …｝ to live
+      // pages because validate stayed quiet). A warning says the one true thing: this
+      // resolves only if a matching locale arrives at render time.
+      out.push(warn(
+        'plural.locale-missing',
+        `{plural ...}: ${count} forms, but no locale was supplied. render defaults to ` +
+          `${DEFAULT_PLURAL_ARITY} forms and leaves this block unresolved — pass the locale you will render with.`,
+        { ...at, data: { got: count, defaultArity: DEFAULT_PLURAL_ARITY } },
+      ));
     }
   }
 }

@@ -56,15 +56,18 @@ spintax-mcp --help
 
 | Tool | What it answers |
 |------|-----------------|
-| `validate_spintax` | Diagnostics with severity, a stable code and 1-based line/column. No `error` ⇒ safe to render. |
+| `validate_spintax` | Diagnostics with severity, a stable code and 1-based line/column. No `error` ⇒ structurally sound; read the warnings too. |
 | `render_spintax` | N variants. With a seed it is deterministic — variant *i* uses seed `<seed>#<i>`. |
 | `analyze_spintax` | Which variables the template needs, which directives it defines, best-effort construct counts. |
 
 Two things worth knowing, because they are the traps this server exists to make visible:
 
-- **Plural arity is locale-sensitive, and silent without a locale.** With no `locale`, the engine
-  files no arity verdict at all — a 3-form `{plural %n%: one|few|many}` validates clean and then
-  renders through the 2-form default. Name the locale when you mean it.
+- **Plural arity is locale-sensitive, and a locale is not optional in practice.** With no `locale`
+  the engine files no arity *verdict* — the template may well be right for the locale you will
+  render with, and failing it here would fail a good template. What it does file is a
+  `plural.locale-missing` **warning** whenever a block's form count is not the 2 that `render`
+  defaults to, because that block will otherwise reach your finished text as `｛plural …｝`. So
+  "no error" is not the whole answer: name the locale, or read the warnings.
 - **The engine is lenient.** Structural mistakes never throw; they surface in the output, with
   fullwidth braces `｛…｝` marking markup the parser could not read. Run `validate_spintax` first.
 
