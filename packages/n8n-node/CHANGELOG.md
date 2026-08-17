@@ -3,6 +3,29 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.2
+
+Refresh: bundles `@spintax/core` **0.4.0**. No behaviour change for a workflow, and the version
+is a patch because measuring said so.
+
+### Changed
+
+- **Bundled engine 0.3.4 → 0.4.0**, which adds a `plural.locale-missing` warning
+  (spintax-js#65) for a `{plural …}` block that cannot resolve at the render default when **no
+  locale was supplied**.
+
+  The first draft of this entry claimed the warning would fire whenever the Locale field is left
+  empty — the field's default — and that was wrong. Reading `validateOp` settled it: an empty
+  field omits the option, and the op falls back to `spintaxMeta.locale` and then to
+  `DEFAULT_LOCALE` (`en`). So this node never validates without a locale, and a three-form
+  Russian plural has always come back as an arity **error** on the Invalid branch rather than
+  silently. The new warning is reachable here only if an item's `spintaxMeta.locale` is an
+  explicit empty string.
+
+  Kept as a release anyway so the artifact users install carries the current engine — the family
+  moves together — and pinned by a test, so the `en` default that makes this a non-event is
+  recorded rather than assumed.
+
 ## 0.2.1
 
 The release exists because the published pool template got ahead of the published node: the

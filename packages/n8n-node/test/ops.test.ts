@@ -157,6 +157,27 @@ describe('validateOp', () => {
     expect(validateOp('x', { locale: 'de', meta: { locale: 'ru' } }).locale).toBe('de');
     expect(validateOp('x').locale).toBe('en');
   });
+
+  it('always supplies a locale, so the engine never files plural.locale-missing here', () => {
+    // core 0.4.0 warns when a plural cannot resolve at the render default AND no locale
+    // was given. This node cannot reach that state through an empty Locale field: the
+    // node omits the option, and the op falls back to spintaxMeta and then to `en`. So a
+    // three-form plural is an arity ERROR on the Invalid branch, which is the useful
+    // answer — recorded here because the CHANGELOG's first draft claimed the opposite.
+    const threeForm = '{plural 3: одна|две|много}';
+
+    const noField = validateOp(threeForm);
+    expect(noField.locale).toBe('en');
+    expect(noField.valid).toBe(false);
+    expect(noField.diagnostics.map((d) => d.code)).toEqual(['plural.arity']);
+
+    expect(validateOp(threeForm, { locale: 'ru' }).valid).toBe(true);
+
+    // The one way in: an item that explicitly declares an empty locale.
+    const emptyMeta = validateOp(threeForm, { meta: { locale: '' } });
+    expect(emptyMeta.valid).toBe(true);
+    expect(emptyMeta.diagnostics.map((d) => d.code)).toEqual(['plural.locale-missing']);
+  });
 });
 
 describe('prompt operations', () => {
