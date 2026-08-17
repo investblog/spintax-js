@@ -1,16 +1,17 @@
 name: Release MCP server
 
-# Publishes @spintax/mcp to npm with PROVENANCE.
+# Publishes @spintax/mcp to npm with PROVENANCE via OIDC Trusted Publishing — no
+# tokens stored anywhere, no OTP. The Trusted Publisher entry exists as of 2026-08-17
+# (npmjs.com → @spintax/mcp → Settings → Trusted Publisher → GitHub Actions,
+# org/repo = investblog/spintax-js, workflow = release-mcp.yml). The @spintax/core
+# entry does NOT cover this package; every package needs its own.
 #
-# FIRST PUBLISH IS DIFFERENT, and this is the trap of a new package: a Trusted
-# Publisher entry cannot precede the first publish — there is no package to attach it
-# to — so 0.1.0 goes out with the NPM_TOKEN repo secret (provenance still works: it
-# comes from `id-token: write` + `--provenance`, not from trusted publishing). After
-# that first release:
-#   1. npmjs.com → @spintax/mcp → Settings → Trusted Publisher → GitHub Actions →
-#      org/repo = investblog/spintax-js, workflow = release-mcp.yml
-#   2. delete the `env: NODE_AUTH_TOKEN` block from the publish step below
-# The @spintax/core entry does NOT cover this package; every package needs its own.
+# 0.1.0 was different, and it is the trap of a NEW package: a Trusted Publisher entry
+# cannot precede the first publish — there is no package to attach it to — so it went
+# out on the NPM_TOKEN repo secret. Provenance still applied there, because it comes
+# from `id-token: write` + `--provenance` rather than from trusted publishing. From
+# 0.1.1 on, this workflow carries no NODE_AUTH_TOKEN and npm exchanges the GitHub OIDC
+# token for a short-lived publish token by itself.
 #
 # Release flow: bump packages/mcp/package.json (and src/version.ts — a test enforces
 # it) → CHANGELOG → commit → tag mcp-vX.Y.Z → push tag. The prefix keeps it out of
@@ -96,8 +97,9 @@ jobs:
       - name: MCP server tarball smoke (bin over stdio + engine as a dependency)
         run: npm run smoke:pack:mcp
 
-      - name: Publish @spintax/mcp (provenance)
+      # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
+      # publish token automatically, and attaches a provenance attestation. The
+      # NPM_TOKEN repo secret still exists for bootstrapping the NEXT new package, but
+      # this workflow no longer uses it.
+      - name: Publish @spintax/mcp (provenance via OIDC)
         run: npm publish -w @spintax/mcp --provenance --access public
-        env:
-          # DELETE THIS BLOCK once the Trusted Publisher entry exists (see the header).
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

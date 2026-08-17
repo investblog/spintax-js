@@ -107,15 +107,17 @@ git tag -a mcp-vX.Y.Z -m "@spintax/mcp X.Y.Z"
 git push origin main && git push origin mcp-vX.Y.Z
 ```
 
-**First publish is the exception, and it is the same trap the n8n node hit:** a
-Trusted Publisher entry cannot precede the first publish, so `0.1.0` goes out with the
-`NPM_TOKEN` repo secret. Provenance still applies — it comes from `id-token: write` +
-`--provenance`, not from trusted publishing. Immediately after that release:
+The Trusted Publisher entry is **in place since 2026-08-17** (npmjs.com →
+`@spintax/mcp` → Settings → Trusted Publisher → GitHub Actions, org `investblog`, repo
+`spintax-js`, workflow `release-mcp.yml`), so releases from `0.1.1` on need no token.
 
-1. **npmjs.com → `@spintax/mcp` → Settings → Trusted Publisher → GitHub Actions**,
-   org `investblog`, repo `spintax-js`, workflow `release-mcp.yml`;
-2. delete the `env: NODE_AUTH_TOKEN` block from the publish step in
-   `release-mcp.yml`.
+**`0.1.0` was the exception, and it is the same trap the n8n node hit:** a Trusted
+Publisher entry cannot precede the first publish — there is no package to attach it to
+— so it went out on the `NPM_TOKEN` repo secret, with provenance coming from
+`id-token: write` + `--provenance` rather than from trusted publishing. The two
+follow-up steps (create the entry, then delete the `env: NODE_AUTH_TOKEN` block from
+the publish step) are **done**. Keep this paragraph for the next new package: the
+sequence is publish-then-connect, never the other way round.
 
 Verify with the client, not just the registry: the tarball smoke
 (`npm run smoke:pack:mcp`) installs the package and drives the real `bin` over stdio,
