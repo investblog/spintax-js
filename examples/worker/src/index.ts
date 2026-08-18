@@ -55,9 +55,14 @@ const MAX_INCLUDE_RESOLUTIONS = 200;
  * at `count: 1` and 2.5 s at `count: 5`, and at `count: 10` the isolate is killed — HTTP 503
  * from 62 bytes. Bounding the engine did not bound the host.
  *
- * Sized for real work rather than for the bomb: 100 variants of a 64 KB document fit.
+ * Sized by what this platform actually sustains, not by what looks generous. At 8 MB the
+ * cap never fired: the isolate was killed at `count: 10` before the loop could refuse, so
+ * the bound existed only in the unit test. 2 MB fires while the request is still alive, and
+ * still carries 100 variants of a 20 KB document — larger than anything this reference API
+ * is for. A single render may still return more (the engine's own allowance is 1 MB); it is
+ * the multiplication that needed bounding.
  */
-const MAX_BATCH_OUTPUT_CHARS = 8 * 1024 * 1024;
+const MAX_BATCH_OUTPUT_CHARS = 2 * 1024 * 1024;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
