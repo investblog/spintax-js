@@ -944,5 +944,21 @@
     "expect": {
       "verdict": "valid"
     }
+  },
+  {
+    "id": "validate/cycle-diamond-terminates",
+    "note": "A converging diamond feeding a cycle: 20 definitions each referencing the previous one TWICE, so the number of routes into the cycle is 2^20. What this really gates is that the engine ANSWERS — emitting one diagnostic per route took 5.9 s and 2 097 152 diagnostics in the JS engine and killed the reference deployment with HTTP 503 (spintax-js#59); a runner that hangs or dies fails this case loudly. It cannot gate the COUNT: the corpus asserts diagnostics as a subset, and multiplicity is deliberately not part of the contract.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %c1% = %c2%\n#set %c2% = %c1%\n#set %d0% = %c1% %c1%\n#set %d1% = %d0% %d0%\n#set %d2% = %d1% %d1%\n#set %d3% = %d2% %d2%\n#set %d4% = %d3% %d3%\n#set %d5% = %d4% %d4%\n#set %d6% = %d5% %d5%\n#set %d7% = %d6% %d6%\n#set %d8% = %d7% %d7%\n#set %d9% = %d8% %d8%\n#set %d10% = %d9% %d9%\n#set %d11% = %d10% %d10%\n#set %d12% = %d11% %d11%\n#set %d13% = %d12% %d12%\n#set %d14% = %d13% %d13%\n#set %d15% = %d14% %d14%\n#set %d16% = %d15% %d15%\n#set %d17% = %d16% %d16%\n#set %d18% = %d17% %d17%\n#set %d19% = %d18% %d18%\n%d19%",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "variable.circular-reference",
+          "severity": "error"
+        }
+      ]
+    }
   }
 ]

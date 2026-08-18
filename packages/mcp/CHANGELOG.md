@@ -3,6 +3,14 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.3 — 2026-08-18
+
+Depends on `@spintax/core` **^0.6.0**, which changes what `validate_spintax` returns for a template
+whose definitions form a converging diamond into a cycle: one diagnostic per name rather than one
+per route (spintax-js#59). Before it, 507 bytes of such definitions produced 2 097 152 diagnostics —
+an answer no agent can read and no transport should carry. Messages for ordinary templates are
+unchanged.
+
 ## 0.2.2 — 2026-08-18
 
 Depends on `@spintax/core` **^0.5.3** (which bounds what one render may expand, and made that

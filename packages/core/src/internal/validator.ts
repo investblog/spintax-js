@@ -571,9 +571,19 @@ function checkVariableReferences(text: string, idx: LineIndex, known: readonly s
     refsOf.set(name, refs);
   }
 
-  const reachesCycle = namesThatReachACycle(defs, refsOf);
+  // ONE diagnostic per name that takes part in, or leads to, a cycle (issue #59). The set
+  // is what the colour walk already computes; emitting per PATH instead re-walked every
+  // route through the graph, and the number of routes through a converging diamond is
+  // exponential in its depth — a 507-byte template produced 2 097 152 diagnostics in 5.9 s,
+  // and 547 bytes took the live /validate-template out with HTTP 503. Four engines were
+  // deliberately aligned to per-path (spintax-win aligned to it on 2026-08-07); this is the
+  // decision #59 was holding, and per-path cannot be kept, because re-walking every route
+  // IS the emission.
+  const { reaches: reachesCycle, via } = namesThatReachACycle(defs, refsOf);
   for (const name of defs.keys()) {
-    detectCycle(name, defs, refsOf, reachesCycle, defPos.get(name) ?? somewhere, out);
+    if (!reachesCycle.has(name)) continue;
+    out.push(err('variable.circular-reference', `Circular variable reference: ${cyclePath(name, via)}.`,
+      { ...(defPos.get(name) ?? somewhere), data: { name } }));
   }
 
   // Blank #set lines to same-length whitespace so ref offsets still map to `text`
@@ -606,11 +616,23 @@ function checkVariableReferences(text: string, idx: LineIndex, known: readonly s
  * and a converging diamond re-explored shared subtrees exponentially — a one-kilobyte
  * template validate() never returned from). One iterative colour walk, computed once.
  */
-function namesThatReachACycle(defs: Map<string, string>, refsOf: Map<string, string[]>): Set<string> {
+function namesThatReachACycle(
+  defs: Map<string, string>,
+  refsOf: Map<string, string[]>,
+): { reaches: Set<string>; via: Map<string, string> } {
   const GREY = 1;
   const BLACK = 2;
   const color = new Map<string, number>();
   const reaches = new Set<string>();
+  // One witness edge per name: the reference through which it first turned out to reach a
+  // cycle. Following it name by name reproduces the route the old per-path walk printed,
+  // without walking every path to find one.
+  const via = new Map<string, string>();
+  const mark = (name: string, witness: string): void => {
+    if (reaches.has(name)) return; // first discovery wins, so the route is deterministic
+    reaches.add(name);
+    via.set(name, witness);
+  };
 
   interface Frame { name: string; refs: string[]; i: number }
   for (const root of defs.keys()) {
@@ -624,8 +646,8 @@ function namesThatReachACycle(defs: Map<string, string>, refsOf: Map<string, str
         top.i += 1;
         if (ref === top.name || !defs.has(ref)) continue;
         const c = color.get(ref);
-        if (c === GREY) reaches.add(top.name); // back edge — top sits on a cycle
-        else if (c === BLACK) { if (reaches.has(ref)) reaches.add(top.name); }
+        if (c === GREY) mark(top.name, ref); // back edge — top sits on a cycle
+        else if (c === BLACK) { if (reaches.has(ref)) mark(top.name, ref); }
         else {
           stack.push({ name: ref, refs: refsOf.get(ref) ?? [], i: 0 });
           color.set(ref, GREY);
@@ -633,63 +655,59 @@ function namesThatReachACycle(defs: Map<string, string>, refsOf: Map<string, str
       } else {
         stack.pop();
         color.set(top.name, BLACK);
-        if (stack.length > 0 && reaches.has(top.name)) reaches.add(stack[stack.length - 1]!.name);
+        if (stack.length > 0 && reaches.has(top.name)) mark(stack[stack.length - 1]!.name, top.name);
       }
     }
   }
-  return reaches;
+  return { reaches, via };
 }
 
+/** Names printed in a circular-reference message before it gives up and counts. */
+const CYCLE_PATH_LIMIT = 8;
+
 /**
- * The reporting walk, exactly the recursive one it replaces: depth-first over a
- * value's references in order, one report per frame that meets a name already on
- * the path (the frame then abandons its remaining references; siblings continue
- * from the parent). Iterative so a definition chain as deep as the document cannot
- * overflow the call stack; the shared path array is pushed/popped instead of copied
- * per step, and membership is a Set — the array `includes` plus the per-step copy
- * made one 1600-definition cycle cost tens of seconds.
+ * The route from `name` into its cycle, as the message shows it.
+ *
+ * Following the witness edges reproduces the text the old per-path walk produced — `a → b
+ * → a` for a two-cycle, `d0 → c1 → c2 → c1` for a name that merely reaches one — so real
+ * cycles read exactly as they did.
+ *
+ * It is capped because per-name emission alone does not bound the TEXT: one cycle of N
+ * names is N diagnostics each printing an N-name route, and a 43 KB template of one giant
+ * cycle carried 29 MB of message text. Past a handful of names the route stops being
+ * something a human reads, so it becomes a count.
  */
-function detectCycle(
-  root: string,
-  defs: Map<string, string>,
-  refsOf: Map<string, string[]>,
-  reachesCycle: Set<string>,
-  rootPos: Pos,
-  out: Diagnostic[],
-): void {
-  if (!reachesCycle.has(root)) return; // the root frame could only report ref === root, which it skips
+function cyclePath(name: string, via: Map<string, string>): string {
+  const seen = new Set<string>([name]);
+  const shown: string[] = [name];
+  let current = name;
 
-  interface Frame { name: string; refs: string[]; i: number }
-  const path: string[] = [root];
-  const onPath = new Set<string>([root]);
-  const stack: Frame[] = [{ name: root, refs: refsOf.get(root) ?? [], i: 0 }];
-
-  const leave = (frame: Frame): void => {
-    stack.pop();
-    onPath.delete(frame.name);
-    path.pop();
-  };
-
-  while (stack.length > 0) {
-    const top = stack[stack.length - 1]!;
-    if (top.i >= top.refs.length) {
-      leave(top);
-      continue;
+  for (;;) {
+    const next = via.get(current);
+    if (next === undefined) break; // cannot happen for a name in `reaches`; belt and braces
+    if (seen.has(next)) {
+      shown.push(next); // the repeat closes the route
+      return shown.join(' → ');
     }
-    const ref = top.refs[top.i]!;
-    top.i += 1;
-    if (ref === top.name) continue; // self-reference already reported
-    if (onPath.has(ref)) {
-      out.push(err('variable.circular-reference', `Circular variable reference: ${[...path, ref].join(' → ')}.`, rootPos));
-      leave(top); // the recursive walk returned from the whole frame here
-      continue;
+    if (shown.length >= CYCLE_PATH_LIMIT) {
+      // Count what is left rather than print it — integer steps, no string building.
+      let more = 0;
+      let walk = next;
+      while (!seen.has(walk)) {
+        seen.add(walk);
+        more += 1;
+        const step = via.get(walk);
+        if (step === undefined) break;
+        walk = step;
+      }
+      return `${shown.join(' → ')} → … (${more} more)`;
     }
-    if (defs.has(ref) && reachesCycle.has(ref)) {
-      stack.push({ name: ref, refs: refsOf.get(ref) ?? [], i: 0 });
-      onPath.add(ref);
-      path.push(ref);
-    }
+    seen.add(next);
+    shown.push(next);
+    current = next;
   }
+
+  return shown.join(' → ');
 }
 
 /** Unknown `#include` targets — only when a slug list is supplied. Raw `/m` scan. */

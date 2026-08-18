@@ -121,6 +121,15 @@ verbatim and is still spintax when the plural is decided, so its brackets earn
 **Not a verdict:** circular `#include` is a render-time `maxDepth` guard, never a `validate()`
 error (the plugin's validator does not resolve includes).
 
+**Not parity-gated: how MANY identical diagnostics come back.** The engines emit one
+`variable.circular-reference` per NAME that takes part in, or leads to, a cycle (spintax-js#59,
+decided 2026-08-18). They used to emit one per PATH, which is exponential on a converging diamond —
+507 bytes produced 2 097 152 diagnostics and 547 bytes took a live endpoint out with HTTP 503. The
+subset assertion is what made that invisible here, and it stays that way on purpose: a fixture
+pins that a code IS present, never how often. Each engine pins its own multiplicity in its own
+suite. The same goes for the route printed in the message — it is capped past a handful of names,
+and where it is capped is not gated either.
+
 **Not parity-gated: what a truncated explosion looks like.** Every engine bounds how much
 text one render may produce by expanding `%variables%` (spintax-js#69) — `#set %a% = %b% %b%`
 over `#set %b% = %a% %a%` doubles every pass, and 2^50 ended the process in all four before

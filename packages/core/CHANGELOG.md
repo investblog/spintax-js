@@ -3,6 +3,48 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.0 — 2026-08-18
+
+**`validate()` now emits ONE `variable.circular-reference` per NAME that takes part in, or leads
+to, a cycle** — it used to emit one per PATH (issue #59). Minor rather than patch: diagnostic
+output visibly changes, though no verdict moves and no API does.
+
+### Fixed
+
+Per-path emission is exponential on a converging diamond, because the number of routes into a
+cycle is exponential in the diamond's depth:
+
+| shape | template | before | after |
+|---|---|---|---|
+| 20 definitions, each referencing the previous one twice, feeding a 2-cycle | **507 B** | **2 097 152 diagnostics, 5.9 s** | **22 diagnostics, 6 ms** |
+| the same at depth 200 | 5 KB | (never finished) | 202 diagnostics, ms |
+| live `POST /validate-template` | **547 B** | **HTTP 503** | 200, with a verdict |
+
+The second half of the same issue: one cycle of N names printed an N-name route in each of N
+messages. A 43 KB template of one giant cycle carried **29 MB of message text**; the route is now
+capped at 8 names and becomes a count — `n0 → n1 → … → n7 → … (1992 more)` — which brings that to
+200 KB. A real cycle is two to five names and reads exactly as it did.
+
+**Messages are unchanged for every shape a human writes.** The colour walk that already existed as
+a prune now also records one witness edge per name, and following those edges reproduces the route
+the per-path walk used to print: `a → b → a`, `d0 → c1 → c2 → c1`. Only the duplicates are gone.
+`Diagnostic.data` carries `{ name }` so a consumer can group without parsing the message.
+
+### Notes
+
+This reverses a deliberate decision, which is why it is recorded rather than quietly shipped. The
+per-path shape was pinned on purpose in three engines' own suites — "an implementation that
+deduplicates repeated edges, memoizes per root, or reorders roots goes red here, not silently
+green" — and `spintax-win` aligned to it on 2026-08-07. It could not be kept and bounded: re-walking
+every route *is* the emission. `spintax-core` (Python) already emitted per name and was the one
+engine immune; the rest followed it, and its counts are now the reference — verified by diffing 400
+generated definition graphs against it, and against `spintax/core`, with zero mismatches.
+
+Mirrored into `spintax/core` 0.8.0 and the WordPress plugin. The corpus gains a fixture for the
+diamond whose real assertion is that the engine *answers*; it cannot gate the count, because
+diagnostics are asserted as a subset — and `packages/conformance/README.md` now says that
+multiplicity is deliberately not part of the contract.
+
 ## 0.5.3 — 2026-08-18
 
 The expansion budget added in 0.5.2 was created per rendered AST, and an `#include` renders one

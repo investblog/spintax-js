@@ -268,21 +268,65 @@ describe('validator — the circular-reference walk (emission shape + the prune 
     ]);
   });
 
-  test('a duplicated edge is walked per occurrence — %b% %b% in a 2-cycle reports three times', () => {
-    // The reference semantics spintax-win aligned to on 2026-08-07: references are not
-    // deduplicated, and a report abandons only the frame that made it.
+  // ── The family moved from per-PATH to per-NAME emission on 2026-08-18 (issue #59) ──
+  //
+  // These two used to pin the opposite, deliberately: references were NOT deduplicated and
+  // a report abandoned only the frame that made it — the semantics spintax-win aligned to
+  // on 2026-08-07. They are rewritten rather than deleted so the reversal is on the record.
+  //
+  // What forced it: the number of routes through a converging diamond is exponential in its
+  // depth, so a 507-byte template produced 2 097 152 diagnostics in 5.9 s and 547 bytes took
+  // the live /validate-template out with HTTP 503. Per-path cannot be kept and bounded,
+  // because re-walking every route IS the emission. Python already emitted per name and was
+  // immune; the other engines followed it.
+  //
+  // Verdicts do not move (`valid` ⇔ no error-severity diagnostic), and the corpus asserts
+  // diagnostics as a SUBSET, so no fixture changes — which is exactly why these local
+  // canaries exist.
+
+  test('a duplicated edge reports ONCE — %b% %b% in a 2-cycle is still two names', () => {
     const diags = circular('#set %a% = %b% %b%\n#set %b% = %a%');
     expect(diags.map((d) => d.message)).toEqual([
-      'Circular variable reference: a → b → a.',
       'Circular variable reference: a → b → a.',
       'Circular variable reference: b → a → b.',
     ]);
   });
 
-  test('a converging diamond feeding a cycle keeps the per-path emission count', () => {
-    // depth 2 → 2^2 + 2^1 reports from the a-roots, one each from a2, p, q.
+  test('a converging diamond feeding a cycle reports once per name, not once per path', () => {
+    // Was 9 (2^2 + 2^1 from the a-roots, one each from a2, p, q). Now 5: a0, a1, a2, p, q.
     const src = '#set %a2% = %p%\n#set %a1% = %a2% %a2%\n#set %a0% = %a1% %a1%\n#set %p% = %q%\n#set %q% = %p%';
-    expect(circular(src)).toHaveLength(9);
+    expect(circular(src)).toHaveLength(5);
+  });
+
+  test('the diamond stays linear in its depth — the shape that was a live DoS', () => {
+    // n=20 was 2 097 152 diagnostics in 5.9 s from 507 bytes. The ceiling is loose on
+    // purpose: it catches a return to exponential, it does not time the machine.
+    const build = (n: number): string => {
+      const lines = ['#set %c1% = %c2%', '#set %c2% = %c1%'];
+      for (let i = 0; i < n; i += 1) {
+        const src = i === 0 ? 'c1' : `d${i - 1}`;
+        lines.push(`#set %d${i}% = %${src}% %${src}%`);
+      }
+      return lines.join('\n');
+    };
+    const started = Date.now();
+    expect(circular(build(20))).toHaveLength(22); // 2 cycle names + 20 that reach it
+    expect(circular(build(200))).toHaveLength(202);
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  test('a giant cycle keeps its message TEXT linear — the second half of #59', () => {
+    // Per-name emission alone does not bound the text: N names each printing an N-name
+    // route is still quadratic, and a 43 KB template carried 29 MB of it. The route is
+    // capped, so a real cycle still reads in full and a pathological one becomes a count.
+    const n = 2000;
+    const lines: string[] = [];
+    for (let i = 0; i < n; i += 1) lines.push(`#set %n${i}% = %n${(i + 1) % n}%`);
+    const diags = circular(lines.join('\n'));
+    expect(diags).toHaveLength(n);
+    const text = diags.reduce((sum, d) => sum + d.message.length, 0);
+    expect(text).toBeLessThan(1024 * 1024); // was 29 MB
+    expect(diags[0]?.message).toContain('(1992 more)');
   });
 
   test('an acyclic chain is silent and fast — the prune must not invent or lose a report', () => {

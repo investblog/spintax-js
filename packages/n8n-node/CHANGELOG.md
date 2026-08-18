@@ -3,6 +3,14 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.7
+
+Bundles `@spintax/core` **0.6.0**: `validate()` emits one `variable.circular-reference` per NAME
+rather than per PATH (spintax-js#59). A Validate node fed a template with a converging diamond of
+definitions could previously return millions of identical diagnostics — 507 bytes produced
+2 097 152 of them — which is a workflow-killer whatever n8n does with the items. Messages are
+unchanged for ordinary templates.
+
 ## 0.2.6
 
 Bundles `@spintax/core` **0.5.3**: the expansion budget added in 0.5.2 was per rendered
