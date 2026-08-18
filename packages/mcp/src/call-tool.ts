@@ -43,6 +43,18 @@ export interface CallToolOptions {
   /** Omit ⇒ no template size cap (the local server has none). */
   maxTemplateChars?: number;
   maxVariants: number;
+  /**
+   * Total characters `render_spintax` may return across all variants.
+   *
+   * A count cap bounds how MANY variants, not how BIG they are, and the engine's own
+   * allowance is per render — so the two multiply. Measured on the hosted server before
+   * this existed: a 62-character expansion bomb at `count: 20` answered 200 with a
+   * **48 MB body after 29 seconds**. Nothing was broken and nothing said no.
+   *
+   * Omit ⇒ no cap, which is right for the local stdio server: it renders what its owner
+   * asked for on their own machine. A hosted deployment should set it.
+   */
+  maxOutputChars?: number;
   include?: IncludeSupport;
   /** Engine `#include`/nesting guard; omit ⇒ the engine default. */
   maxDepth?: number;
@@ -160,8 +172,22 @@ export function callTool(
         };
         if (opts.include) opts.include.begin();
         const variants: string[] = [];
+        let produced = 0;
         for (let i = 0; i < count; i++) {
-          variants.push(render(template, { ...base, ...(seed === undefined ? {} : { seed: `${seed}#${i}` }) }));
+          const variant = render(template, { ...base, ...(seed === undefined ? {} : { seed: `${seed}#${i}` }) });
+          produced += variant.length;
+          // Refused, not truncated. A short list of variants looks like a valid answer,
+          // and an agent asked for N would quietly act on however many fit.
+          if (opts.maxOutputChars !== undefined && produced > opts.maxOutputChars) {
+            return {
+              kind: 'error',
+              message:
+                `Rendering stopped: ${count} variants would return more than the server's `
+                + `${opts.maxOutputChars}-character limit (reached it at variant ${i + 1}). `
+                + 'Ask for fewer variants, or check the template for a definition that expands into itself.',
+            };
+          }
+          variants.push(variant);
         }
         let text = variants.join('\n---\n');
         const structured: Record<string, unknown> = { variants };

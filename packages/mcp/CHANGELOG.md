@@ -3,6 +3,27 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.2 — 2026-08-18
+
+Depends on `@spintax/core` **^0.5.3** (which bounds what one render may expand, and made that
+bound per call rather than per included template). Adds the cap the count limit was never able
+to provide.
+
+### Added
+
+- **`maxOutputChars`** on `CallToolOptions` — total characters `render_spintax` may return
+  across all variants. Omit it and nothing changes, which is right for the local stdio server:
+  it renders what its owner asked for, on their own machine. A hosted deployment should set it.
+
+  A count cap bounds how MANY variants, not how BIG they are, and the engine's allowance is per
+  render — so the two multiply. Measured on `spintax.net/mcp` before this existed: a
+  62-character expansion bomb at `count: 20` answered **HTTP 200 with a 48 MB body after 29
+  seconds**. Nothing was broken, nothing said no, and the caller had spent 62 bytes.
+
+  The call is refused rather than truncated, and the message names the variant it stopped at
+  and what to do — a short list of variants looks like a valid answer, and an agent that asked
+  for twenty would quietly act on however many happened to fit.
+
 ## 0.2.1 — 2026-08-18
 
 Depends on `@spintax/core` **^0.5.0** (a real dependency, not bundled — the site ends up with one

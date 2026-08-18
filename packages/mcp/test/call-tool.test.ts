@@ -191,3 +191,32 @@ describe('analyze_spintax', () => {
     expect(out.structured.includes).toEqual(['partial']);
   });
 });
+
+describe('the output cap', () => {
+  // A count cap bounds how MANY variants, not how BIG they are, and the engine's own
+  // allowance is per render — so the two multiply. Measured on the hosted server before
+  // this existed: a 62-character expansion bomb at count 20 answered 200 with a 48 MB
+  // body after 29 seconds. Nothing was broken and nothing said no.
+  const BOMB = '#set %a% = %b% %b%\n#set %b% = %a% %a%\n%a%';
+  const HOSTED: CallToolOptions = { ...CAPPED, maxOutputChars: 2 * 1024 * 1024 };
+
+  it('refuses when the variants would exceed it, naming the variant it stopped at', () => {
+    const out = callTool('render_spintax', { template: BOMB, locale: 'en', count: 20 }, HOSTED);
+    expect(out).toMatchObject({ kind: 'error' });
+    // Variant 2, not 1: one bomb render is 1.14 MB and the cap is 2 MB. The number is
+    // what makes the message actionable, so it is asserted rather than the phrasing.
+    expect(out.kind === 'error' && out.message).toContain('at variant 2');
+    expect(out.kind === 'error' && out.message).toContain('2097152-character limit');
+  });
+
+  it('leaves ordinary work alone', () => {
+    const out = callTool('render_spintax', { template: '{a|b} %who%', context: { who: 'Ada' }, count: 20 }, HOSTED);
+    expect(out.kind).toBe('ok');
+    expect(out.kind === 'ok' && (out.structured.variants as string[]).length).toBe(20);
+  });
+
+  it('no cap ⇒ no refusal, which is what the local stdio server wants', () => {
+    const out = callTool('render_spintax', { template: BOMB, locale: 'en', count: 2 }, LOCAL);
+    expect(out.kind).toBe('ok');
+  });
+});
