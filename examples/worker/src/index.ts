@@ -47,6 +47,17 @@ const MAX_BATCH = 100;
 const MAX_TEMPLATE_CHARS = 8192;
 /** Include resolutions allowed per render() — see `includeResolver` for why a source cap is not enough. */
 const MAX_INCLUDE_RESOLUTIONS = 200;
+/**
+ * Total characters `/render-batch` may return.
+ *
+ * The engine bounds what ONE render may expand (spintax-js#69); a batch multiplies that by
+ * up to MAX_BATCH. Measured on this Worker: a 62-character expansion bomb answers in 1.2 s
+ * at `count: 1` and 2.5 s at `count: 5`, and at `count: 10` the isolate is killed — HTTP 503
+ * from 62 bytes. Bounding the engine did not bound the host.
+ *
+ * Sized for real work rather than for the bomb: 100 variants of a 64 KB document fit.
+ */
+const MAX_BATCH_OUTPUT_CHARS = 8 * 1024 * 1024;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
@@ -174,13 +185,22 @@ export default {
           const ast = parse(template); // parse once, render N times (batching is a host concern, §9.3)
           const base = seedBase(body.seed);
           const opts = renderOpts(body);
-          const variants = Array.from({ length: count }, (_v, i) => {
+          const variants: string[] = [];
+          let produced = 0;
+          for (let i = 0; i < count; i += 1) {
             // A FRESH resolver per variant, so the include budget is per render rather
             // than per request — sharing one across a batch of 100 would quietly drop the
             // includes from every variant after the budget ran out.
             const resolver = includeResolver(body);
-            return render(ast, { ...opts, seed: base + i, ...(resolver ? { includeResolver: resolver } : {}) });
-          });
+            const variant = render(ast, { ...opts, seed: base + i, ...(resolver ? { includeResolver: resolver } : {}) });
+            produced += variant.length;
+            // Refused rather than truncated: a short batch looks like a valid answer, and a
+            // caller asking for 100 variants would silently ship however many fit.
+            if (produced > MAX_BATCH_OUTPUT_CHARS) {
+              return json({ error: 'batch_output_too_large', limit: MAX_BATCH_OUTPUT_CHARS, variants: i }, 413);
+            }
+            variants.push(variant);
+          }
           return json({ variants });
         }
         default:

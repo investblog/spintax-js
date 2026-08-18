@@ -70,6 +70,16 @@ describe('worker — routing & guards', () => {
     expect(res.status).toBe(200);
     expect(typeof (await bodyOf(res)).output).toBe('string');
   });
+  test('a batch that would return too much is refused, not truncated', async () => {
+    // The engine bounds ONE render; the batch multiplies it. Measured live before this
+    // cap: an expansion bomb answered at count 1 and 5, and killed the isolate at 10 —
+    // HTTP 503 from 62 bytes. A short batch would look like a valid answer, so 413.
+    const bomb = '#set %a% = %b% %b%\n#set %b% = %a% %a%\n%a%';
+    const res = await post('/render-batch', { template: bomb, locale: 'en', count: 100 });
+    expect(res.status).toBe(413);
+    expect((await bodyOf(res)).error).toBe('batch_output_too_large');
+  });
+
   test('each variant of a batch gets its own include budget', async () => {
     // One resolver shared across the batch would silently drop includes from every
     // variant after the budget ran out — the last variant must look like the first.
