@@ -1,6 +1,6 @@
 # n8n community node — `n8n-nodes-spintax` (spec)
 
-Status: **RELEASED; 0.2.1 on npm, gallery submission 18308 under review (2026-08-16).**
+Status: **RELEASED; 0.2.6 on npm, gallery submission 18308 under review (2026-08-16).**
 
 > **Read [§6.1](#61-where-it-actually-stands--2026-08-16-and-how-to-resume) first.** It carries the
 > current state and everything needed to resume — what is published, what is submitted where, which
@@ -562,10 +562,18 @@ so no surface here drifts from it:
 The plan above is the intent; this is the state, written to survive a lost session. Anything not
 listed here is unchanged from the plan.
 
-**Published.** `n8n-nodes-spintax@0.2.1` on npm (provenance via OIDC; the release workflow's own
+**Published.** `n8n-nodes-spintax@0.2.6` on npm (provenance via OIDC; the release workflow's own
 `scan` job reports "passed all security checks", so no separate scanner dispatch is needed since
 0.1.4). 0.2.0 closed #60–#63; 0.2.1 added Lint's **Ignored Strings**, which a live run turned up —
 see below. The node is at eight operations; `docs` and the site say so.
+
+**0.2.2–0.2.6 are engine catch-up plus one node-side fix.** 0.2.3 corrected Validate, which read
+the raw `locale` parameter while Render resolved it through the node's helper — one item, two
+answers, and a workflow branching on the Validate outputs can route differently after it. The rest
+carry `@spintax/core` 0.5.0 → 0.5.3: plural forms counted after expansion (#66), a conditional in a
+plural's count slot no longer deleting the block, and two expansion bombs where a 62-character
+template ended the Node process. A Render node fed author-supplied templates took the workflow
+down with it, so treat 0.2.6 as the floor.
 
 **Gallery — two records, one live.**
 

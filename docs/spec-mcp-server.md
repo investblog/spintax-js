@@ -1,6 +1,6 @@
 # `@spintax/mcp` — one tool module, two transports
 
-Status: **shipped** (0.1.0). Source of the requirement: issue
+Status: **shipped** (0.2.2; the hosted twin `spintax.net/mcp` is registry entry `net.spintax/mcp` 1.0.5). Source of the requirement: issue
 [#64](https://github.com/investblog/spintax-js/issues/64). This document records the decisions and
 the measured facts, not the API — for the API read `packages/mcp/README.md`, and for what changed
 read `packages/mcp/CHANGELOG.md`.
@@ -152,6 +152,10 @@ otherwise start a server with silently different limits.
 
 ## 7. Follow-ups
 
+> **Follow-ups 1–3 are done** (2026-08-17/18): the site refactor shipped with the core pin moved,
+> `decodeSentinel` was fixed there, and follow-up 4 landed as `packages[]` on the registry entry.
+> The list is kept because each records why the decision was made.
+
 1. **The site refactor.** `functions/mcp.ts` becomes ~40 lines: CORS, method guards,
    `MAX_BODY_BYTES`, `JSON.parse`, `dispatch(msg, headerAdapter)`, status mapping, and the `ASSETS`
    resource provider. **Precondition:** that repo pins `@spintax/core` at exactly `0.3.3` while this
@@ -171,3 +175,35 @@ otherwise start a server with silently different limits.
    name. That is a spintax.net change (`server.json` + `static/.well-known/mcp.json`, which this
    package's `parity-card.test.ts` already guards), and the promo plan's trap applies — name, auth
    method and URL must agree across the card, the manifest and the live server.
+
+## 8. `maxOutputChars`, and why a variant count was never a bound (0.2.2)
+
+`maxTemplateChars` bounds the input. `maxVariants` bounds how MANY variants come back. Neither
+bounds how BIG they are, and the engine's own expansion allowance is **per render**, so the two
+multiply.
+
+Measured on `spintax.net/mcp` before this existed, with both caps satisfied — a 62-character
+template and `count: 20`:
+
+```
+HTTP 200, 47 929 371 bytes, 28.7 s
+```
+
+The template was `#set %a% = %b% %b%` over `#set %b% = %a% %a%` and a reference to it: doubling
+expansion, engine issue #69. Nothing was broken, nothing said no, and the caller had spent
+62 bytes. After the cap (2 MB): 428 bytes, ~1 s, a tool error naming the variant it stopped at.
+
+Three decisions worth keeping:
+
+- **Optional.** Omitted ⇒ no cap, which is right for the local stdio server: it renders what its
+  owner asked for, on their own machine. A hosted deployment sets it; the site passes 2 MB.
+- **Refused, not truncated.** A short list of variants looks like a valid answer, and an agent
+  that asked for twenty would quietly act on however many happened to fit. The message names the
+  variant it stopped at and what to do — including that a definition may expand into itself.
+- **2 MB came from measurement, not from taste.** The reference Worker's first batch cap was 8 MB
+  and never fired once: the isolate was killed before the loop reached it, so the bound existed
+  only in the unit test. A cap that never fires is worse than none — it reads as protection.
+
+Standing cost, unchanged: the registry entry names an exact package version, so releasing this
+package drags the card, `server.json`, the Function, the parity pin, an apex deploy and a registry
+publish, in that order. 0.2.2 went out as server `1.0.5`.

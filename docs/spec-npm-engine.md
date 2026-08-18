@@ -596,6 +596,34 @@ Contract rules (parity-relevant — see §3.1):
   verbatim with fullwidth braces (U+FF5B / U+FF5D), matching the plugin — a bad block must not
   crash the page/bot/Worker. `render()` may throw only on programmer error (e.g. an
   `includeResolver` that itself throws), not on template content.
+- **Expansion is bounded, and the bound is on GROWTH** (added 2026-08-18, issues #66/#69, engine
+  0.5.1–0.5.3). `#set %a% = %b% %b%` over `#set %b% = %a% %a%` doubles the text every pass, so a
+  depth cap alone bounds height and not work: **62 characters ended the process in every engine of
+  the family**, in `validate()` (the form-count expansion) and in `render()` (the general variable
+  path, pre-existing since at least 0.3.4). `validate` allows 64 KB of growth over the form list;
+  `render` allows 1 MB of expansion **per `render()` call** — per call, not per rendered template,
+  because `#include` renders one and a per-template budget hands every include a fresh allowance.
+  Three properties are load-bearing and each was learned by getting it wrong first:
+  - **Growth, not total size.** A ceiling on total length made `{plural 2: one|<65 KB of ordinary
+    text>}` "unknowable" and flipped it from `plural.arity` to valid. Long is not exploding.
+  - **Enforced DURING the pass.** `replace()` / `sub()` / `preg_replace_callback` build the whole
+    next generation before anything downstream can measure it, so 15k self-references allocate
+    hundreds of megabytes and the check afterwards never runs.
+  - **Exhaustion is silence, not an error.** `validate` files no count-based verdict; `render`
+    leaves the reference literal — the answer an undefined name already gets, so no new output
+    shape appears and "never throws on content" survives.
+
+  **What a truncated explosion LOOKS like is not parity-gated.** TS and Python walk per reference
+  and agree to the character; both PHP engines run a whole-text fixpoint and stop elsewhere
+  (1 198 223 against 599 191 on the same input). The contract is that render terminates, does not
+  throw, bounds its output and leaves what it could not afford literal. Canary per engine, no
+  corpus fixture — see the conformance README.
+
+  **Bounding INPUT stays a host job (§9.3), and the engine's bound does not replace it.** A host
+  that batches multiplies the per-render allowance: the reference Worker caps the whole source
+  (root **plus include bodies**), budgets include resolutions per render, and refuses a batch over
+  2 MB of output; `@spintax/mcp` takes `maxOutputChars`, because a variant COUNT bounds how many
+  variants and not how big they are.
 - **Determinism.** With a fixed `seed` + `context` + `locale`, `render()` is reproducible
   *within this engine*. Cross-engine RNG-sequence parity with PHP is a NON-goal (§3.2).
 - **`Ast` is opaque/versioned**, not a public data contract in v1 — consumers pass it back to
