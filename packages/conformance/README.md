@@ -121,6 +121,18 @@ verbatim and is still spintax when the plural is decided, so its brackets earn
 **Not a verdict:** circular `#include` is a render-time `maxDepth` guard, never a `validate()`
 error (the plugin's validator does not resolve includes).
 
+**Not parity-gated: what a truncated explosion looks like.** Every engine bounds how much
+text one render may produce by expanding `%variables%` (spintax-js#69) — `#set %a% = %b% %b%`
+over `#set %b% = %a% %a%` doubles every pass, and 2^50 ended the process in all four before
+the bound existed. The *contract* is that render terminates, stays lenient, and leaves the
+references it could not afford as literal `%name%`. The exact output is NOT asserted, and no
+fixture pins it: the engines expand by different mechanisms — a per-reference tree walk here
+and in Python, a whole-text fixpoint in both PHP engines — so they stop at different places
+and produce different byte counts for the same bomb (measured: 1 198 223 vs 599 191 characters
+for the same input). Making those agree would mean rewriting one engine's expansion to match
+another's traversal, for input that no author writes. Each engine pins its own bound in its
+own suite instead.
+
 ### `rng` — pin exactly
 
 `rng` injects a **raw RNG of signature `(min, max) => int`** (NOT a choice-index picker),

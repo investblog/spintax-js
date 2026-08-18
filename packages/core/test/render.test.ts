@@ -17,7 +17,9 @@ function render(
   const ast = parseTemplate(src);
   const rngFn = rngFromStrategy(rng);
   const base = buildVars(ast.setDefs, context);
-  const walkOpts = { rng: rngFn, locale, depth: 0, onPluralError };
+  // A budget large enough to be invisible here; #69's bound is exercised through the
+  // public API, where the real one is installed.
+  const walkOpts = { rng: rngFn, locale, depth: 0, onPluralError, budget: { left: 1024 * 1024 } };
   const vars = { ...base, ...rollDefinitions(ast.defDefs, base, context, walkOpts) };
   return renderNodes(ast.nodes, { ...walkOpts, vars });
 }
@@ -275,6 +277,26 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
     const depth = 12_000; // comfortably past the ~9000 where the recursive pass died
     const deep = `#set %V% = y\n{plural ${'{?V?'.repeat(depth)}1${'}'.repeat(depth)}: one|two}`;
     expect(publicRender(deep, { locale: 'en' })).toBe('One');
+  });
+
+  test('an expansion bomb renders instead of ending the process (#69)', () => {
+    // 62 characters. Each pass replaces one reference with two, so depth 50 is 2^50 —
+    // an out-of-memory abort here, a memory fatal in the PHP engines, HTTP 503 on the
+    // public Worker. Acyclic doubling does the same, so the cycle guard never sees it.
+    // What is asserted is the contract: it terminates, it does not throw, the output is
+    // bounded, and the references it could not afford stay literal. The exact text is
+    // deliberately NOT pinned — the engines expand by different mechanisms and stop in
+    // different places, which is why no corpus fixture covers it.
+    const bomb = '#set %a% = %b% %b%\n#set %b% = %a% %a%\n%a%';
+    const out = publicRender(bomb, { locale: 'en' });
+    expect(out.length).toBeLessThan(4 * 1024 * 1024);
+    expect(out).toContain('%b%');
+  });
+
+  test('an ordinary template is nowhere near the expansion budget', () => {
+    // The bound must be invisible to real work: this is the shape a host actually sends.
+    const ordinary = '#set %greeting% = {Hi|Hello}\n#def %n% = 2\n%greeting%, {plural %n%: guest|guests}!';
+    expect(publicRender(ordinary, { locale: 'en', seed: 1 })).toMatch(/^(Hi|Hello), guests!$/);
   });
 
   test('an unbalanced count slot stays linear', () => {

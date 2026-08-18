@@ -27,6 +27,14 @@ import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 
 const MAX_VARIABLE_DEPTH = 50;
+/**
+ * Characters a single render may produce by expanding `%variables%` (issue #69).
+ *
+ * Deliberately far above any real document — the point is to end an explosion, not to
+ * ration ordinary output. Charged per substitution and checked before the next one, so
+ * the bomb dies at the budget rather than after allocating past it.
+ */
+const MAX_EXPANSION_CHARS = 1024 * 1024;
 // ASCII whitespace only, spelled out — no dialect's `\s` is this set. This comment used to
 // claim PHP's `\s` under /u is ASCII; measured (#55), it is the opposite: /u turns on
 // PCRE2_UCP, so PHP matched NBSP and all of \p{Z} here until it spelled the class out too.
@@ -82,6 +90,7 @@ export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
     locale: ctx.locale,
     depth: 0,
     onPluralError: ctx.onPluralError,
+    budget: { left: MAX_EXPANSION_CHARS },
   };
   // The roll happens here and not inside buildVars: a definition is rendered against the FULL
   // context, globals and runtime included, so it must wait until that context exists.
@@ -132,6 +141,19 @@ export interface RenderInternalOptions {
   readonly locale: string;
   /** Variable re-processing depth (guards runaway/circular expansion). */
   readonly depth: number;
+  /**
+   * Characters of variable expansion left for this render (issue #69).
+   *
+   * Depth alone does not bound expansion, only its height: `#set %a% = %b% %b%` over
+   * `#set %b% = %a% %a%` replaces one reference with two every level, so 50 levels is
+   * 2^50 and a 62-character template ended the process — an out-of-memory abort here,
+   * a memory fatal in the PHP engines, HTTP 503 on the public Worker. Acyclic doubling
+   * does the same, so the cycle guard never sees it.
+   *
+   * A mutable holder on purpose: `opts` is spread-copied down the walk, so a plain
+   * number would give every branch its own budget and bound nothing.
+   */
+  readonly budget: { left: number };
   /** Optional observer for unresolvable plural blocks; never affects output. */
   readonly onPluralError: ((issue: PluralIssue) => void) | undefined;
 }
@@ -287,6 +309,10 @@ function resolveVariable(name: string, opts: RenderInternalOptions): string {
   // At the cap, stop expanding (lenient: partial output, never throws — unlike the
   // plugin which throws→'' on runaway; §9.2 render never throws on content).
   if (opts.depth >= MAX_VARIABLE_DEPTH || !/[{[%]/u.test(value)) return value;
+  // Out of budget ⇒ the reference stays literal, exactly as an undefined name does. No
+  // new output shape, and the promise that render never throws on content survives.
+  if (opts.budget.left <= 0) return `%${name}%`;
+  opts.budget.left -= value.length;
   // parseSequence, NOT parseTemplate: a value must not be re-comment-stripped or
   // re-#set-extracted (those are one-time body passes in the plugin).
   return renderNodes(parseSequence(value), { ...opts, depth: opts.depth + 1 });
@@ -300,6 +326,9 @@ function expandVarsOnly(text: string, opts: RenderInternalOptions): string {
     out = out.replace(/%(\w+)%/gu, (m, name: string): string => {
       const value = opts.vars[name.toLowerCase()];
       if (value === undefined) return m;
+      // Same purse as resolveVariable: a plural slot is not a separate allowance.
+      if (opts.budget.left <= 0) return m;
+      opts.budget.left -= value.length;
       changed = true;
       return value;
     });

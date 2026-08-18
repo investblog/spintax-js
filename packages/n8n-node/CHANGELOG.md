@@ -3,6 +3,13 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.5
+
+Bundles `@spintax/core` **0.5.2**, which stops `render()` dying on a 62-character template
+(spintax-js#69) — a doubling pair of `#set` definitions ended the Node process, so a Render
+node fed an author-supplied template took the workflow down with it. Not a regression: every
+released engine did this. **Upgrade from 0.2.4.**
+
 ## 0.2.4
 
 Bundles `@spintax/core` **0.5.1**, which fixes two crashes in the 0.5.0 form-counting path — a

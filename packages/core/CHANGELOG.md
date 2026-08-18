@@ -3,6 +3,45 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.2 — 2026-08-18
+
+**`render()` no longer dies on a 62-character template** (issue #69). Not a regression — the
+published 0.3.4 does the same, and so did every engine in the family. Live, this was HTTP 503
+from the reference Worker.
+
+### Fixed
+
+```
+#set %a% = %b% %b%
+#set %b% = %a% %a%
+%a%
+```
+
+Each expansion replaces one reference with two, so the 50-level depth cap allows 2^50 and the
+process ends: an out-of-memory abort here and in the Python port, a memory fatal in both PHP
+engines. Acyclic doubling definitions do it too, so the cycle guard never fires. **Any**
+reference to such a value reaches it — plain text, a plural slot, an enumeration, a
+permutation. Defining the pair is harmless, and a conditional testing one is harmless, because
+neither expands the value.
+
+A render may now expand at most 1 MB of `%variable%` text. Past that a reference is left
+literal — exactly what an undefined name already does, so no new output shape appears, render
+stays lenient (§9.2), and a plural whose count did not resolve erases as it always has. The
+ceiling is far above any real document; the point is to end an explosion, not to ration output.
+
+### Notes
+
+**What a truncated explosion looks like is deliberately NOT parity-gated,** and the conformance
+README now says so. The engines expand by different mechanisms — a per-reference tree walk here
+and in Python, a whole-text fixpoint in both PHP engines — so they stop in different places and
+produce different byte counts for the same bomb (1 198 223 against 599 191, measured). What is
+contract, and what each engine pins in its own suite, is that render terminates, does not
+throw, bounds its output, and leaves what it could not afford as literal `%name%`. Making the
+byte counts agree would mean rewriting one engine's expansion to match another's traversal, for
+input no author writes.
+
+This is the render-side twin of the counting bomb fixed in 0.5.1; that one bounds `validate()`.
+
 ## 0.5.1 — 2026-08-18
 
 Two crashes in the 0.5.0 form-counting path, both reachable from template text, both found by
