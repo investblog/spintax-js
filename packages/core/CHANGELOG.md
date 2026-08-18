@@ -3,6 +3,50 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.1 — 2026-08-18
+
+Two crashes in the 0.5.0 form-counting path, both reachable from template text, both found by
+review rather than by a failing test. **Upgrade from 0.5.0.**
+
+### Fixed
+
+- **A 62-character template could take `validate()` out with an out-of-memory crash.**
+
+  ```
+  #set %a% = %b% %b%
+  #set %b% = %a% %a%
+  {plural 2: one|%a%}
+  ```
+
+  Counting plural forms expands definitions, and the expansion was bounded by 51 *passes* with
+  nothing bounding the *size*. That template doubles the text on every pass, so 51 passes is 2^51.
+  Every engine in the family died on it — this one and the Python port with an out-of-memory
+  crash, both PHP engines with a memory fatal. A non-cyclic doubling chain does the same, so the
+  circular-reference guard never got a chance.
+
+  The expansion now stops at 64 KB and reports the count as unknowable, which is the same silence
+  this validator already uses for every input it cannot pin down. A form list is a handful of
+  plural forms; nothing legitimate approaches the ceiling.
+
+  `validate` is exposed by public HTTP surfaces — this was a remote denial of service, not a
+  local footgun.
+
+- **`validate()` threw `RangeError` on a long `#set` chain.** The macro walk added in 0.5.0 was
+  recursive: roughly 9000 links (a 205 KB template) exhausted the call stack, while the Python
+  port gave up at ~1000 links (20 KB) and both PHP engines answered normally — one input, three
+  behaviours. The walk is iterative now.
+
+  It is a pre-order depth-first walk in source order, and it has to stay one: the first non-clean
+  answer wins, so a graph holding both an opaque macro and a brackety one gives different
+  diagnostics depending on which is met first. Checked by leaving the PHP engine recursive and
+  diffing 300 generated macro graphs against it — no mismatches.
+
+### Notes
+
+No API change and no verdict change for any template that was not crashing. Both fixes are
+mirrored into `spintax/core`, `spintax-core` and the WordPress plugin, and pinned by two corpus
+fixtures whose real assertion is that the engine answers at all — a runner that hangs fails them.
+
 ## 0.5.0 — 2026-08-18
 
 Two plural fixes, both cross-engine, both found by measuring one engine against another rather

@@ -916,5 +916,33 @@
     "expect": {
       "verdict": "valid"
     }
+  },
+  {
+    "id": "validate/plural-forms-expansion-cannot-be-exploded",
+    "note": "A 62-character memory bomb. Counting forms expands definitions, and passes alone do not bound that: this doubles the text every pass, so 51 passes is 2**51. Every engine in the family died here with an out-of-memory crash — a template this size reaching validate() through any public endpoint. The count is bounded by the SIZE of the expansion, not just the number of passes. What this case really asserts is that the engine answers at all; a runner that hangs or dies fails it loudly.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %a% = %b% %b%\n#set %b% = %a% %a%\n{plural 2: one|%a%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "variable.circular-reference",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-forms-expansion-bounded-without-a-cycle",
+    "note": "The same explosion with no cycle to catch it: 24 links, each doubling, 2**24 copies of a two-character value. The cycle guard cannot see this one — only the size ceiling stops it. Verdict is valid: an unexpandable count is left unjudged, the same silence used for every other input this validator cannot pin down.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %v0% = %v1% %v1%\n#set %v1% = %v2% %v2%\n#set %v2% = %v3% %v3%\n#set %v3% = %v4% %v4%\n#set %v4% = %v5% %v5%\n#set %v5% = %v6% %v6%\n#set %v6% = %v7% %v7%\n#set %v7% = %v8% %v8%\n#set %v8% = %v9% %v9%\n#set %v9% = %v10% %v10%\n#set %v10% = %v11% %v11%\n#set %v11% = %v12% %v12%\n#set %v12% = %v13% %v13%\n#set %v13% = %v14% %v14%\n#set %v14% = %v15% %v15%\n#set %v15% = %v16% %v16%\n#set %v16% = %v17% %v17%\n#set %v17% = %v18% %v18%\n#set %v18% = %v19% %v19%\n#set %v19% = %v20% %v20%\n#set %v20% = %v21% %v21%\n#set %v21% = %v22% %v22%\n#set %v22% = %v23% %v23%\n#set %v23% = %v24% %v24%\n#set %v24% = t\n{plural 2: one|%v0%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
+    }
   }
 ]

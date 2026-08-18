@@ -43,6 +43,43 @@ describe('worker — routing & guards', () => {
     const res = await post('/preview-render', { template: 'a'.repeat(8192) });
     expect(res.status).toBe(200);
   });
+  test('include bodies count toward the same budget', async () => {
+    // The first version of the cap read body.template alone, which bounded nothing:
+    // `#include "big"` is 18 characters and carried an unbounded child past it, then
+    // /render-batch rendered that child up to MAX_BATCH times.
+    const res = await post('/render-batch', {
+      template: '#include "big"',
+      includes: { big: 'x'.repeat(8192) },
+      count: 100,
+    });
+    expect(res.status).toBe(413);
+    expect(await bodyOf(res)).toMatchObject({ error: 'template_too_large', got: 8192 + 14 });
+  });
+  test('a small template with small includes still renders', async () => {
+    const res = await post('/preview-render', { template: '#include "a"', includes: { a: 'hello' } });
+    expect(res.status).toBe(200);
+    expect((await bodyOf(res)).output).toBe('Hello');
+  });
+  test('an include DAG that fans out is bounded, and stays lenient', async () => {
+    // Under a kilobyte of unique source, ~2^20 child renders: each body references the
+    // next one twice. Acyclic, so the engine's cycle guard never fires, and maxDepth
+    // bounds depth rather than width. The source budget cannot see this at all.
+    const includes: Record<string, string> = { a20: 'leaf' };
+    for (let i = 0; i < 20; i += 1) includes[`a${i}`] = `#include "a${i + 1}" #include "a${i + 1}"`;
+    const res = await post('/preview-render', { template: '#include "a0"', includes });
+    expect(res.status).toBe(200);
+    expect(typeof (await bodyOf(res)).output).toBe('string');
+  });
+  test('each variant of a batch gets its own include budget', async () => {
+    // One resolver shared across the batch would silently drop includes from every
+    // variant after the budget ran out — the last variant must look like the first.
+    const res = await post('/render-batch', { template: '#include "a"', includes: { a: 'hi' }, count: 100 });
+    expect(res.status).toBe(200);
+    const { variants } = await bodyOf(res);
+    expect(variants).toHaveLength(100);
+    expect(variants.at(-1)).toBe(variants[0]);
+    expect(variants[0]).toBe('Hi');
+  });
 });
 
 describe('worker — endpoints map to the §9.2 surface', () => {

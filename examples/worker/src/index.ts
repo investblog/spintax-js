@@ -13,7 +13,8 @@
  *   /preview-render     → render()     { output }        (post-process on by default)
  *   /render-batch       → host loop over render(ast, { seed: base + i }) → { variants }
  *
- * A template over MAX_TEMPLATE_CHARS is refused with 413 before any endpoint runs.
+ * A source over MAX_TEMPLATE_CHARS — root template plus include bodies — is refused
+ * with 413 before any endpoint runs.
  */
 import {
   analyze,
@@ -38,8 +39,14 @@ const MAX_BATCH = 100;
  * the family, and `/render-batch` multiplies it by up to MAX_BATCH. The hosted MCP
  * server has capped templates at this size from the start — this is the same number,
  * so the two public doors answer alike.
+ *
+ * Measured against the WHOLE source: the root template plus every include body. The
+ * first version of this cap read `body.template` only, which bounded nothing — an
+ * 18-character `#include "big"` carried an unbounded child past it.
  */
 const MAX_TEMPLATE_CHARS = 8192;
+/** Include resolutions allowed per render() — see `includeResolver` for why a source cap is not enough. */
+const MAX_INCLUDE_RESOLUTIONS = 200;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
@@ -87,7 +94,18 @@ function shieldContext(body: Body): Record<string, string> | undefined {
 function includeResolver(body: Body): ((ref: string) => string | null) | undefined {
   const map = strRecord(body.includes);
   if (!map) return undefined;
-  return (ref) => (ref in map ? (map[ref] ?? null) : null);
+  // Counting the bodies bounds the SOURCE; it does not bound the WORK, because a body may
+  // reference another one twice. Twenty such levels is under a kilobyte of unique text and
+  // ~2^20 child renders — acyclic, so the engine's cycle guard never fires, and `maxDepth`
+  // limits how deep it goes rather than how wide. The budget is per render() call, which is
+  // why the resolver is built fresh for each one. Exhausted ⇒ the ref resolves to nothing,
+  // the same answer an unknown ref already gets, so render stays lenient.
+  let budget = MAX_INCLUDE_RESOLUTIONS;
+  return (ref) => {
+    if (budget <= 0) return null;
+    budget -= 1;
+    return ref in map ? (map[ref] ?? null) : null;
+  };
 }
 
 function renderOpts(body: Body): RenderOptions {
@@ -130,8 +148,13 @@ export default {
     }
     const template = str(body.template);
     if (template === undefined) return json({ error: 'template_required' }, 400);
-    if (template.length > MAX_TEMPLATE_CHARS) {
-      return json({ error: 'template_too_large', limit: MAX_TEMPLATE_CHARS, got: template.length }, 413);
+    // The budget covers the WHOLE source, root plus every include body. Capping the root
+    // alone left the cap trivially bypassable: `#include "big"` is 18 characters, and the
+    // megabyte it pulls in is parsed and rendered like any other template — up to
+    // MAX_BATCH times on /render-batch.
+    const source = template.length + Object.values(strRecord(body.includes) ?? {}).reduce((n, v) => n + v.length, 0);
+    if (source > MAX_TEMPLATE_CHARS) {
+      return json({ error: 'template_too_large', limit: MAX_TEMPLATE_CHARS, got: source }, 413);
     }
 
     try {
@@ -151,7 +174,13 @@ export default {
           const ast = parse(template); // parse once, render N times (batching is a host concern, §9.3)
           const base = seedBase(body.seed);
           const opts = renderOpts(body);
-          const variants = Array.from({ length: count }, (_v, i) => render(ast, { ...opts, seed: base + i }));
+          const variants = Array.from({ length: count }, (_v, i) => {
+            // A FRESH resolver per variant, so the include budget is per render rather
+            // than per request — sharing one across a batch of 100 would quietly drop the
+            // includes from every variant after the budget ran out.
+            const resolver = includeResolver(body);
+            return render(ast, { ...opts, seed: base + i, ...(resolver ? { includeResolver: resolver } : {}) });
+          });
           return json({ variants });
         }
         default:

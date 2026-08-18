@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pack @spintax/mcp, install the tarball into a throwaway project, and prove the
-# PUBLISHED artifact works the way an MCP client consumes it: run the `bin` over
+# packed artifact works the way an MCP client consumes it: run the `bin` over
 # stdio and read a tools/list back.
 #
 # This is the gate that matters most for this package, because it is the first one in
@@ -43,6 +43,8 @@ npm init -y >/dev/null 2>&1
 # test. If the range and the packed core disagree, npm says so here — which is the check
 # this line replaces, moved earlier rather than dropped.
 npm install ./core.tgz ./pkg.tgz >/dev/null 2>&1
+SMOKE_CORE_VERSION="$(node -p "require('$ROOT/packages/core/package.json').version")"
+export SMOKE_CORE_VERSION
 
 node -e "const s=require('@spintax/mcp'); if(typeof s.createDispatcher!=='function'){console.error('CJS entry missing createDispatcher');process.exit(1)} console.log('  CJS require ok')"
 node --input-type=module -e "import('@spintax/mcp').then(s=>{ if(typeof s.buildTools!=='function'){console.error('ESM entry missing buildTools');process.exit(1)} console.log('  ESM import ok') })"
@@ -65,8 +67,16 @@ const dir = path.dirname(require.resolve('@spintax/mcp/package.json'));
 const bin = path.join(dir, pkg.bin[binName]);
 assert.ok(fs.existsSync(bin), 'the bin file must ship in the tarball');
 assert.ok(fs.readFileSync(bin, 'utf8').startsWith('#!/usr/bin/env node'), 'the bin needs its shebang');
-// The engine resolves from the INSTALLED tree, not from this repo.
-require.resolve('@spintax/core', { paths: [dir] });
+// The engine resolves from the INSTALLED tree, not from this repo — AND it is the
+// engine we just packed. Proving only that *some* core resolves would pass against a
+// stale registry release npm chose because the declared range excluded the local pack,
+// which is the exact failure this script was rewritten to catch.
+const engine = require(require.resolve('@spintax/core/package.json', { paths: [dir] }));
+assert.strictEqual(
+  engine.version,
+  process.env.SMOKE_CORE_VERSION,
+  'the mcp package resolved @spintax/core ' + engine.version + ', not the packed ' + process.env.SMOKE_CORE_VERSION,
+);
 
 const child = spawn(process.execPath, [bin], { stdio: ['pipe', 'pipe', 'pipe'] });
 let out = '', err = '';

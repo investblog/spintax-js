@@ -307,4 +307,22 @@ describe('validator — the circular-reference walk (emission shape + the prune 
     for (const d of diags) expect(d.message).toContain('first on line 2');
     expect(diags.map((d) => d.line)).toEqual([4, 5]);
   });
+
+  // The expansion budget bounds GROWTH, not size. Both halves are cheap to get wrong and
+  // neither is in the shared corpus: a 65 KB fixture would be carried by five engines.
+  describe('the form-expansion budget', () => {
+    test('a long PLAIN form list is still counted', () => {
+      // A ceiling on total length made this "unknowable" and flipped invalid → valid.
+      // Nothing in the grammar limits how long a form may be; long is not exploding.
+      const list = `{plural 2: one|${'x'.repeat(65 * 1024)}}`;
+      expect(validate(list, { locale: 'ru' }).map((d) => d.code)).toEqual(['plural.arity']);
+    });
+
+    test('one pass cannot allocate past the budget', () => {
+      // 15k self-references: the next generation is ~900 MB. Checking the size after
+      // building the string is checking it too late — the allocation is the failure.
+      const template = `#set %a% = ${'%a% '.repeat(15_000)}\n{plural 2: one|%a%}`;
+      expect(validate(template, { locale: 'en' }).map((d) => d.code)).toContain('variable.self-reference');
+    });
+  });
 });

@@ -347,6 +347,20 @@ const ANY_BRACKET = /[[\]{}]/u;
  * this is suppressed rather than judged, which is the safe direction.
  */
 const FORM_EXPANSION_PASSES = 51;
+/**
+ * How far the form list may GROW under expansion, in characters.
+ *
+ * Passes alone do NOT bound the work: `#set %a% = %b% %b%` over `#set %b% = %a% %a%`
+ * doubles the text every pass, so 51 of them is 2^51 — a 62-character template took
+ * `validate()` out with an out-of-memory crash in every engine of the family.
+ *
+ * Growth, not total size, and the difference is a verdict: `{plural 2: one|<65 KB of
+ * ordinary text>}` is plainly two forms and must keep earning `plural.arity` under `ru`.
+ * A ceiling on total length called that unknowable and flipped it to valid — a real
+ * regression, caught in review before it shipped. Expansion that ADDS this much is a
+ * graph exploding; a long form list is just long.
+ */
+const FORM_EXPANSION_MAX_GROWTH = 64 * 1024;
 
 /**
  * How many forms the plural stage will actually receive — or an admission that it is not
@@ -394,9 +408,31 @@ function expandFormsForCounting(
   // PATH, not of one hop — `#set %a% = %b%` with `#set %b% = {a|b}` never crosses a #def,
   // so the macro text arrives whole and the block renders as the fallback.
   const seenMacro = new Set<string>();
+  const refsOf = (text: string): string[] =>
+    [...text.matchAll(/%(\w+)%/gu)].map((m) => (m[1] ?? '').toLowerCase());
+  /**
+   * Iterative, and the order is load-bearing: this is a pre-order depth-first walk in
+   * source order, and the FIRST non-clean answer wins. A graph holding both an opaque
+   * macro and a brackety one gives different diagnostics depending on which is met
+   * first, so a cheaper order would be a different contract.
+   *
+   * Written recursively it cost one frame per link and threw on a long acyclic `#set`
+   * chain — `RangeError` here at ~9000 links, `RecursionError` in the Python port at
+   * ~1000, a 20 KB template — while the PHP engines returned a verdict. `validate()`
+   * answering with an exception is neither a verdict nor parity. The `seenMacro` set
+   * already bounds total work to the number of distinct macros, so no step budget is
+   * needed on top.
+   */
   const walkMacros = (source: string): 'brackets' | 'opaque' | 'clean' => {
-    for (const m of source.matchAll(/%(\w+)%/gu)) {
-      const name = (m[1] ?? '').toLowerCase();
+    const stack: { refs: string[]; i: number }[] = [{ refs: refsOf(source), i: 0 }];
+
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1] as { refs: string[]; i: number };
+      if (frame.i >= frame.refs.length) {
+        stack.pop();
+        continue;
+      }
+      const name = frame.refs[frame.i++] as string;
       // A #def rolls it, and a host value replaces it — either way the macro text does
       // not arrive verbatim, so this path says nothing.
       if (defs[name] !== undefined || hostNames.has(name)) continue;
@@ -409,9 +445,9 @@ function expandFormsForCounting(
       // side — the retreat this whole fix is built on.
       if (/\{\?/u.test(macro)) return 'opaque';
       if (ANY_BRACKET.test(macro)) return 'brackets';
-      const deeper = walkMacros(macro);
-      if (deeper !== 'clean') return deeper;
+      stack.push({ refs: refsOf(macro), i: 0 });
     }
+
     return 'clean';
   };
   const verbatim = walkMacros(formsRaw);
@@ -419,36 +455,47 @@ function expandFormsForCounting(
   if (verbatim === 'opaque') return unknown();
 
   let text = formsRaw;
+  const budget = formsRaw.length + FORM_EXPANSION_MAX_GROWTH;
   for (let pass = 0; pass < FORM_EXPANSION_PASSES; pass++) {
     let sawReference = false;
     let bailed = false;
 
     // EVERY reference per pass, as the renderer's expansion does. Replacing one at a time
     // spent the budget on a list that merely repeats a name 51 times.
-    text = text.replace(/%(\w+)%/gu, (whole: string, raw: string): string => {
+    //
+    // Built by hand rather than with `replace()` because the budget has to be enforced
+    // DURING the pass: `replace()` materializes the whole next generation before anyone
+    // can measure it, so a single pass over 60 KB of self-reference allocates ~900 MB and
+    // the check downstream never runs.
+    const parts: string[] = [];
+    let total = 0;
+    let cursor = 0;
+    const re = /%(\w+)%/gu;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
       sawReference = true;
-      const name = raw.toLowerCase();
+      const name = (m[1] ?? '').toLowerCase();
       // Runtime context outranks a definition of the same name, so a host-declared name
       // makes the count unknowable even where the template defines one locally.
-      if (hostNames.has(name)) {
-        bailed = true;
-        return whole;
-      }
-      const value = defs[name] ?? macros[name];
-      if (value === undefined) {
-        bailed = true;
-        return whole;
-      }
+      const value = hostNames.has(name) ? undefined : defs[name] ?? macros[name];
       // A construct in the value: what it rolls to may or may not carry a top-level pipe,
       // so no single count is true of every render.
-      if (ANY_BRACKET.test(value)) {
+      if (value === undefined || ANY_BRACKET.test(value)) {
         bailed = true;
-        return whole;
+        break;
       }
-      return value;
-    });
+      parts.push(text.slice(cursor, m.index), value);
+      total += m.index - cursor + value.length;
+      cursor = m.index + m[0].length;
+      if (total > budget) return unknown();
+    }
 
     if (bailed) return unknown();
+    parts.push(text.slice(cursor));
+    total += text.length - cursor;
+    if (total > budget) return unknown();
+    text = parts.join('');
+
     if (!sawReference) {
       // No construct can be left here, so the plain split is what the renderer does too.
       return { forms: text.split('|').length, unresolved: false, directMacroSpintax: false };

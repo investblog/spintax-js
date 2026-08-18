@@ -3,6 +3,15 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.4
+
+Bundles `@spintax/core` **0.5.1**, which fixes two crashes in the 0.5.0 form-counting path — a
+62-character template could take `validate()` out with an out-of-memory crash, and a long `#set`
+chain threw `RangeError`. Both reachable from template text, so a Validate node fed
+author-supplied templates could take the workflow down with it. **Upgrade from 0.2.3.**
+
+No node-side change; no verdict changes for a template that was not crashing.
+
 ## 0.2.3
 
 Bundles `@spintax/core` **0.5.0**. **A workflow's Validate branching can change** — read on.
