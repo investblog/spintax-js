@@ -25,7 +25,7 @@ const VARIABLE_RE = /^%(\w+)%/;
  * multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
  */
 export const DIRECTIVE_RE = /^[ \t]*#(set|def)[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \t]*\r?$/gmu;
-const CONDITIONAL_NAME_RE = /^[A-Za-z_]\w*/;
+const CONDITIONAL_NAME_RE = /[A-Za-z_]\w*/y;
 const PLURAL_PREFIX = 'plural ';
 
 /**
@@ -192,33 +192,89 @@ function parseBraceConstruct(content: string): Node {
   return { type: 'enumeration', options: splitTopLevel(content).map((o) => parseSequence(o)) };
 }
 
-/** Parse `?VAR?then|else` / `?!VAR?then` (content starts with `?`), or null if malformed. */
-function tryParseConditional(content: string): Node | null {
-  let p = 1; // past the leading '?'
+/**
+ * A recognized `{?…}` as OFFSETS into the string it was found in — no branch text
+ * copied out. The count-slot pass walks spans instead of substrings; slicing the
+ * branch per level of nesting is quadratic on a deeply nested template, and that
+ * template arrives from the public Worker.
+ */
+export interface ConditionalHead {
+  readonly name: string;
+  readonly inverted: boolean;
+  /** Offset of the body (past `?name?`). */
+  readonly bodyStart: number;
+  /** Offset of the top-level `|`, or -1 when the branch stands alone. */
+  readonly sepIndex: number;
+}
+
+/** A recognized `{?…}` with its branches materialized — what the parser needs. */
+export interface ConditionalParts {
+  readonly name: string;
+  readonly inverted: boolean;
+  readonly thenRaw: string;
+  readonly elseRaw: string;
+}
+
+/**
+ * Recognize `?VAR?then|else` / `?!VAR?then` in `text[contentStart, contentEnd)`
+ * (the span between the braces), or null if malformed — the ONE place the
+ * conditional grammar lives. Reports offsets only; {@link splitConditional} is
+ * the wrapper that materializes the branches for the parser.
+ *
+ * The renderer needs the branches unparsed as well as parsed: the plural count
+ * slot resolves conditionals textually, without resolving the enums a branch may
+ * carry (spintax-js#67). Two readers, one recognizer — a second copy of these
+ * rules would be a syntax-surface divergence waiting to happen (#55–#57).
+ */
+export function recognizeConditional(
+  text: string,
+  contentStart: number,
+  contentEnd: number,
+): ConditionalHead | null {
+  let p = contentStart + 1; // past the leading '?'
   let inverted = false;
-  if (content.charAt(p) === '!') {
+  if (text.charAt(p) === '!') {
     inverted = true;
     p += 1;
   }
 
-  const name = CONDITIONAL_NAME_RE.exec(content.slice(p))?.[0];
-  if (name === undefined) return null;
+  CONDITIONAL_NAME_RE.lastIndex = p;
+  const name = CONDITIONAL_NAME_RE.exec(text)?.[0];
+  if (name === undefined || p + name.length > contentEnd) return null;
   p += name.length;
 
-  if (content.charAt(p) !== '?') return null; // required '?' after the name
+  if (text.charAt(p) !== '?') return null; // required '?' after the name
   p += 1;
 
-  const body = content.slice(p);
-  const sep = firstTopLevelPipe(body);
-  const thenRaw = sep < 0 ? body : body.slice(0, sep);
-  const elseRaw = sep < 0 ? '' : body.slice(sep + 1);
+  return { name, inverted, bodyStart: p, sepIndex: firstTopLevelPipe(text, p, contentEnd) };
+}
+
+export function splitConditional(content: string): ConditionalParts | null {
+  const head = recognizeConditional(content, 0, content.length);
+  if (head === null) return null;
+
+  const body = content.slice(head.bodyStart);
+  const sep = head.sepIndex < 0 ? -1 : head.sepIndex - head.bodyStart;
+
+  return {
+    name: head.name,
+    inverted: head.inverted,
+    thenRaw: sep < 0 ? body : body.slice(0, sep),
+    elseRaw: sep < 0 ? '' : body.slice(sep + 1),
+  };
+}
+
+/** Parse `?VAR?then|else` / `?!VAR?then` (content starts with `?`), or null if malformed. */
+function tryParseConditional(content: string): Node | null {
+  const parts = splitConditional(content);
+  if (parts === null) return null;
 
   return {
     type: 'conditional',
-    name,
-    inverted,
-    then: parseSequence(thenRaw),
-    else: parseSequence(elseRaw),
+    name: parts.name,
+    inverted: parts.inverted,
+    then: parseSequence(parts.thenRaw),
+    else: parseSequence(parts.elseRaw),
   };
 }
 
@@ -433,9 +489,9 @@ export function splitTopLevel(inner: string): string[] {
  * depth counter CLAMPED at 0 (matching the plugin's `parse_conditional` body
  * split, which differs from `split_top_level`'s signed dual counters).
  */
-function firstTopLevelPipe(body: string): number {
+function firstTopLevelPipe(body: string, from = 0, to = body.length): number {
   let depth = 0;
-  for (let j = 0; j < body.length; j += 1) {
+  for (let j = from; j < to; j += 1) {
     const ch = body.charAt(j);
     if (ch === '{' || ch === '[') {
       depth += 1;

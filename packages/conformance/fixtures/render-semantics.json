@@ -875,5 +875,101 @@
     "expect": {
       "output": "b.a"
     }
+  },
+  {
+    "id": "plural/count-conditional-resolves",
+    "note": "A conditional reaching the COUNT slot resolves before the numeric test, so the block renders. Every engine used to expand variables into the slot and stop there: the conditional survived, failed the numeric test, and the block was ERASED while validate() reported nothing -- and plural.count-macro exempts conditionals precisely BECAUSE they resolve before plurals.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %flag% =\n#set %n% = {?flag?1|2}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\ntwo"
+    }
+  },
+  {
+    "id": "plural/count-conditional-truthy-branch",
+    "note": "The other branch of the same shape: both are resolved, not just the one that happens to be second.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %flag% = yes\n#set %n% = {?flag?1|2}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\none"
+    }
+  },
+  {
+    "id": "plural/count-conditional-nested",
+    "note": "A branch may hold another conditional; the count slot resolves them all the way down.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a% =\n#set %b% = 1\n#set %n% = {?a?9|{?b?2|3}}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\ntwo"
+    }
+  },
+  {
+    "id": "plural/count-conditional-inverted",
+    "note": "Truthiness in the count slot is the ordinary rule, inversion included -- an undefined name is falsy, so {?!missing? takes the then-branch.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %n% = {?!missing?2|1}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\ntwo"
+    }
+  },
+  {
+    "id": "plural/count-enum-still-erases",
+    "note": "NEGATIVE control for the case above. Only conditionals resolve early; enumerations run AFTER plurals, so an enum in the count slot still reaches the numeric test intact and erases the block. Resolving the branch by rendering it instead of substituting it would spin this to 1 and invent a count no engine has.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %n% = {1|2}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n"
+    }
+  },
+  {
+    "id": "plural/count-conditional-to-text-erases",
+    "note": "NEGATIVE control: resolving the conditional is not the same as accepting the result. A branch that is not a number still erases the block.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %flag% =\n#set %n% = {?flag?x|y}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\n"
+    }
+  },
+  {
+    "id": "plural/count-conditional-partial-erases",
+    "note": "NEGATIVE control: the slot is tested whole. A resolved conditional surrounded by text is not numeric.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %flag% =\n#set %n% = x{?flag?1|2}\n{plural %n%: one|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\n"
+    }
+  },
+  {
+    "id": "plural/count-conditional-shown-in-fallback",
+    "note": "The lenient fallback prints the count as the plural stage saw it -- resolved. Pins WHERE the resolution happens (before every check, not just before the numeric test), which is what makes the fallback text comparable across engines.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %flag% =\n#set %n% = {?flag?1|2}\n{plural %n%: one|two|three}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\n｛plural 2: one|two|three｝"
+    }
   }
 ]

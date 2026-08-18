@@ -12,6 +12,8 @@
  *   /analyze-template   → analyze()    { refs, sets, defs, includes, diagnostics, constructs }
  *   /preview-render     → render()     { output }        (post-process on by default)
  *   /render-batch       → host loop over render(ast, { seed: base + i }) → { variants }
+ *
+ * A template over MAX_TEMPLATE_CHARS is refused with 413 before any endpoint runs.
  */
 import {
   analyze,
@@ -28,6 +30,16 @@ import {
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' } as const;
 const MAX_BATCH = 100;
+/**
+ * Input cap — a HOST policy, not an engine one (§9.3: small core, rich Worker).
+ *
+ * The engine is lenient by contract and will happily chew on a megabyte of
+ * pathological markup; nesting costs the same super-linear time in every engine of
+ * the family, and `/render-batch` multiplies it by up to MAX_BATCH. The hosted MCP
+ * server has capped templates at this size from the start — this is the same number,
+ * so the two public doors answer alike.
+ */
+const MAX_TEMPLATE_CHARS = 8192;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
@@ -118,6 +130,9 @@ export default {
     }
     const template = str(body.template);
     if (template === undefined) return json({ error: 'template_required' }, 400);
+    if (template.length > MAX_TEMPLATE_CHARS) {
+      return json({ error: 'template_too_large', limit: MAX_TEMPLATE_CHARS, got: template.length }, 413);
+    }
 
     try {
       switch (pathname) {

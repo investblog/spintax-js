@@ -22,7 +22,7 @@
  */
 import type { Node, ParsedAst, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { IncludeResolverError } from './errors';
-import { parseSequence, parseTemplate } from './parser';
+import { parseSequence, parseTemplate, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 
@@ -309,11 +309,121 @@ function expandVarsOnly(text: string, opts: RenderInternalOptions): string {
 }
 
 /** Truthy = the raw var value is set and has a non-whitespace char (plugin is_truthy). */
-function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): string {
-  const value = opts.vars[node.name.toLowerCase()];
+function conditionalTakesThen(name: string, inverted: boolean, opts: RenderInternalOptions): boolean {
+  const value = opts.vars[name.toLowerCase()];
   const baseTruthy = value !== undefined && /\S/u.test(value);
-  const truthy = node.inverted ? !baseTruthy : baseTruthy;
+  return inverted ? !baseTruthy : baseTruthy;
+}
+
+function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): string {
+  const truthy = conditionalTakesThen(node.name, node.inverted, opts);
   return renderNodes(truthy ? node.then : node.else, opts);
+}
+
+/**
+ * Resolve conditionals in the plural COUNT slot, textually — the branch is
+ * substituted, never rendered (spintax-js#67).
+ *
+ * Why this exists: the plugin runs its conditional stage over the whole text
+ * before plurals, so `#set %n% = {?flag?1|2}` reaches the count slot as a plain
+ * number and the block renders. This engine parses the count slot into a raw
+ * string and expanded VARIABLES only, so the conditional survived, failed the
+ * numeric test, and the block was ERASED — `validate()` meanwhile returned no
+ * diagnostic at all, and `plural.count-macro` documents conditionals as exempt
+ * *because* they resolve before plurals. Valid input, silently deleted output.
+ *
+ * Textual, and only the taken branch's text, because the stage order still holds
+ * around it: enums and permutations resolve AFTER plurals, so a branch yielding
+ * `{a|b}` must reach the numeric test as `{a|b}` and erase the block, exactly as
+ * the plugin does. Rendering the branch would spin it into `a` and invent a
+ * count neither engine has.
+ *
+ * The FORM slot is deliberately not touched: there the engines genuinely
+ * disagree and no side has been chosen yet (spintax-js#67).
+ *
+ * Iterative, over spans, for two reasons paid for in review: recursing into the
+ * taken branch made `render()` throw `RangeError` at ~9000 levels of nesting —
+ * §9.2 says render never throws on content, and the parsers were made iterative
+ * for this exact reason — and re-scanning per `{?` was quadratic (see
+ * {@link matchBraces}). Both are reachable from template text through the live
+ * public Worker.
+ */
+function resolveCountConditionals(text: string, opts: RenderInternalOptions): string {
+  if (!text.includes('{?')) return text;
+
+  const close = matchBraces(text);
+  const out: string[] = [];
+  // Spans of `text` still to emit, in order. A taken branch is a SPAN of the same
+  // string, never a copy, and the untaken one is skipped — so every character is
+  // visited at most once and the pass stays linear.
+  const pending: [number, number][] = [[0, text.length]];
+
+  while (pending.length > 0) {
+    const segment = pending.pop() as [number, number];
+    const segEnd = segment[1];
+    let i = segment[0];
+
+    while (i < segEnd) {
+      const open = text.indexOf('{?', i);
+      // `{?` found past this span belongs to the text around it, not to this span.
+      if (open === -1 || open + 1 >= segEnd) {
+        out.push(text.slice(i, segEnd));
+        break;
+      }
+
+      // A close outside the span is no close at all: the branch it would reach
+      // into is not ours to read.
+      const shut = close[open] ?? -1;
+      const head = shut === -1 || shut >= segEnd ? null : recognizeConditional(text, open + 1, shut);
+      if (head === null) {
+        // Unclosed, or `{?` that is not a conditional — a malformed one is an
+        // enumeration to the parser, and enumerations are not this pass's business.
+        out.push(text.slice(i, Math.min(open + 2, segEnd)));
+        i = open + 2;
+        continue;
+      }
+
+      out.push(text.slice(i, open));
+      const branchEnd = head.sepIndex < 0 ? shut : head.sepIndex;
+      const [from, to] = conditionalTakesThen(head.name, head.inverted, opts)
+        ? [head.bodyStart, branchEnd]
+        : [head.sepIndex < 0 ? shut : head.sepIndex + 1, shut];
+      // Continuation first, branch second: the stack pops the branch back out
+      // ahead of it, which is what keeps the output in source order.
+      pending.push([shut + 1, segEnd]);
+      pending.push([from, to]);
+      break;
+    }
+  }
+
+  return out.join('');
+}
+
+/**
+ * Match `{` to `}` across the whole string in ONE pass — index of the closing
+ * brace for every opening one, or -1.
+ *
+ * Equivalent to calling `findMatchingClose` per `{`, and that is the point: the
+ * per-brace call rescans to the end of the string every time it fails to match,
+ * so an unbalanced count slot (legal — only the whole `{plural …}` block has to
+ * balance, and the slot is cut at the first `:`) made this pass quadratic. A
+ * 78 KB slot took 3 seconds, and the public Worker renders untrusted templates.
+ */
+function matchBraces(text: string): Int32Array {
+  const close = new Int32Array(text.length).fill(-1);
+  const opens: number[] = [];
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charAt(i);
+    if (ch === '{') {
+      opens.push(i);
+    } else if (ch === '}') {
+      const open = opens.pop();
+      if (open !== undefined) close[open] = i;
+    }
+  }
+
+  return close;
 }
 
 /**
@@ -324,7 +434,7 @@ function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): 
  * error paths emit the (var-expanded) construct verbatim with fullwidth braces.
  */
 function renderPlural(node: PluralNode, opts: RenderInternalOptions): string {
-  const countRaw = expandVarsOnly(node.countRaw, opts);
+  const countRaw = resolveCountConditionals(expandVarsOnly(node.countRaw, opts), opts);
   const formsRaw = expandVarsOnly(node.formsRaw, opts);
   const base = normalizeBaseLang(opts.locale);
   const report = (issue: PluralIssue): void => opts.onPluralError?.(issue);

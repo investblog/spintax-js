@@ -30,6 +30,19 @@ describe('worker — routing & guards', () => {
     expect(res.status).toBe(400);
     expect((await bodyOf(res)).error).toBe('template_required');
   });
+  test('an oversized template ⇒ 413, before the engine sees it', async () => {
+    // The engine is lenient by contract and would work through a megabyte of
+    // pathological nesting; /render-batch would then do it up to MAX_BATCH times.
+    // Bounding the input is the host's job (§9.3), and it happens before dispatch
+    // so every endpoint is covered by this one check.
+    const res = await post('/preview-render', { template: 'a'.repeat(8193) });
+    expect(res.status).toBe(413);
+    expect(await bodyOf(res)).toMatchObject({ error: 'template_too_large', limit: 8192, got: 8193 });
+  });
+  test('a template at the limit is accepted', async () => {
+    const res = await post('/preview-render', { template: 'a'.repeat(8192) });
+    expect(res.status).toBe(200);
+  });
 });
 
 describe('worker — endpoints map to the §9.2 surface', () => {

@@ -2,6 +2,9 @@ import { describe, test, expect } from 'vitest';
 import { parseTemplate } from '../src/internal/parser';
 import { buildVars, renderNodes, rollDefinitions, type PluralIssue } from '../src/internal/render';
 import { rngFromStrategy, type RngStrategy } from './corpus-harness';
+// The public API, next to the white-box helper below: the count-slot cases are
+// about what a caller gets, not about an injected RNG.
+import { render as publicRender, validate } from '../src/index';
 
 /** White-box render with an injected RNG strategy (like the corpus harness). */
 function render(
@@ -247,5 +250,42 @@ describe('render — onPluralError observer', () => {
     // cannot be matched against the value that actually broke it.
     const { issues } = renderCollecting('{plural 2: item|%v%}', 'en', { v: 'a|b' });
     expect(issues[0]?.construct).toBe('{plural 2: item|a|b}');
+  });
+});
+
+describe('plural count slot: conditionals (spintax-js#67)', () => {
+  const COUNT_FROM_A_CONDITIONAL = '#set %flag% =\n#set %n% = {?flag?1|2}\nstart {plural %n%: one|two} end';
+
+  test('a conditional in the count slot resolves before the numeric test', () => {
+    // It used to survive into the test, fail it, and ERASE the block — while
+    // validate() reported nothing at all. Both PHP engines always rendered it.
+    expect(publicRender(COUNT_FROM_A_CONDITIONAL, { locale: 'en' })).toBe('Start two end');
+    expect(validate(COUNT_FROM_A_CONDITIONAL, { locale: 'en' })).toEqual([]);
+  });
+
+  test('an enumeration in the count slot still erases the block', () => {
+    // The negative half. Enumerations resolve AFTER plurals, so the branch is
+    // substituted and never rendered; resolving it would invent a count.
+    expect(publicRender('#set %n% = {1|2}\n{plural %n%: one|two}', { locale: 'en', postProcess: false })).toBe('\n');
+  });
+
+  test('deep nesting does not throw — render is lenient on content (§9.2)', () => {
+    // Recursion into the taken branch raised RangeError at ~9000 levels, a 72 KB
+    // template. The parsers were made iterative for this same reason.
+    const depth = 12_000; // comfortably past the ~9000 where the recursive pass died
+    const deep = `#set %V% = y\n{plural ${'{?V?'.repeat(depth)}1${'}'.repeat(depth)}: one|two}`;
+    expect(publicRender(deep, { locale: 'en' })).toBe('One');
+  });
+
+  test('an unbalanced count slot stays linear', () => {
+    // Legal input: only the whole {plural …} block has to balance, and the slot is
+    // cut at the first `:`. Matching braces per `{?` rescanned to the end every
+    // time and made this quadratic — 78 KB cost 3 seconds. The ceiling is loose on
+    // purpose; it is there to catch a return to quadratic, not to time the machine.
+    const n = 100_000;
+    const unbalanced = `{plural ${'{?a?'.repeat(n)}: one|two${'}'.repeat(n + 1)}`;
+    const started = Date.now();
+    expect(publicRender(unbalanced, { locale: 'en' })).toContain('｛plural');
+    expect(Date.now() - started).toBeLessThan(10_000);
   });
 });
