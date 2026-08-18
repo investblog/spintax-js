@@ -63,6 +63,167 @@
     }
   },
   {
+    "id": "validate/plural-forms-def-expands-before-count",
+    "note": "#66: render expands %variables% and THEN counts forms, so the count must be taken on the expanded list. `one|%tail%` with `#def %tail% = few|many` is THREE forms — correct for ru. Counting the raw pipes called this valid template invalid.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %tail% = few|many\n{plural 2: one|%tail%}",
+    "locale": "ru",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-forms-def-expands-arity-error",
+    "note": "#66, the other direction: the same template is genuinely wrong for a 2-form locale, and the error must survive the fix.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %tail% = few|many\n{plural 2: one|%tail%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-forms-def-whole-list",
+    "note": "#66: a #def holding the WHOLE list has one raw pipe and two real forms — valid for en. The raw count invented an arity error here.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %forms% = one|many\n{plural 2: %forms%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-forms-def-construct-not-counted",
+    "note": "#66: a definition value carrying a bracket is not counted. `{a|b}` is in fact invariant at one form — the point is that it cannot be told from `{?flag?a|b|c}`, which is not, without evaluating it, so the rule proves the sufficient condition instead of guessing. This case is the CHEAP half of the pair: the removed depth-zero predictor also passed it. Its partner (…-conditional-not-counted) is the one that only the retreat can satisfy.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#def %x% = {a|b}\n{plural 1: one|%x%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-forms-def-conditional-not-counted",
+    "note": "#66: the shape that disproved the prediction, and the one only the retreat satisfies. The false branch of `{?flag?a|b|c}` freezes as `b|c` — TWO forms — so the block resolves under ru. It is not unknowable: %flag% is locally and deterministically empty. The validator declines to evaluate it, because telling an invariant construct from a varying one means running the engine.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %flag% =\n#def %x% = {?flag?a|b|c}\n{plural 1: one|%x%}",
+    "locale": "ru",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-forms-def-rolling-a-set-is-not-nested-brackets",
+    "note": "#66: a #set reached THROUGH a #def is rolled before the plural is decided, so its brackets never arrive in the form list. Only a #set named directly in the forms slot earns plural.nested-brackets.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %s% = {a|b}\n#def %x% = %s%\n{plural 1: one|%x%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-forms-every-reference-expanded-per-pass",
+    "note": "#66: expansion replaces EVERY reference per pass, as the renderer does. Replacing one per iteration spent the budget on a list that merely repeats a name, and the completed expansion was then treated as unresolvable — silence where the engine really does fall back.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = a|b\n{plural 1: %x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%%x%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-forms-set-carrying-spintax",
+    "note": "#66: a #set is substituted VERBATIM and is still spintax when the plural is decided, so its brackets reach the form list and the block renders as the fullwidth fallback. Same verdict as brackets written inline — the existing message already says exactly this.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = {a|b}\n{plural 2: one|%x%}",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.nested-brackets",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-forms-set-chain-carries-brackets",
+    "note": "#66 (review): \"direct\" is a property of the PATH, not of one hop. `%a%` -> `%b%` never crosses a #def, so the macro text arrives verbatim and the plural stage rejects it. Checking only the immediate value let this validate clean while every renderer fell back.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %b% = {a|b}\n#set %a% = %b%\n{plural 1: one|%a%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.nested-brackets",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-forms-set-carries-a-closing-bracket",
+    "note": "#66 (review): a stray closer balances against an opener elsewhere in the template, so the bracket checker stays quiet — but every renderer's plural guard rejects all four brackets, not just openers. The form test has to mirror that guard rather than test for \"a construct\".",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %unused% = [\n#set %x% = ]\n{plural 1: one|%x%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.nested-brackets",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-forms-set-plain-text-counts",
+    "note": "#66: a #set of plain text is just substitution, so its pipes DO separate forms: three here, which is right for ru.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %x% = a|b\n{plural 1: one|%x%}",
+    "locale": "ru",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/plural-forms-unknown-ref-no-verdict",
+    "note": "#66: a host-supplied variable has no static form count. File no count-based verdict rather than guessing — the same principle as skipping arity without a locale.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|%host%}",
+    "locale": "ru",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
     "id": "validate/undefined-variable-is-warning-not-error",
     "note": "Parity gate: an unresolved %var% is a WARNING, so the template stays VALID (valid ⇔ no severity:error).",
     "kind": "deterministic",

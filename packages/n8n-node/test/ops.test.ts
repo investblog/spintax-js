@@ -173,7 +173,10 @@ describe('validateOp', () => {
 
     expect(validateOp(threeForm, { locale: 'ru' }).valid).toBe(true);
 
-    // The one way in: an item that explicitly declares an empty locale.
+    // The op itself still honours an explicit empty meta locale — that is the op's
+    // contract. What changed is the NODE: it now feeds validate through resolveLocale
+    // like every other operation, so a workflow cannot validate under "no locale" and
+    // render under `en`. Pinned at the node level in node.test.ts.
     const emptyMeta = validateOp(threeForm, { meta: { locale: '' } });
     expect(emptyMeta.valid).toBe(true);
     expect(emptyMeta.diagnostics.map((d) => d.code)).toEqual(['plural.locale-missing']);

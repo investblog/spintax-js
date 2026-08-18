@@ -132,9 +132,10 @@ export function buildTools(opts: ToolBuildOptions): ToolDef[] {
       title: 'Validate a spintax template',
       description:
         'Static validation: returns diagnostics with severity, stable code, message and 1-based ' +
-        'line/column. A template with no "error"-severity diagnostics is safe to render. Pass ' +
-        'knownVariables for names you will supply at render time to silence their ' +
-        'variable.undefined warnings.' +
+        'line/column. No "error"-severity diagnostic means the template is structurally sound — ' +
+        'read the warnings before rendering, because some of them (plural.locale-missing) mean ' +
+        'a block will not resolve. Pass knownVariables for names you will supply at render time ' +
+        'to silence their variable.undefined warnings.' +
         // Precisely what the engine does, not what would be nicer: `validate()` files
         // unknown-target verdicts only for a NON-EMPTY allow-list, so a template whose
         // every include is broken validates clean. Overstating it here would send an

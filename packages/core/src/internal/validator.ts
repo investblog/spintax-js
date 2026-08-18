@@ -32,7 +32,7 @@ export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagn
   checkBrackets(text, diagnostics);
   checkDirectives(text, diagnostics);
   checkPermutationConfigs(text, idx, diagnostics);
-  checkPlurals(text, idx, opts.locale, diagnostics);
+  checkPlurals(text, idx, opts.locale, opts.knownVariables, diagnostics);
   checkVariableReferences(text, idx, opts.knownVariables, diagnostics);
   if (opts.knownIncludes && opts.knownIncludes.length > 0) {
     checkIncludeTargets(text, idx, opts.knownIncludes, diagnostics);
@@ -203,13 +203,24 @@ function checkPermutationConfigs(text: string, idx: LineIndex, out: Diagnostic[]
 }
 
 /** `{plural …}`: no nested brackets in forms; form count matches locale arity. */
-function checkPlurals(text: string, idx: LineIndex, locale: string | undefined, out: Diagnostic[]): void {
+function checkPlurals(
+  text: string,
+  idx: LineIndex,
+  locale: string | undefined,
+  knownVariables: readonly string[] | undefined,
+  out: Diagnostic[],
+): void {
   // Guard on the NORMALIZED base (like the plugin): a non-empty locale that
   // normalizes to '' (e.g. "_en") skips the arity check.
   const base = locale && locale !== '' ? normalizeBaseLang(locale) : '';
   const arity = base !== '' ? pluralArity(base) : 0;
 
   const tainted = macroTaintedNames(text);
+  const { setDefs: macros, defDefs: defs } = extractDirectives(text);
+  // Names the host says it will supply: runtime context outranks a definition of the
+  // same name, so one of these makes a form count unknowable however the template
+  // defines it.
+  const hostNames = new Set((knownVariables ?? []).map((n) => n.toLowerCase()));
 
   for (const block of findPluralBlocks(text)) {
     const at = span(idx, block.start, block.end - block.start);
@@ -231,7 +242,29 @@ function checkPlurals(text: string, idx: LineIndex, locale: string | undefined, 
       out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets. Extract via #def first — a #set is substituted verbatim and would put the brackets straight back.', at));
       continue;
     }
-    const count = block.formsRaw.split('|').length;
+
+    // The form list AS THE RENDERER WILL SEE IT. `render` expands variables before it
+    // counts forms (internal/render.ts), so counting the raw pipes here judged a
+    // different string than the one that gets rendered — a `#def` holding `few|many`
+    // made a correct 3-form Russian template report plural.arity, and a 1-pipe list
+    // that expands to 2 forms reported nothing (issue #66, found adopting #65 in the
+    // Pascal port).
+    const expanded = expandFormsForCounting(block.formsRaw, defs, macros, hostNames);
+
+    // A `#set` whose value carries spintax lands in the form list VERBATIM and is still
+    // unresolved when the plural is decided — the same fact plural.count-macro states
+    // for the count slot, and exactly what this message already describes.
+    if (expanded.directMacroSpintax) {
+      out.push(err('plural.nested-brackets', '{plural ...}: forms must not contain nested spintax brackets. Extract via #def first — a #set is substituted verbatim and would put the brackets straight back.', at));
+      continue;
+    }
+
+    // A reference the template does not define — a host variable, or a chain past the
+    // budget — has no static form count. Judging it would repeat the mistake #65 fixed:
+    // filing a verdict on a fact the caller never claimed.
+    if (expanded.unresolved) continue;
+
+    const count = expanded.forms;
     if (arity > 0) {
       if (count !== arity) {
         out.push(err('plural.arity', `{plural ...}: expected ${arity} forms, got ${count}.`,
@@ -245,11 +278,26 @@ function checkPlurals(text: string, idx: LineIndex, locale: string | undefined, 
       // fallback in finished text (issue #65: a pipeline shipped ｛plural …｝ to live
       // pages because validate stayed quiet). A warning says the one true thing: this
       // resolves only if a matching locale arrives at render time.
+      // Two ways to arrive with no arity: nothing was passed, or what was passed does
+      // not normalize to a language the engine knows (`_en`). Saying "no locale was
+      // supplied" to a caller who supplied one sends them looking for the wrong bug.
+      const unusable = locale !== undefined && locale !== '';
       out.push(warn(
         'plural.locale-missing',
-        `{plural ...}: ${count} forms, but no locale was supplied. render defaults to ` +
-          `${DEFAULT_PLURAL_ARITY} forms and leaves this block unresolved — pass the locale you will render with.`,
-        { ...at, data: { got: count, defaultArity: DEFAULT_PLURAL_ARITY } },
+        unusable
+          ? `{plural ...}: ${count} forms, and the locale '${locale}' does not normalize to a ` +
+            `language the engine knows, so render falls back to ${DEFAULT_PLURAL_ARITY} forms and ` +
+            `leaves this block unresolved — pass a base tag such as 'en' or 'ru'.`
+          : `{plural ...}: ${count} forms, but no locale was supplied. render defaults to ` +
+            `${DEFAULT_PLURAL_ARITY} forms and leaves this block unresolved — pass the locale you will render with.`,
+        {
+          ...at,
+          data: {
+            got: count,
+            defaultArity: DEFAULT_PLURAL_ARITY,
+            ...(unusable ? { locale } : {}),
+          },
+        },
       ));
     }
   }
@@ -270,6 +318,145 @@ function checkPlurals(text: string, idx: LineIndex, locale: string | undefined, 
  * arbitrarily long and carry no bracket at its final link.
  */
 const UNRESOLVED_AT_PLURAL_TIME = /\[|\{(?!\?)/u;
+
+/**
+ * Any bracket at all — all four, and conditionals too.
+ *
+ * Two reasons, and both were review findings. Conditionals: one resolves before plurals,
+ * so it is not "unresolved at plural time", but its branches can differ in top-level
+ * pipes (`{?flag?a|b|c}` freezes as `a` or as `b|c`), and counting is about invariance
+ * rather than stage order. Closing brackets: a `#set %x% = ]` balances against a `[`
+ * elsewhere in the template, so the bracket checker stays quiet, and every renderer's
+ * plural guard is `[{}[\]]` — it rejects the form list on a stray closer exactly as on an
+ * opener.
+ *
+ * Construct-free is a SUFFICIENT condition for the count to be invariant, deliberately
+ * not a necessary one: `{a|b}` really does always freeze to one form. It is the property
+ * this validator elects to prove, because the cases where a construct is invariant cannot
+ * be told from the cases where it is not without evaluating it.
+ */
+const ANY_BRACKET = /[[\]{}]/u;
+
+/**
+ * Passes, not occurrences — each one substitutes EVERY reference, as the renderer's
+ * expansion does. Counting occurrences instead made a form list with 51 references
+ * exhaust the budget and go unjudged.
+ *
+ * It is deliberately NOT claimed to match a renderer's own limit (they differ: 50 here
+ * and in Python, 51 in both PHP engines). It only has to terminate — a chain deeper than
+ * this is suppressed rather than judged, which is the safe direction.
+ */
+const FORM_EXPANSION_PASSES = 51;
+
+/**
+ * How many forms the plural stage will actually receive — or an admission that it is not
+ * knowable.
+ *
+ * Why this exists: `render` expands `%variables%` and only THEN splits the form list,
+ * while this validator used to split the raw source, so any reference inside a form list
+ * was judged on the wrong number in both directions (issue #66).
+ *
+ * The rule is deliberately narrow, and the narrowness IS the correction. A first version
+ * tried to predict the roll — counting pipes at bracket depth 0, on the theory that a
+ * construct always collapses to one form. It does not:
+ *
+ *     #set %flag% =
+ *     #def %x% = {?flag?a|b|c}     ← the false branch freezes as `b|c`: TWO forms
+ *     {plural 1: one|%x%}          ← renders fine under ru; the guess said arity error
+ *
+ * So a value is counted only when its form count is the same WHATEVER the roll does —
+ * that is, when it carries no spintax construct at all. Anything else, any name the host
+ * may supply at render time, and any reference the template does not define, suppresses
+ * the count-based verdicts. Silence on an unknowable input is the #65 principle; a
+ * confident wrong answer is what it replaced.
+ *
+ * `directMacroSpintax` is the one prediction that survives, because it is not one: a
+ * `#set` named DIRECTLY in the form slot is substituted verbatim and is still spintax
+ * when the plural is decided — measured, and exactly what the nested-brackets message has
+ * always described. Reached through a `#def` it is rolled first, so it is not reported.
+ */
+function expandFormsForCounting(
+  formsRaw: string,
+  defs: Record<string, string>,
+  macros: Record<string, string>,
+  hostNames: ReadonlySet<string>,
+): { forms: number; unresolved: boolean; directMacroSpintax: boolean } {
+  const unknown = (
+    directMacroSpintax = false,
+  ): { forms: number; unresolved: boolean; directMacroSpintax: boolean } => ({
+    forms: 0,
+    unresolved: true,
+    directMacroSpintax,
+  });
+
+  // Which brackets reach the form slot VERBATIM: follow the `#set` chain out of the raw
+  // slot, stopping at anything that changes the answer. "Direct" is a property of the
+  // PATH, not of one hop — `#set %a% = %b%` with `#set %b% = {a|b}` never crosses a #def,
+  // so the macro text arrives whole and the block renders as the fallback.
+  const seenMacro = new Set<string>();
+  const walkMacros = (source: string): 'brackets' | 'opaque' | 'clean' => {
+    for (const m of source.matchAll(/%(\w+)%/gu)) {
+      const name = (m[1] ?? '').toLowerCase();
+      // A #def rolls it, and a host value replaces it — either way the macro text does
+      // not arrive verbatim, so this path says nothing.
+      if (defs[name] !== undefined || hostNames.has(name)) continue;
+      const macro = macros[name];
+      if (macro === undefined || seenMacro.has(name)) continue;
+      seenMacro.add(name);
+      // A conditional is where the engines themselves disagree: both PHP renderers
+      // resolve one that expansion introduces INSIDE a form list, TS and Python do not.
+      // Until that is settled (filed separately), decline to judge rather than pick a
+      // side — the retreat this whole fix is built on.
+      if (/\{\?/u.test(macro)) return 'opaque';
+      if (ANY_BRACKET.test(macro)) return 'brackets';
+      const deeper = walkMacros(macro);
+      if (deeper !== 'clean') return deeper;
+    }
+    return 'clean';
+  };
+  const verbatim = walkMacros(formsRaw);
+  if (verbatim === 'brackets') return unknown(true);
+  if (verbatim === 'opaque') return unknown();
+
+  let text = formsRaw;
+  for (let pass = 0; pass < FORM_EXPANSION_PASSES; pass++) {
+    let sawReference = false;
+    let bailed = false;
+
+    // EVERY reference per pass, as the renderer's expansion does. Replacing one at a time
+    // spent the budget on a list that merely repeats a name 51 times.
+    text = text.replace(/%(\w+)%/gu, (whole: string, raw: string): string => {
+      sawReference = true;
+      const name = raw.toLowerCase();
+      // Runtime context outranks a definition of the same name, so a host-declared name
+      // makes the count unknowable even where the template defines one locally.
+      if (hostNames.has(name)) {
+        bailed = true;
+        return whole;
+      }
+      const value = defs[name] ?? macros[name];
+      if (value === undefined) {
+        bailed = true;
+        return whole;
+      }
+      // A construct in the value: what it rolls to may or may not carry a top-level pipe,
+      // so no single count is true of every render.
+      if (ANY_BRACKET.test(value)) {
+        bailed = true;
+        return whole;
+      }
+      return value;
+    });
+
+    if (bailed) return unknown();
+    if (!sawReference) {
+      // No construct can be left here, so the plain split is what the renderer does too.
+      return { forms: text.split('|').length, unresolved: false, directMacroSpintax: false };
+    }
+  }
+  // A cycle, or a chain deeper than this bothers to follow.
+  return unknown();
+}
 
 function macroTaintedNames(text: string): Set<string> {
   const macros = extractDirectives(text).setDefs;

@@ -784,9 +784,14 @@ export class Spintax implements INodeType {
           case 'validate': {
             const cleaned = readTemplate(this, i);
             const meta = readMeta(this, i);
-            const localeParam = this.getNodeParameter('locale', i, '') as string;
+            // resolveLocale, not the raw parameter: Render, Lint and Uniqueness all take
+            // the locale through it, and Validate reading the same fields differently is
+            // how a workflow validated under "no locale" and rendered under `en`. An item
+            // carrying `spintaxMeta.locale: ''` used to route Valid with a
+            // plural.locale-missing warning and then render the fullwidth fallback — the
+            // exact failure #65 was reported for, inside one node.
             const result = validateOp(cleaned.cleanedTemplate, {
-              ...(localeParam !== '' ? { locale: localeParam } : {}),
+              locale: resolveLocale(this, i),
               ...(meta !== undefined ? { meta } : {}),
               ...csvParam(this, i, 'knownVariables'),
               ...csvParam(this, i, 'knownIncludes'),

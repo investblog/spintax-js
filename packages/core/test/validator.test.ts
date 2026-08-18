@@ -106,6 +106,117 @@ describe('validator — plural.locale-missing (#65)', () => {
   });
 });
 
+/**
+ * Issue #66, found adopting #65 in the Pascal port: `render` expands `%variables%` and
+ * then counts forms, while this validator counted the raw source — so a reference inside
+ * a form list was judged on the wrong number, in both directions.
+ *
+ * The property these tests hold to is the one that matters and the one that was missing:
+ * **the verdict agrees with what render actually does.** Each case asserts both.
+ */
+describe('validator — plural forms are counted as the RENDERER sees them (#66)', () => {
+  const codesOf = (src: string, opts?: Parameters<typeof validate>[1]): string[] =>
+    validate(src, opts).map((d) => d.code);
+  /** Did the block fail to resolve? The engine says so with fullwidth braces. */
+  const rendersBroken = (src: string, opts?: Parameters<typeof render>[1]): boolean =>
+    render(src, { seed: 1, ...opts }).includes('｛');
+
+  test('a #def holding extra forms no longer makes a correct template invalid', () => {
+    const src = '#def %tail% = few|many\n{plural 2: one|%tail%}';
+    // Three forms after expansion: right for ru, and ru renders it.
+    expect(codesOf(src, { locale: 'ru' })).toEqual([]);
+    expect(rendersBroken(src, { locale: 'ru' })).toBe(false);
+    // With no locale it cannot resolve at the 2-form default — and now says so.
+    expect(codesOf(src)).toEqual(['plural.locale-missing']);
+    expect(rendersBroken(src)).toBe(true);
+  });
+
+  test('a #def holding the WHOLE list stops producing a phantom count', () => {
+    const src = '#def %forms% = one|many\n{plural 2: %forms%}';
+    // One raw pipe, two real forms. Was: error for en, warning for none.
+    expect(codesOf(src, { locale: 'en' })).toEqual([]);
+    expect(codesOf(src)).toEqual([]);
+    expect(rendersBroken(src, { locale: 'en' })).toBe(false);
+    expect(rendersBroken(src)).toBe(false);
+  });
+
+  test('a #def whose value carries a construct is NOT counted — the roll is not invariant', () => {
+    // The first version of this fix counted pipes at bracket depth 0, on the theory that
+    // a construct always collapses to one form. Review found two shapes where it does
+    // not, and both are now the reason this stays silent instead of guessing.
+    const synonym = ['#def %x% = {a|b}', '{plural 1: one|%x%}'].join('\n');
+    expect(codesOf(synonym, { locale: 'en' })).toEqual([]);
+    expect(codesOf(synonym, { locale: 'ru' })).toEqual([]);
+
+    // A conditional's branches can differ in top-level pipes: `b|c` on the false branch.
+    const conditional = ['#set %flag% =', '#def %x% = {?flag?a|b|c}', '{plural 1: one|%x%}'].join(
+      '\n',
+    );
+    expect(codesOf(conditional, { locale: 'ru' })).toEqual([]);
+    expect(rendersBroken(conditional, { locale: 'ru' })).toBe(false);
+  });
+
+  test('a #def that rolls a #set is not reported as nested brackets', () => {
+    // The #def roll consumes the macro's `{a|b}` before the plural is decided, so the
+    // block renders normally. Following the reference into the raw macro reported it.
+    const src = ['#set %s% = {a|b}', '#def %x% = %s%', '{plural 1: one|%x%}'].join('\n');
+    expect(codesOf(src, { locale: 'en' })).toEqual([]);
+    expect(rendersBroken(src, { locale: 'en' })).toBe(false);
+  });
+
+  test('every reference is expanded per pass, as the renderer does', () => {
+    // Replacing one occurrence per iteration spent the whole budget on a list that
+    // merely repeats a name, and the completed expansion was then called unresolvable.
+    const src = ['#set %x% = a|b', `{plural 1: ${'%x%'.repeat(51)}}`].join('\n');
+    expect(codesOf(src, { locale: 'en' })).toEqual(['plural.arity']);
+    expect(rendersBroken(src, { locale: 'en' })).toBe(true);
+  });
+
+  test('a name the host will supply outranks a local definition, so nothing is counted', () => {
+    // Runtime context wins over a same-named definition at render time, so the local
+    // value is not what will be counted.
+    const src = ['#def %forms% = one|many', '{plural 2: %forms%}'].join('\n');
+    expect(codesOf(src, { locale: 'en', knownVariables: ['forms'] })).toEqual([]);
+    expect(render(src, { locale: 'en', context: { forms: 'one|few|many' }, seed: 1 })).toContain('｛');
+  });
+
+  test('a #set carrying spintax is reported, not silently rendered broken', () => {
+    const src = '#set %x% = {a|b}\n{plural 2: one|%x%}';
+    // A #set is substituted verbatim and is still spintax when the plural is decided —
+    // which is exactly what the nested-brackets message has always said.
+    expect(codesOf(src)).toEqual(['plural.nested-brackets']);
+    expect(codesOf(src, { locale: 'en' })).toEqual(['plural.nested-brackets']);
+    expect(rendersBroken(src)).toBe(true);
+  });
+
+  test('a #set of plain text counts its pipes, like the substitution does', () => {
+    const src = '#set %x% = a|b\n{plural 1: one|%x%}';
+    expect(codesOf(src, { locale: 'ru' })).toEqual([]);
+    expect(rendersBroken(src, { locale: 'ru' })).toBe(false);
+  });
+
+  test('a reference the template does not define suppresses the count verdicts', () => {
+    // A host variable has no static form count, and #65 settled the principle: no
+    // verdict on a fact the caller never claimed.
+    const src = '{plural 2: one|%host%}';
+    expect(codesOf(src, { locale: 'en' })).toEqual(['variable.undefined']);
+    expect(codesOf(src, { knownVariables: ['host'], locale: 'ru' })).toEqual([]);
+  });
+
+  test('a cyclic reference stops at the budget instead of hanging', () => {
+    const src = '#set %a% = %b%\n#set %b% = %a%\n{plural 2: one|%a%}';
+    const codes = codesOf(src, { locale: 'ru' });
+    expect(codes).not.toContain('plural.arity');
+    expect(codes).toContain('variable.circular-reference');
+  });
+
+  test('the ordinary case is untouched — no directives, no references', () => {
+    expect(codesOf('{plural 2: one|many}', { locale: 'en' })).toEqual([]);
+    expect(codesOf('{plural 2: one|many}', { locale: 'ru' })).toEqual(['plural.arity']);
+    expect(codesOf('{plural 2: {a|b}|many}')).toEqual(['plural.nested-brackets']);
+  });
+});
+
 describe('validator — diagnostic positions (line/column/end + data)', () => {
   const only = (src: string, code: string, opts?: Parameters<typeof validate>[1]) =>
     validate(src, opts).find((d) => d.code === code)!;

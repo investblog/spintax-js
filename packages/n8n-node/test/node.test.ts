@@ -405,6 +405,26 @@ describe('Spintax node — execute()', () => {
     expect(valid![0]!.json['spintaxMeta']).toEqual(meta);
   });
 
+  it('validate takes the locale through the SAME funnel as render (#66 review finding)', async () => {
+    // An item declaring an empty meta locale used to split the node against itself:
+    // validate saw "no locale" and answered valid + plural.locale-missing, while render,
+    // lint and uniqueness resolved the same blank to `en`. A workflow could route Valid
+    // and then ship the fullwidth fallback — the failure #65 exists to prevent, inside
+    // one node. Both operations now read it through resolveLocale.
+    const params = { template: '{plural 3: одна|две|много}', spintaxMeta: { locale: '' } };
+
+    const [valid, invalid] = await run({ operation: 'validate', ...params }, [{}]);
+    expect(valid).toHaveLength(0);
+    expect(invalid![0]!.json['locale']).toBe('en');
+    expect((invalid![0]!.json['diagnostics'] as { code: string }[]).map((d) => d.code)).toEqual([
+      'plural.arity',
+    ]);
+
+    // …and that is the same verdict the render side would earn, rather than a surprise.
+    const [rendered] = await run({ operation: 'render', postProcess: false, ...params }, [{}]);
+    expect(rendered![0]!.json['rendered']).toContain('｛');
+  });
+
   it('render: blank locale falls back to the spintaxMeta locale (one locale through the funnel)', async () => {
     const params = {
       operation: 'render',

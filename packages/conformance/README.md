@@ -76,6 +76,27 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 parity-gated (§3.1); the plugin hardcodes many, the TS engine may be more precise. The corpus
 is the source of truth for these stable codes; every engine maps its diagnostics onto them.
 
+**How forms are counted** (spintax-js#66 — every engine got this wrong the same way): `render`
+expands `%variables%` and only THEN splits the form list, so a validator that counts the raw
+source judges a different string. Substitute definition values — every reference per pass, as
+the renderer does — and split the result.
+
+**Count only what is provably invariant.** A value carrying any bracket — all four, and
+conditionals too — is not counted. Note what that claim is and is not: construct-free is a
+*sufficient* condition for the count to be invariant, **not a necessary one**. `{a|b}` really
+does always freeze to one form. But `{?flag?a|b|c}` freezes as `a` or as `b|c`, and the two
+cannot be told apart without evaluating the construct — so the rule proves the easy property
+instead of guessing at the hard one. A
+reference to such a value, a name the host may supply at render time (runtime context outranks
+a definition of the same name), a name the template does not define, and a chain past the
+expansion budget all suppress the count-based verdicts — `plural.arity` and
+`plural.locale-missing` alike. Silence on an unknowable input is the rule; a confident wrong
+answer is what it replaced. Predicting the roll was tried first and produced false errors.
+
+One prediction is not a prediction: a `#set` named **directly** in the form slot is substituted
+verbatim and is still spintax when the plural is decided, so its brackets earn
+`plural.nested-brackets`. Reached through a `#def` it is rolled first and earns nothing.
+
 | code | severity | condition |
 |---|---|---|
 | `bracket.unclosed` | error | an opening `{`/`[` never closed |
@@ -88,8 +109,9 @@ is the source of truth for these stable codes; every engine maps its diagnostics
 | `permutation.unknown-key` | error | config key not in {minsize,maxsize,sep,lastsep} |
 | `permutation.minsize-not-integer` | error | `minsize=` value is not a run of ASCII digits (note: `0` passes `ctype_digit`, so it does NOT flag) |
 | `permutation.maxsize-not-integer` | error | `maxsize=` value is not a run of ASCII digits |
-| `plural.nested-brackets` | error | `{plural …}` forms slot contains `{}`/`[]` |
+| `plural.nested-brackets` | error | `{plural …}` forms slot contains `{}`/`[]`, or a `#set` reference in it carries them — a `#set` is substituted verbatim and is still spintax when the plural is decided |
 | `plural.arity` | error | form count ≠ locale arity (only when `locale` given) |
+| `plural.locale-missing` | **warning** | no locale normalizes AND the form count is not the render default (2). No verdict is filed without a locale — the template may be right for the locale the host renders with — but rendering resolves against the default, so the block would reach finished text as the fullwidth fallback. A 2-form block stays silent |
 | `plural.count-macro` | error | the count slot resolves — transitively — to a `#set` macro still carrying `[` or `{` that does not open a conditional. Conditionals resolve *before* plurals and are exempt; a nested `{plural …}` resolves in the *same* pass and is not |
 | `variable.self-reference` | error | a definition value references its own name |
 | `variable.circular-reference` | error | a cycle among definitions (A→B→A), either directive |

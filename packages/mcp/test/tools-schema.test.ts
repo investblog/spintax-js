@@ -1,13 +1,17 @@
 /**
- * The schema freeze — the proof that the port changed nothing.
+ * The schema freeze.
  *
- * `test/fixtures/site-tools.json` was extracted MECHANICALLY from the live
- * `functions/mcp.ts` in the spintax.net repo (its TOOLS literal, evaluated), not
- * retyped. `buildTools` with the hosted server's caps must reproduce it exactly.
+ * Its provenance has flipped, and saying so matters. The fixture was first extracted
+ * MECHANICALLY from the live `functions/mcp.ts` in spintax.net (its TOOLS literal,
+ * evaluated) to prove the port changed nothing. Since that endpoint moved onto this
+ * module, the fixture is no longer independent evidence about the hosted server — it is
+ * the change-detector for the tool contract BOTH doors publish. Regenerating it is
+ * therefore a deliberate act that changes what an agent reads, not a way to make a test
+ * pass; the review that accompanies it is the real gate.
  *
- * It is a plain JSON file rather than a vitest snapshot on purpose: `vitest -u`
- * would silently rewrite a snapshot, and this file IS the contract a published
- * server advertises.
+ * It stays a plain JSON file rather than a vitest snapshot for exactly that reason:
+ * `vitest -u` would rewrite a snapshot silently, and a diff on this file is meant to be
+ * read.
  */
 
 import { describe, expect, it } from 'vitest';
