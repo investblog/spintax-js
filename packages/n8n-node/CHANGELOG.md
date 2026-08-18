@@ -3,6 +3,12 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.6
+
+Bundles `@spintax/core` **0.5.3**: the expansion budget added in 0.5.2 was per rendered
+template, so every `#include` handed it a fresh allowance — fifty includes over one 62-character
+body made 57 MB out of 690 bytes. It is per `render()` call now. **Upgrade from 0.2.5.**
+
 ## 0.2.5
 
 Bundles `@spintax/core` **0.5.2**, which stops `render()` dying on a 62-character template

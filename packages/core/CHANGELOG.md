@@ -3,6 +3,31 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.3 — 2026-08-18
+
+The expansion budget added in 0.5.2 was created per rendered AST, and an `#include` renders one
+— so every include handed the bomb a fresh allowance. Fifty `#include` lines over a single
+62-character body turned **690 bytes into 57 MB**, growing linearly with the include count: the
+bound held for each subtree and bounded nothing overall.
+
+### Fixed
+
+The budget now belongs to the `render()` call and travels on the render context, includes and
+all. Measured after: 200 includes over the same body produce 1.14 MB, flat, in about 210 ms —
+the same figure one include produces.
+
+A host may cap the number of include resolutions (the reference Worker does), but the engine
+must not need it to.
+
+### Notes
+
+Worth stating plainly, since it decides who is exposed: **this needs an untrusted template
+author, not untrusted data.** The bomb is built from `#set` definitions, and definitions live in
+the template — T1, author-trusted in the §6 model. A context value is T2, and `neutralize()`
+strips `%` from it (`%b% %b%` becomes `b b`), so shielded data cannot carry a reference at all.
+A host that renders its own templates against user data is not reachable; a host that renders
+templates its users write is.
+
 ## 0.5.2 — 2026-08-18
 
 **`render()` no longer dies on a 62-character template** (issue #69). Not a regression — the

@@ -1,6 +1,6 @@
 {
   "name": "@spintax/core",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Framework-agnostic spintax / text-spinning engine for JS & TS — turn one LLM-drafted {a|b|c} template into endless deterministic variations. Render, validate, extract. Zero-dependency; Node, Workers, browser. Also available as an n8n community node (n8n-nodes-spintax).",
   "keywords": [
     "spintax",

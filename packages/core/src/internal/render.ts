@@ -34,7 +34,7 @@ const MAX_VARIABLE_DEPTH = 50;
  * ration ordinary output. Charged per substitution and checked before the next one, so
  * the bomb dies at the budget rather than after allocating past it.
  */
-const MAX_EXPANSION_CHARS = 1024 * 1024;
+export const MAX_EXPANSION_CHARS = 1024 * 1024;
 // ASCII whitespace only, spelled out — no dialect's `\s` is this set. This comment used to
 // claim PHP's `\s` under /u is ASCII; measured (#55), it is the opposite: /u turns on
 // PCRE2_UCP, so PHP matched NBSP and all of \p{Z} here until it spelled the class out too.
@@ -74,6 +74,16 @@ export interface RenderCtx {
   readonly maxDepth: number;
   /** #include ref chain for circular-reference detection. */
   readonly includeStack: readonly string[];
+  /**
+   * Expansion allowance for the WHOLE call, includes and all (issue #69).
+   *
+   * Per-call, not per-AST: `resolveIncludes` renders each included body through
+   * `renderAst`, so a budget created there gave every include a fresh megabyte. Fifty
+   * `#include` lines over one 62-character bomb turned 690 bytes into 57 MB — the bound
+   * held for each subtree and bounded nothing overall. A host may cap the number of
+   * resolutions, but the engine must not need it to.
+   */
+  readonly budget: { left: number };
   /** Optional observer for unresolvable plural blocks; never affects output. */
   readonly onPluralError: ((issue: PluralIssue) => void) | undefined;
 }
@@ -90,7 +100,7 @@ export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
     locale: ctx.locale,
     depth: 0,
     onPluralError: ctx.onPluralError,
-    budget: { left: MAX_EXPANSION_CHARS },
+    budget: ctx.budget,
   };
   // The roll happens here and not inside buildVars: a definition is rendered against the FULL
   // context, globals and runtime included, so it must wait until that context exists.

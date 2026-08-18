@@ -293,6 +293,17 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
     expect(out).toContain('%b%');
   });
 
+  test('the expansion budget covers the whole call, includes and all', () => {
+    // The budget used to be created per rendered AST, and an include renders one — so
+    // every `#include` handed the bomb a fresh megabyte. Fifty lines over one 62-byte
+    // body made 57 MB out of 690 bytes: the bound held per subtree and bounded nothing.
+    const bomb = '#set %a% = %b% %b%\n#set %b% = %a% %a%\n%a%';
+    const many = Array.from({ length: 50 }, () => '#include "a"').join('\n');
+    const one = publicRender('#include "a"', { locale: 'en', includeResolver: () => bomb });
+    const fifty = publicRender(many, { locale: 'en', includeResolver: () => bomb });
+    expect(fifty.length).toBeLessThanOrEqual(one.length + 1024);
+  });
+
   test('an ordinary template is nowhere near the expansion budget', () => {
     // The bound must be invisible to real work: this is the shape a host actually sends.
     const ordinary = '#set %greeting% = {Hi|Hello}\n#def %n% = 2\n%greeting%, {plural %n%: guest|guests}!';

@@ -7,7 +7,7 @@
  * Order: strip stray sentinels → build vars, roll #def, tree-walk (+ #include) →
  * cosmetic post-process (if on) → mandatory neutralize safety-restore (always).
  */
-import { renderAst, type PluralIssue, type RenderCtx } from './render';
+import { MAX_EXPANSION_CHARS, renderAst, type PluralIssue, type RenderCtx } from './render';
 import { postProcess } from './postprocess';
 import { safetyRestore } from './neutralize';
 import { parseTemplate } from './parser';
@@ -36,6 +36,9 @@ export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions 
     maxDepth: opts.maxDepth ?? DEFAULT_MAX_DEPTH,
     includeStack: [],
     onPluralError: opts.onPluralError,
+    // One allowance for the whole call. Created here rather than in renderAst because
+    // includes re-enter renderAst, and a budget made there is a budget per subtree.
+    budget: { left: MAX_EXPANSION_CHARS },
   };
   // parseTemplate sanitises author markup itself now (see its docblock), so the sentinel strip
   // that used to live here — and only here, missing parse() and analyze() — is gone.
