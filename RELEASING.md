@@ -122,5 +122,13 @@ sequence is publish-then-connect, never the other way round.
 Verify with the client, not just the registry: the tarball smoke
 (`npm run smoke:pack:mcp`) installs the package and drives the real `bin` over stdio,
 which is the only check that covers the shebang, the `bin` field, the exports map and
-resolution of `@spintax/core` as a dependency from the published artifact — the four
+resolution of `@spintax/core` as a dependency from the built artifact — the four
 things a first-`bin` package actually breaks on.
+
+**When the engine moves, bump `dependencies["@spintax/core"]` in the same wave.** The range
+is a real dependency, not a bundle, so leaving it on the previous major-zero range does not
+merely lag — npm installs that older engine *underneath* `packages/mcp`, and the package is
+then tested against an engine nobody is shipping. `test/artifact.test.ts` fails on exactly
+that, and it is there because it happened. The smoke packs `@spintax/core` locally rather
+than pulling it from the registry, so a range naming an unpublished version is not a
+chicken-and-egg problem: release core first, and this gate is green the whole way through.

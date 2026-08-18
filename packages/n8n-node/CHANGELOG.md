@@ -3,6 +3,29 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.3
+
+Bundles `@spintax/core` **0.5.0**. **A workflow's Validate branching can change** — read on.
+
+### Fixed
+
+- **Validate ignored the node's Locale resolution.** The operation read the raw `locale` parameter
+  while Render resolved it through the same helper every other operation uses, so an item carrying
+  `spintaxMeta.locale: ""` was *validated* as "no locale given" and *rendered* under the resolved
+  default. One item, two answers, from one node.
+
+  An item that used to leave on **Valid** with a `plural.locale-missing` warning can now leave on
+  **Invalid** with `plural.arity`, which is the truth about how it will render. This is a routing
+  change: check any workflow that branches on the Validate outputs.
+
+### Changed
+
+- **Bundled engine 0.4.0 → 0.5.0.** Plural form counting now expands definitions before counting,
+  so `{plural 2: one|%tail%}` with `#def %tail% = few|many` under `ru` stops reporting a false
+  `plural.arity` (spintax-js#66); and a conditional in a plural's count slot resolves instead of
+  silently deleting the block (`#set %n% = {?flag?1|2}`). Both move templates from wrong output or
+  wrong verdict to right, so a workflow's results can change — for the better, but not identically.
+
 ## 0.2.2
 
 Refresh: bundles `@spintax/core` **0.4.0**. No behaviour change for a workflow, and the version

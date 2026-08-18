@@ -3,6 +3,76 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 — 2026-08-18
+
+Two plural fixes, both cross-engine, both found by measuring one engine against another rather
+than by a failing test. Minor rather than patch: validation output and render output both change.
+
+### Fixed
+
+- **`validate` counted plural forms before `%variable%` expansion; `render` counts them after**
+  (issue #66, found by the Object Pascal port and confirmed in all five engines).
+
+  `#def %tail% = few|many` with `{plural 2: one|%tail%}` under `ru` renders correctly as three
+  forms, and every validator reported `plural.arity` for the two it could see in the source. The
+  count now substitutes definition values first — every reference per pass, as the renderer does —
+  and splits the result.
+
+  Only where the count is **provably invariant**. A value carrying any bracket — all four, and
+  conditionals too — suppresses the count-based verdicts rather than guessing: `{a|b}` really does
+  always freeze to one form, but `{?flag?a|b|c}` freezes as `a` or as `b|c` and the two cannot be
+  told apart without evaluating the construct. Predicting the roll was tried first and produced a
+  fresh crop of false errors. Silence on an unknowable input is the trade.
+
+  One case is not a prediction: a `#set` named **directly** in the form slot is substituted
+  verbatim and is still spintax when the plural is decided, so its brackets keep earning
+  `plural.nested-brackets` — through a `#def` it is rolled first and earns nothing.
+
+- **A conditional in the plural COUNT slot deleted the block, silently.**
+
+  ```
+  #set %flag% =
+  #set %n% = {?flag?1|2}
+  start {plural %n%: one|two} end
+  ```
+
+  rendered `start end` — no fallback braces, no diagnostic, `validate` returning `[]`. Both PHP
+  engines have always rendered `start two end`: they run the conditional stage over the whole text
+  before plurals, so a plain number reaches the slot. This engine expanded variables into the raw
+  slot and left constructs literal, so the conditional failed the numeric test and the block was
+  erased. `plural.count-macro` exempts conditionals *because* they resolve before plurals — the
+  validator was written to a renderer behaviour that was not implemented here.
+
+  The branch is substituted, never rendered: enumerations resolve AFTER plurals, so a branch
+  yielding `{a|b}` still reaches the numeric test intact and still erases the block, exactly as the
+  plugin does. Rendering it would invent a count no engine has.
+
+  The **form** slot is deliberately untouched. There the engines genuinely disagree — both PHP
+  renderers resolve a conditional that expansion introduces inside a form list, this engine and the
+  Python one do not — and picking a side is issue #67, not a bug fix.
+
+### Performance
+
+- The count-slot pass is linear and iterative. Written recursively it made `render()` throw
+  `RangeError` at ~9000 levels of nesting, breaking the §9.2 promise that render never throws on
+  content; matching braces per `{?` made it quadratic, and an unbalanced count slot is legal input
+  (only the whole `{plural …}` block has to balance, and the slot is cut at the first `:`), so a
+  78 KB template cost 3 seconds. Both were reachable from template text through a public endpoint.
+  78 KB now costs 42 ms and 1 MB costs 372 ms.
+
+  Deep *balanced* nesting is still super-linear, in every engine of the family — the reference
+  implementation scans the body per level too. Bounding input size is a host job (§9.3); the
+  reference Worker now refuses a template over 8192 characters with 413, the same cap the hosted
+  MCP server has always applied.
+
+### Notes
+
+Mirrored where each engine needed it: the counting fix into `spintax/core`, the WordPress plugin
+and `spintax-core` (Python); the count-slot fix into the Python engine only, the PHP engines
+having been right all along. Pinned by 20 new corpus fixtures — 12 for the counting rule, 8 for the
+count slot, of which 4 are negative controls — taking the corpus from 235 to 255, green in
+TypeScript, Python and both PHP engines.
+
 ## 0.4.0 — 2026-08-17
 
 ### Added

@@ -3,6 +3,23 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1 — 2026-08-18
+
+Depends on `@spintax/core` **^0.5.0** (a real dependency, not bundled — the site ends up with one
+engine copy). Two plural fixes reach every tool through it: form counts are computed after
+definitions expand, so a false `plural.arity` on `{plural 2: one|%tail%}` is gone (spintax-js#66);
+and a conditional in a plural's count slot resolves instead of silently deleting the block.
+
+### Changed
+
+- **`validate_spintax`'s description no longer says a clean error list means "safe to render".**
+  It says the template is structurally sound and tells the agent to read the warnings, because some
+  of them — `plural.locale-missing` above all — mean a block will not resolve. An agent that stops
+  at the verdict ships the fullwidth fallback into finished copy.
+
+  The hosted `spintax.net/mcp` advertises the old wording until it is redeployed; the parity test
+  in that repo compares names and schemas, never description text, for exactly this reason.
+
 ## 0.2.0 — 2026-08-18
 
 Minor rather than patch: `validate_spintax` returns a diagnostic it did not return before, on

@@ -6,25 +6,43 @@
 # This is the gate that matters most for this package, because it is the first one in
 # the repo with a `bin`. One command exercises the shebang, the bin field, the exports
 # map, the dual ESM/CJS entries and — unlike the n8n node, which bundles the engine —
-# real resolution of @spintax/core as a DEPENDENCY from the registry.
+# real resolution of @spintax/core as a DEPENDENCY.
+#
+# The engine is installed from a LOCAL tarball, not the registry. It used to come from
+# the registry, which quietly made this gate un-passable for a whole release: the mcp
+# manifest must name the core version it is being shipped against, and that version is
+# not on npm until core is released — while pinning the PREVIOUS range instead makes npm
+# nest a stale engine under packages/mcp, which the artifact guard (correctly) fails. Both
+# doors locked. Packing both means this proves the pair we are about to ship, at any point
+# in the cycle, which is the more useful claim anyway.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/packages/mcp"
+CORE="$ROOT/packages/core"
 
-cd "$PKG"
 # prepack builds a fresh dist and tsup prints to stdout, so don't capture pack's
 # stdout — silence everything and locate the tarball by glob instead.
+cd "$CORE"
+npm pack >/dev/null 2>&1
+CORE_TARBALL="$(ls -t "$CORE"/spintax-core-*.tgz 2>/dev/null | head -1)"
+[ -n "$CORE_TARBALL" ] || { echo "npm pack produced no @spintax/core tarball"; exit 1; }
+
+cd "$PKG"
 npm pack >/dev/null 2>&1
 TARBALL="$(ls -t "$PKG"/spintax-mcp-*.tgz 2>/dev/null | head -1)"
 [ -n "$TARBALL" ] || { echo "npm pack produced no tarball"; exit 1; }
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP" "$TARBALL"' EXIT
+trap 'rm -rf "$TMP" "$TARBALL" "$CORE_TARBALL"' EXIT
 cp "$TARBALL" "$TMP/pkg.tgz"
+cp "$CORE_TARBALL" "$TMP/core.tgz"
 
 cd "$TMP"
 npm init -y >/dev/null 2>&1
-npm install ./pkg.tgz >/dev/null 2>&1
+# Core first and explicitly, so the mcp manifest's range is satisfied by the build under
+# test. If the range and the packed core disagree, npm says so here — which is the check
+# this line replaces, moved earlier rather than dropped.
+npm install ./core.tgz ./pkg.tgz >/dev/null 2>&1
 
 node -e "const s=require('@spintax/mcp'); if(typeof s.createDispatcher!=='function'){console.error('CJS entry missing createDispatcher');process.exit(1)} console.log('  CJS require ok')"
 node --input-type=module -e "import('@spintax/mcp').then(s=>{ if(typeof s.buildTools!=='function'){console.error('ESM entry missing buildTools');process.exit(1)} console.log('  ESM import ok') })"
