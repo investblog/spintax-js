@@ -142,6 +142,55 @@ for the same input). Making those agree would mean rewriting one engine's expans
 another's traversal, for input that no author writes. Each engine pins its own bound in its
 own suite instead.
 
+## Known divergences, measured and not currently gated
+
+These are places where the engines demonstrably differ and no fixture says so. They are recorded
+here rather than in the issue tracker, because an open issue reads as "someone should change
+this" — and in each case the measured answer was that changing it costs more than the difference
+does. An implementer needs to know they exist; nobody needs to be nudged into fixing them.
+
+**Diagnostic ORDER differs in all four engines, and the PHP API cannot express one.** Measured on
+`%undef1%\n#include "missing"\n%undef2%` with `knownIncludes: ["known"]`:
+
+| engine | order |
+|---|---|
+| `@spintax/core` | both `variable.undefined`, then `include.unknown-target` — includes appended last |
+| `spintax-core` (py) | source order, and a test pins it |
+| `spintax/core` (PHP) | returns `{errors, warnings}` — two lists, so an error and a warning have no relative order at all; its warnings also carry `line: 0` |
+| `spintax-win` | `include.unknown-target` first, then the variable warnings |
+
+**Order is not contract.** `code` and `severity` are what §3.1 gates, `diagnostics` is asserted as
+a subset, and no fixture pins an order. A consumer that wants a stable order should sort by
+position itself. Making it contract would mean changing the PHP two-list API for a property nobody
+has asked for.
+
+**A conditional that expansion introduces INTO a plural form list renders differently.** Both PHP
+engines resolve it; `@spintax/core` and `spintax-core` do not. `#set %x% = {?flag?a|b|c}` used as
+`{plural 1: one|%x%}` gives PHP `｛plural 1: one|b|c｝` and the others
+`｛plural 1: one|｛? Flag? A|b|c｝｝` — both fall back, with different text; in some shapes PHP
+resolves to a working render where the others do not. The **validators deliberately retreat there**
+rather than pick a side: a form list whose macro path reaches a conditional gets no count verdict in
+any engine, so no verdict is wrong anywhere. Picking a side would change two or three renderers,
+which is a breaking change to finished text, for a shape no user has reported hitting.
+
+**Four characters trim differently in post-process.** `render("x" + ch)` — is the trailing
+character kept?
+
+| character | `@spintax/core` | `spintax-core` | `spintax/core` (PHP) |
+|---|---|---|---|
+| form feed `U+000C`, NBSP `U+00A0`, line separator `U+2028` | trimmed | trimmed | **kept** |
+| NUL `U+0000` | **kept** | **kept** | trimmed |
+
+PHP's `trim()` charlist is `" \t\n\r\0\x0B"`; JavaScript's takes the Unicode whitespace set and
+never NUL. Post-process *is* parity-gated, so this one is a genuine unresolved divergence rather
+than a non-goal — it is here because a template that ends in an invisible is not something anyone
+writes on purpose, and because NUL is the shielding sentinel, so changing the trim needs the
+`neutralize()` round-trip checked first (spintax-js#52–#54 were all paid for in that area).
+
+**What would move any of these into work:** someone rendering the same template through two engines
+and getting output they cannot explain. Then the fix is worth its cost — and these notes are the
+starting measurement.
+
 ### `rng` — pin exactly
 
 `rng` injects a **raw RNG of signature `(min, max) => int`** (NOT a choice-index picker),
