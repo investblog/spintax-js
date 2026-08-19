@@ -46,13 +46,20 @@ export interface CallToolOptions {
   /**
    * Total characters `render_spintax` may return across all variants.
    *
-   * A count cap bounds how MANY variants, not how BIG they are, and the engine's own
-   * allowance is per render — so the two multiply. Measured on the hosted server before
-   * this existed: a 62-character expansion bomb at `count: 20` answered 200 with a
-   * **48 MB body after 29 seconds**. Nothing was broken and nothing said no.
+   * **The rule is human perception, not byte thrift.** A big answer is fine if it arrives
+   * while the caller is still waiting; what must never happen is a frozen screen. A cap
+   * that refuses work a person would happily have waited for is a bug, not caution — so it
+   * sits above every legitimate request and below the point where an answer stops arriving.
+   *
+   * A count cap cannot do that job: it bounds how MANY variants, not how BIG they are, and
+   * the engine's own expansion allowance is per render, so the two multiply. Measured on
+   * the hosted server before this existed — a 62-character expansion bomb at `count: 20`
+   * answered **200 with a 48 MB body after 29 seconds**. Nothing was broken, both existing
+   * caps were satisfied, and nothing said no.
    *
    * Omit ⇒ no cap, which is right for the local stdio server: it renders what its owner
-   * asked for on their own machine. A hosted deployment should set it.
+   * asked for on their own machine, and there is no one else's screen to freeze. A hosted
+   * deployment sets it; `spintax.net` passes 2 MB, which is about a second of answer.
    */
   maxOutputChars?: number;
   include?: IncludeSupport;

@@ -200,9 +200,21 @@ Three decisions worth keeping:
 - **Refused, not truncated.** A short list of variants looks like a valid answer, and an agent
   that asked for twenty would quietly act on however many happened to fit. The message names the
   variant it stopped at and what to do — including that a definition may expand into itself.
-- **2 MB came from measurement, not from taste.** The reference Worker's first batch cap was 8 MB
-  and never fired once: the isolate was killed before the loop reached it, so the bound existed
-  only in the unit test. A cap that never fires is worse than none — it reads as protection.
+- **The rule the number serves is human perception, not byte thrift.** A big answer is fine if it
+  arrives while the caller is still waiting for it; what must never happen is a frozen screen. So a
+  cap sits above every legitimate request and below the point where an answer stops arriving, and
+  **a cap that refuses work a person would happily have waited for is a bug, not caution.**
+
+  The envelope, measured on the live deployment (2026-08-19) with the 8192-character template cap
+  in place: the heaviest *legitimate* batch — 8 KB of spinnable prose, `count: 100` — returns
+  **703 KB in 0.74–0.92 s**, and the deepest nesting the cap allows, 4 000 levels, renders in
+  **0.98 s**. Everything reachable answers in about a second. 2 MB is roughly a second of answer
+  and about three times the heaviest real batch, so it can only ever catch expansion — the one
+  shape where bytes and time come apart, where 62 characters become megabytes.
+
+  The number was also checked the other way: the reference Worker's first batch cap was 8 MB and
+  **never fired once** — the isolate died before the loop reached it, so the bound existed only in
+  the unit test. A cap that never fires is worse than none, because it reads as protection.
 
 Standing cost, unchanged: the registry entry names an exact package version, so releasing this
 package drags the card, `server.json`, the Function, the parity pin, an apex deploy and a registry

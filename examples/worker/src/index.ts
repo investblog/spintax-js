@@ -50,17 +50,28 @@ const MAX_INCLUDE_RESOLUTIONS = 200;
 /**
  * Total characters `/render-batch` may return.
  *
- * The engine bounds what ONE render may expand (spintax-js#69); a batch multiplies that by
- * up to MAX_BATCH. Measured on this Worker: a 62-character expansion bomb answers in 1.2 s
- * at `count: 1` and 2.5 s at `count: 5`, and at `count: 10` the isolate is killed — HTTP 503
- * from 62 bytes. Bounding the engine did not bound the host.
+ * **The rule these caps serve is human perception, not byte thrift.** A big answer is fine
+ * if it arrives while the caller is still waiting for it; what must never happen is a frozen
+ * screen. So a cap is set by measuring the latency envelope and then sitting above every
+ * legitimate request and below the point where an answer stops arriving — a cap that refuses
+ * work a person would happily have waited for is a bug, not caution.
  *
- * Sized by what this platform actually sustains, not by what looks generous. At 8 MB the
- * cap never fired: the isolate was killed at `count: 10` before the loop could refuse, so
- * the bound existed only in the unit test. 2 MB fires while the request is still alive, and
- * still carries 100 variants of a 20 KB document — larger than anything this reference API
- * is for. A single render may still return more (the engine's own allowance is 1 MB); it is
- * the multiplication that needed bounding.
+ * Measured on this deployment (2026-08-19):
+ *
+ * - the heaviest LEGITIMATE batch the source cap even allows — 8 KB of spinnable prose,
+ *   `count: 100` — returns **703 KB in 0.74–0.92 s**;
+ * - the deepest nesting the source cap allows, 4 000 levels, renders in **0.98 s**;
+ * - so with MAX_TEMPLATE_CHARS in place, everything reachable answers in about a second.
+ *
+ * This cap exists for the one shape where bytes and time come apart: expansion. A
+ * 62-character template can become megabytes (spintax-js#69), and `/render-batch` multiplies
+ * it by up to MAX_BATCH — at `count: 10` that used to kill the isolate outright, HTTP 503
+ * from 62 bytes. 2 MB is roughly a second of answer, three times the heaviest real batch, and
+ * it fires while the request is still alive. An earlier 8 MB never fired at all, which is
+ * worse than no cap: it reads as protection.
+ *
+ * A single render may still return more — the engine's own allowance is 1 MB. It is the
+ * multiplication that needed bounding.
  */
 const MAX_BATCH_OUTPUT_CHARS = 2 * 1024 * 1024;
 
