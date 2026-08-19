@@ -3,6 +3,13 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.2.8
+
+Bundles `@spintax/core` **0.6.1**: the engine no longer throws `RangeError` on deeply nested
+content (spintax-js#68). A Render or Validate node fed an author-supplied template with ~2000
+levels of nesting — 3.9 KB — used to take the workflow down with an exception rather than
+returning the lenient fullwidth fallback. No behaviour change otherwise; output is byte-identical.
+
 ## 0.2.7
 
 Bundles `@spintax/core` **0.6.0**: `validate()` emits one `variable.circular-reference` per NAME

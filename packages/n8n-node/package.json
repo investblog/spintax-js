@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-spintax",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "n8n community node for spintax templates — render, validate, lint what came out, measure pool uniqueness, generate N variants, protect foreign placeholders, and build LLM authoring/repair prompts. Use AI to create the template once; use spintax to generate safely and cheaply forever.",
   "keywords": [
     "n8n-community-node-package",

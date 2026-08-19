@@ -3,6 +3,50 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.1 — 2026-08-19
+
+**The engine no longer throws on deeply nested content** (issue #68). `parse()`, `render()` and
+`analyze()` raised `RangeError: Maximum call stack size exceeded` at about 2000 levels of nesting —
+a **3.9 KB** template — while §9.2 promises a bad construct comes back as text with fullwidth
+braces, never as an exception. No other engine in the family threw.
+
+### Fixed
+
+Three walks recursed once per level of nesting, and each is a frame stack now:
+
+- `parseSequence` — a construct returns a *plan* (its child texts, and how to assemble the node)
+  and a stack drives it. The shape mirrors the Python port's `_plan_*` functions, written that way
+  from the start for this reason.
+- `renderNodes` — the same. **The RNG order is contract and did not move**: an enumeration picks
+  before descending, so an unpicked branch never consumes RNG; a permutation renders every element
+  first and consumes its own picks after. Seeded renders are reproducible within the engine (§3.2)
+  and corpus fixtures pin exact picks with `rng: { sequence }`.
+- `walk` (`ast.ts`) — pre-order, children in source order, because `analyze`'s `constructs` counts
+  and `refs` order come out of it.
+
+Fixing only the parser would have moved the wall rather than removed it: with parsing iterative,
+`render` and `analyze` still threw at ~5000. All three now return at 2 000, 9 000 and 50 000 levels.
+
+`validate()` and `extract()` never threw, which made this worse than it looked — a caller could not
+pre-screen for it by validating first.
+
+### Notes
+
+**Output is byte-identical.** 400 generated documents covering every construct, dumped across
+parse / extract / validate×2 / analyze / render×2 / neutralize before and after — no difference.
+The harness itself was corrected first: of three deliberate control mutations it caught two and
+missed one, because the generator never emitted the per-element `[a < or > | b]` separator — which
+is precisely the code this release moved. A green that cannot see the changed line is not evidence.
+
+**Deep nesting is still super-linear**, in this engine and in the family: 9 000 levels cost seconds
+here where the PHP engine costs 382 ms, because `findMatchingClose`, the inner slice and
+`splitTopLevel` each rescan a construct's content once per level. Removing that means threading
+spans through five helpers whose separator rules deliberately differ from one another, so it is
+recorded rather than guessed at — the same call as #71. Bounding input remains a host job (§9.3);
+the reference Worker caps a source at 8192 characters.
+
+`AST_VERSION` is unchanged — the node shape did not move.
+
 ## 0.6.0 — 2026-08-18
 
 **`validate()` now emits ONE `variable.circular-reference` per NAME that takes part in, or leads
