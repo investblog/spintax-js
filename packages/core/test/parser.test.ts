@@ -291,3 +291,30 @@ describe('splitTopLevel', () => {
     expect(splitTopLevel('a}|b')).toEqual(['a}|b']);
   });
 });
+
+describe('parser — depth (#68)', () => {
+  // The parser used to recurse once per level and threw `RangeError` at about 2000 —
+  // a 3.9 KB template — while §9.2 promises the engine never throws on content. The
+  // walk is a frame stack now. 3000 is chosen to sit past the old wall and still cost
+  // under a second; 50 000 returns too, in minutes rather than never.
+  const nested = (n: number): string => '{'.repeat(n) + 'x' + '}'.repeat(n);
+
+  test('3000 levels parse instead of throwing', () => {
+    const ast = parseTemplate(nested(3000));
+    expect(ast.nodes).toHaveLength(1);
+    expect(ast.nodes[0]?.type).toBe('enumeration');
+  });
+
+  test('the deep tree is still the right shape all the way down', () => {
+    // A stack walk that loses a level, or hands a child to the wrong parent, still
+    // parses — so the count is the assertion, not the fact that it returned.
+    let node = parseTemplate(nested(300)).nodes[0] as Node;
+    let levels = 0;
+    while (node.type === 'enumeration') {
+      levels += 1;
+      node = node.options[0]?.[0] as Node;
+    }
+    expect(levels).toBe(300);
+    expect(node).toEqual({ type: 'literal', value: 'x' });
+  });
+});

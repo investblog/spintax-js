@@ -14,7 +14,7 @@
  * literal here; the renderer resolves it as a post-tree string pass (like the
  * plugin's post-enum `resolve_includes`).
  */
-import { AST_VERSION, type Node, type ParsedAst, type PermConfig, type PermOption } from './ast';
+import { AST_VERSION, type Node, type ParsedAst, type PermConfig } from './ast';
 import { stripSentinels } from './neutralize';
 
 const VARIABLE_RE = /^%(\w+)%/;
@@ -117,79 +117,150 @@ export function stripComments(text: string): string {
 /** Parse a run of text into a node sequence (construct parsing only — no comment
  *  strip / #set extraction; the renderer uses this to re-process variable values). */
 export function parseSequence(text: string): Node[] {
-  const nodes: Node[] = [];
-  let literal = '';
-  let i = 0;
-
-  const flushLiteral = (): void => {
-    if (literal !== '') {
-      nodes.push({ type: 'literal', value: literal });
-      literal = '';
-    }
-  };
-
-  while (i < text.length) {
-    const ch = text.charAt(i);
-
-    if (ch === '{') {
-      const end = findMatchingClose(text, i, '{', '}');
-      if (end === -1) {
-        literal += ch;
-        i += 1;
-        continue;
-      }
-      const content = text.slice(i + 1, end);
-      flushLiteral();
-      nodes.push(parseBraceConstruct(content));
-      i = end + 1;
-      continue;
-    }
-
-    if (ch === '[') {
-      const end = findMatchingClose(text, i, '[', ']');
-      if (end === -1) {
-        literal += ch;
-        i += 1;
-        continue;
-      }
-      flushLiteral();
-      nodes.push(parsePermutation(text.slice(i + 1, end)));
-      i = end + 1;
-      continue;
-    }
-
-    if (ch === '%') {
-      const name = VARIABLE_RE.exec(text.slice(i))?.[1];
-      if (name !== undefined) {
-        flushLiteral();
-        nodes.push({ type: 'variable', name });
-        i += name.length + 2; // "%" + name + "%"
-        continue;
-      }
-    }
-
-    literal += ch;
-    i += 1;
+  interface Frame {
+    text: string;
+    i: number;
+    literal: string;
+    nodes: Node[];
+    /** The construct whose children this frame is collecting, if any. */
+    plan: ChildPlan | null;
+    parts: Node[][];
   }
 
-  flushLiteral();
-  return nodes;
+  const frame = (t: string): Frame => ({ text: t, i: 0, literal: '', nodes: [], plan: null, parts: [] });
+  const stack: Frame[] = [frame(text)];
+
+  while (stack.length > 0) {
+    const f = stack[stack.length - 1] as Frame;
+
+    // A construct is mid-flight: descend into its next child, or assemble it.
+    if (f.plan !== null) {
+      if (f.parts.length < f.plan.texts.length) {
+        stack.push(frame(f.plan.texts[f.parts.length] as string));
+        continue;
+      }
+      f.nodes.push(f.plan.build(f.parts));
+      f.plan = null;
+      f.parts = [];
+      continue;
+    }
+
+    const flushLiteral = (): void => {
+      if (f.literal !== '') {
+        f.nodes.push({ type: 'literal', value: f.literal });
+        f.literal = '';
+      }
+    };
+
+    let planned: Planned | null = null;
+    while (f.i < f.text.length && planned === null) {
+      const ch = f.text.charAt(f.i);
+
+      if (ch === '{' || ch === '[') {
+        const close = ch === '{' ? '}' : ']';
+        const end = findMatchingClose(f.text, f.i, ch, close);
+        if (end === -1) {
+          f.literal += ch;
+          f.i += 1;
+          continue;
+        }
+        const inner = f.text.slice(f.i + 1, end);
+        flushLiteral();
+        planned = ch === '{' ? planBraceConstruct(inner) : planPermutation(inner);
+        f.i = end + 1;
+        continue;
+      }
+
+      if (ch === '%') {
+        const name = VARIABLE_RE.exec(f.text.slice(f.i))?.[1];
+        if (name !== undefined) {
+          flushLiteral();
+          f.nodes.push({ type: 'variable', name });
+          f.i += name.length + 2; // "%" + name + "%"
+          continue;
+        }
+      }
+
+      f.literal += ch;
+      f.i += 1;
+    }
+
+    if (planned !== null) {
+      if ('node' in planned) f.nodes.push(planned.node);
+      else f.plan = planned;
+      continue;
+    }
+
+    // Frame exhausted: finish it and hand its nodes to the parent's pending construct.
+    flushLiteral();
+    stack.pop();
+    const parent = stack[stack.length - 1];
+    if (parent !== undefined) parent.parts.push(f.nodes);
+    else return f.nodes;
+  }
+
+  return [];
 }
+
+/**
+ * A construct whose children still need parsing: their raw texts, and how to assemble
+ * the node once they are parsed.
+ *
+ * This is what lets the parser be iterative. Each construct used to call
+ * `parseSequence` on every child — one stack frame per level of nesting — so
+ * `parse()` threw `RangeError` at about 2000 levels, a 3.9 KB template, and `render()`
+ * did the same over the tree it produced (#68). §9.2 says the engine never throws on
+ * content. The shape mirrors the Python port's `_plan_*` functions, written this way
+ * from the start for exactly this reason.
+ */
+type ChildPlan = { texts: string[]; build: (parts: Node[][]) => Node };
+type Planned = { node: Node } | ChildPlan;
 
 /**
  * Decide what a `{…}` (content between the braces) is: a conditional (`?…`), a
  * plural (`plural …:` …), or — the default and the fallback for a malformed
  * conditional — an enumeration.
  */
-function parseBraceConstruct(content: string): Node {
+function planBraceConstruct(content: string): Planned {
   if (content.charAt(0) === '?') {
-    const cond = tryParseConditional(content);
-    if (cond) return cond;
+    const parts = splitConditional(content);
+    if (parts !== null) {
+      return {
+        texts: [parts.thenRaw, parts.elseRaw],
+        build: (children) => ({
+          type: 'conditional',
+          name: parts.name,
+          inverted: parts.inverted,
+          then: children[0] ?? [],
+          else: children[1] ?? [],
+        }),
+      };
+    }
     // Malformed conditional ⇒ fall back to enumeration (plugin parity).
   } else if (content.startsWith(PLURAL_PREFIX) && content.slice(PLURAL_PREFIX.length).includes(':')) {
-    return parsePlural(content.slice(PLURAL_PREFIX.length));
+    return { node: parsePlural(content.slice(PLURAL_PREFIX.length)) };
   }
-  return { type: 'enumeration', options: splitTopLevel(content).map((o) => parseSequence(o)) };
+  return {
+    texts: splitTopLevel(content),
+    build: (children) => ({ type: 'enumeration', options: children }),
+  };
+}
+
+/**
+ * `[<config>a|b|c]` — the config and the per-element separators resolve here; the
+ * element texts are parsed by the caller's loop.
+ */
+function planPermutation(rawInner: string): Planned {
+  const { config, content } = extractPermutationConfig(rawInner);
+  const { texts, separators } = permutationElements(splitTopLevel(content));
+  return {
+    texts,
+    build: (children) => ({
+      type: 'permutation',
+      config,
+      options: children.map((nodes, i) => ({ nodes, separator: separators[i] ?? null })),
+    }),
+  };
 }
 
 /**
@@ -264,20 +335,6 @@ export function splitConditional(content: string): ConditionalParts | null {
   };
 }
 
-/** Parse `?VAR?then|else` / `?!VAR?then` (content starts with `?`), or null if malformed. */
-function tryParseConditional(content: string): Node | null {
-  const parts = splitConditional(content);
-  if (parts === null) return null;
-
-  return {
-    type: 'conditional',
-    name: parts.name,
-    inverted: parts.inverted,
-    then: parseSequence(parts.thenRaw),
-    else: parseSequence(parts.elseRaw),
-  };
-}
-
 /** Parse `<count>: forms` (the part after the `plural ` prefix). */
 function parsePlural(afterPrefix: string): Node {
   const colon = afterPrefix.indexOf(':');
@@ -298,13 +355,6 @@ const PER_ELEM_HTML_RE = /^[a-zA-Z][a-zA-Z0-9]*\s/;
 
 function defaultPermConfig(): PermConfig {
   return { minsize: null, maxsize: null, sep: ' ', lastsep: null };
-}
-
-/** Parse a permutation body `[<config>a|b|c]` inner → config + options with per-element seps. */
-function parsePermutation(rawInner: string): Node {
-  const { config, content } = extractPermutationConfig(rawInner);
-  const options = extractPerElementSeparators(splitTopLevel(content));
-  return { type: 'permutation', config, options };
 }
 
 /** Split a leading `<config>` off the body (config is extracted BEFORE the top-level split). */
@@ -364,8 +414,9 @@ function looksLikeHtmlStartTag(tagText: string, remaining: string): boolean {
  * the per-element separator of the element from part[i+1]. Each element's text is
  * trimmed; empty elements are dropped (plugin `extract_per_element_separators`).
  */
-function extractPerElementSeparators(rawParts: string[]): PermOption[] {
-  const options: PermOption[] = [];
+function permutationElements(rawParts: string[]): { texts: string[]; separators: (string | null)[] } {
+  const texts: string[] = [];
+  const separators: (string | null)[] = [];
   let pendingSep: string | null = null;
 
   rawParts.forEach((part, i) => {
@@ -380,12 +431,13 @@ function extractPerElementSeparators(rawParts: string[]): PermOption[] {
     }
     const trimmed = phpTrim(text);
     if (trimmed !== '') {
-      options.push({ nodes: parseSequence(trimmed), separator: pendingSep });
+      texts.push(trimmed);
+      separators.push(pendingSep);
     }
     pendingSep = trailingSep;
   });
 
-  return options;
+  return { texts, separators };
 }
 
 /** Detect a trailing `< sep >` on a part (not an HTML tag). Returns {text, sep} or null. */

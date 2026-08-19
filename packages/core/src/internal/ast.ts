@@ -129,21 +129,41 @@ export interface PluralNode {
 
 /** Depth-first walk over every node, descending into all child sequences. */
 export function walk(nodes: readonly Node[], visit: (n: Node) => void): void {
-  for (const n of nodes) {
+  // Iterative, for the same reason the parser and the renderer are (#68): one frame per
+  // level of nesting threw `RangeError` on a template this engine parses happily, and
+  // `analyze()` is the caller that noticed. Pre-order, children in source order —
+  // `constructs` counts and `refs` order come out of this, so the traversal order is
+  // observable and must not drift.
+  const stack: { list: readonly Node[]; i: number }[] = [{ list: nodes, i: 0 }];
+
+  while (stack.length > 0) {
+    const top = stack[stack.length - 1] as { list: readonly Node[]; i: number };
+    if (top.i >= top.list.length) {
+      stack.pop();
+      continue;
+    }
+    const n = top.list[top.i] as Node;
+    top.i += 1;
     visit(n);
+
+    let children: readonly (readonly Node[])[];
     switch (n.type) {
       case 'enumeration':
-        for (const opt of n.options) walk(opt, visit);
+        children = n.options;
         break;
       case 'conditional':
-        walk(n.then, visit);
-        walk(n.else, visit);
+        children = [n.then, n.else];
         break;
       case 'permutation':
-        for (const opt of n.options) walk(opt.nodes, visit);
+        children = n.options.map((opt) => opt.nodes);
         break;
       default:
-        break; // literal / variable / plural (raw slots): no child nodes
+        continue; // literal / variable / plural (raw slots): no child nodes
+    }
+    // Reversed, so the stack hands them back in source order — and before this node's
+    // own siblings, which is what makes it depth-first rather than breadth-first.
+    for (let k = children.length - 1; k >= 0; k -= 1) {
+      stack.push({ list: children[k] as readonly Node[], i: 0 });
     }
   }
 }

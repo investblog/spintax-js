@@ -280,13 +280,69 @@ function directReferences(text: string): string[] {
   return [...text.matchAll(/%(\w+)%/gu)].map((match) => (match[1] ?? '').toLowerCase());
 }
 
+/**
+ * Walk a node list, iteratively (#68).
+ *
+ * A recursive walk costs one frame per level of nesting and threw `RangeError` at
+ * about 5000 levels once the parser stopped throwing first — §9.2 says the engine
+ * never throws on content, so the guarantee has to hold here too.
+ *
+ * **The RNG order is the contract, not the traversal shape.** An enumeration picks
+ * BEFORE descending, so an unpicked branch never touches the RNG; a permutation
+ * renders EVERY element first and consumes its own picks after. Seeded renders are
+ * reproducible within the engine (§3.2) and the corpus pins exact picks with
+ * `rng: { sequence }` fixtures, so a tidier order would quietly change output.
+ * Children are therefore rendered at exactly the moment the recursive version
+ * rendered them.
+ */
 export function renderNodes(nodes: readonly Node[], opts: RenderInternalOptions): string {
-  let out = '';
-  for (const node of nodes) out += renderNode(node, opts);
-  return out;
+  interface Frame {
+    nodes: readonly Node[];
+    i: number;
+    out: string[];
+    /** Child lists being rendered for the construct this frame paused on. */
+    pending: { lists: (readonly Node[])[]; done: string[]; assemble: (parts: string[]) => string } | null;
+  }
+
+  const frame = (list: readonly Node[]): Frame => ({ nodes: list, i: 0, out: [], pending: null });
+  const stack: Frame[] = [frame(nodes)];
+
+  while (stack.length > 0) {
+    const f = stack[stack.length - 1] as Frame;
+
+    if (f.pending !== null) {
+      if (f.pending.done.length < f.pending.lists.length) {
+        stack.push(frame(f.pending.lists[f.pending.done.length] as readonly Node[]));
+        continue;
+      }
+      f.out.push(f.pending.assemble(f.pending.done));
+      f.pending = null;
+      continue;
+    }
+
+    if (f.i >= f.nodes.length) {
+      const text = f.out.join('');
+      stack.pop();
+      const parent = stack[stack.length - 1];
+      if (parent === undefined) return text;
+      (parent.pending as { done: string[] }).done.push(text);
+      continue;
+    }
+
+    const node = f.nodes[f.i] as Node;
+    f.i += 1;
+    const step = renderNode(node, opts);
+    if (typeof step === 'string') f.out.push(step);
+    else f.pending = step;
+  }
+
+  return '';
 }
 
-function renderNode(node: Node, opts: RenderInternalOptions): string {
+/** What a node contributes: finished text, or child lists plus how to assemble them. */
+type RenderStep = string | { lists: (readonly Node[])[]; done: string[]; assemble: (parts: string[]) => string };
+
+function renderNode(node: Node, opts: RenderInternalOptions): RenderStep {
   switch (node.type) {
     case 'literal':
       return node.value;
@@ -354,9 +410,9 @@ function conditionalTakesThen(name: string, inverted: boolean, opts: RenderInter
   return inverted ? !baseTruthy : baseTruthy;
 }
 
-function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): string {
+function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): RenderStep {
   const truthy = conditionalTakesThen(node.name, node.inverted, opts);
-  return renderNodes(truthy ? node.then : node.else, opts);
+  return { lists: [truthy ? node.then : node.else], done: [], assemble: (parts) => parts[0] ?? '' };
 }
 
 /**
@@ -472,7 +528,7 @@ function matchBraces(text: string): Int32Array {
  * literal. Order: bracket check → numeric erase → arity → bucket pick. The two
  * error paths emit the (var-expanded) construct verbatim with fullwidth braces.
  */
-function renderPlural(node: PluralNode, opts: RenderInternalOptions): string {
+function renderPlural(node: PluralNode, opts: RenderInternalOptions): RenderStep {
   const countRaw = resolveCountConditionals(expandVarsOnly(node.countRaw, opts), opts);
   const formsRaw = expandVarsOnly(node.formsRaw, opts);
   const base = normalizeBaseLang(opts.locale);
@@ -516,9 +572,10 @@ function renderPlural(node: PluralNode, opts: RenderInternalOptions): string {
     return fullwidthVerbatim(countRaw, formsRaw);
   }
 
-  // The picked form re-enters the pipeline (its enums/perms resolve after plurals).
+  // The picked form re-enters the pipeline (its enums/perms resolve after plurals) —
+  // as a child list, so a deeply nested form does not cost a stack frame.
   const picked = pluralFor(base, Number.parseInt(count, 10), forms);
-  return renderNodes(parseSequence(picked), opts);
+  return { lists: [parseSequence(picked)], done: [], assemble: (parts) => parts[0] ?? '' };
 }
 
 /** The construct as the renderer saw it — ASCII braces, for reports and logs. */
@@ -531,11 +588,13 @@ function fullwidthVerbatim(countRaw: string, formsRaw: string): string {
   return rawConstruct(countRaw, formsRaw).replace(/\{/gu, '｛').replace(/\}/gu, '｝');
 }
 
-/** Pick one option (outer-first) and render it. */
-function renderEnumeration(options: readonly (readonly Node[])[], opts: RenderInternalOptions): string {
+/** Pick one option (outer-first) and render it. The pick happens BEFORE the descent,
+ *  so an unpicked branch never consumes RNG — that ordering is pinned by fixtures. */
+function renderEnumeration(options: readonly (readonly Node[])[], opts: RenderInternalOptions): RenderStep {
   if (options.length === 0) return '';
   const picked = options[randomInt(opts.rng, 0, options.length - 1)];
-  return picked ? renderNodes(picked, opts) : '';
+  if (!picked) return '';
+  return { lists: [picked], done: [], assemble: (parts) => parts[0] ?? '' };
 }
 
 interface Element {
@@ -543,11 +602,19 @@ interface Element {
   sep: string | null;
 }
 
-function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): string {
-  const elements: Element[] = node.options.map((o) => ({
-    text: renderNodes(o.nodes, opts),
-    sep: o.separator,
-  }));
+function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): RenderStep {
+  if (node.options.length === 0) return '';
+  return {
+    lists: node.options.map((o) => o.nodes),
+    done: [],
+    assemble: (parts) => assemblePermutation(node, parts, opts),
+  };
+}
+
+/** Shuffle and join, once every element has been rendered — the RNG for the size pick
+ *  and the shuffle is consumed here, AFTER the children, exactly as it always was. */
+function assemblePermutation(node: PermutationNode, rendered: string[], opts: RenderInternalOptions): string {
+  const elements: Element[] = node.options.map((o, i) => ({ text: rendered[i] ?? '', sep: o.separator }));
   const total = elements.length;
   if (total === 0) return '';
 

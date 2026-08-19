@@ -4,7 +4,7 @@ import { buildVars, renderNodes, rollDefinitions, type PluralIssue } from '../sr
 import { rngFromStrategy, type RngStrategy } from './corpus-harness';
 // The public API, next to the white-box helper below: the count-slot cases are
 // about what a caller gets, not about an injected RNG.
-import { render as publicRender, validate } from '../src/index';
+import { analyze, render as publicRender, validate } from '../src/index';
 
 /** White-box render with an injected RNG strategy (like the corpus harness). */
 function render(
@@ -277,6 +277,16 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
     const depth = 12_000; // comfortably past the ~9000 where the recursive pass died
     const deep = `#set %V% = y\n{plural ${'{?V?'.repeat(depth)}1${'}'.repeat(depth)}: one|two}`;
     expect(publicRender(deep, { locale: 'en' })).toBe('One');
+  });
+
+  test('deep nesting renders and analyzes instead of throwing (#68)', () => {
+    // Making the parser iterative moved this wall rather than removing it: `render`
+    // and `analyze` walk the tree the parser produced, and both threw `RangeError` at
+    // ~5000 levels while `parse` was already fine. All three are frame stacks now.
+    // §9.2: the engine never throws on content, whatever the content is.
+    const deep = '{'.repeat(3000) + 'x' + '}'.repeat(3000);
+    expect(publicRender(deep, { locale: 'en', seed: 1 })).toBe('X');
+    expect(analyze(deep).constructs.enumeration).toBe(3000);
   });
 
   test('an expansion bomb renders instead of ending the process (#69)', () => {
