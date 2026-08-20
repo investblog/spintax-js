@@ -635,9 +635,11 @@ story):
 
 **Template rules that were paid for and now hold.** A template using a community node must carry a
 **workflow image at the top of the description** — the gallery preview does not render for one, so
-without it a reviewer never sees the canvas (the likeliest reason 17930 read as "too basic"). The
-image lives in this repo at `templates/product-copy-pool.png` and is referenced by its raw GitHub
-URL. The sticky rules are above, from their generator; the word budgets we had measured still hold
+without it a reviewer never sees the canvas (the likeliest reason 17930 read as "too basic" — that
+submission has no image at all, so its canvas has never been seen). The image lives in this repo at
+`templates/product-copy-pool.png` and is referenced by its raw GitHub URL, which means replacing the
+file in `main` updates the live listing without re-editing the submission. 17930 needs one shot for
+itself; the pool's needs re-shooting, because the canvas changed under it. The sticky rules are above, from their generator; the word budgets we had measured still hold
 inside it (overview 100–300 words, each group sticky under 50). And n8n renders a lone newline
 inside a sticky paragraph as a line break, so each paragraph is emitted on one physical line by the
 generator.

@@ -7,6 +7,10 @@ JSON file here, or download and use **Import from File…**.
 The texts below double as the n8n workflow-gallery listing copy (submission is manual, via a
 creator account).
 
+Each file has a canvas image beside it (`*.png`), shot from a live n8n after the last change.
+A gallery listing for a community node gets no rendered preview, so that image is the only way a
+reviewer sees the canvas — it belongs at the top of the description.
+
 Sticky notes in all three files are generated to n8n's own rules — the ones their template 13868
 implements, not the ones we inferred from finished templates. See `docs/spec-n8n-node.md` §6.1 for
 the constants; the short version is at least `ceil(nodes / 3)` tight groups, an overview sticky 480
