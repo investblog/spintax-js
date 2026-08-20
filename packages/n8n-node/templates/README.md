@@ -30,7 +30,7 @@ ESP/Gmail/SMTP node. Feed it a product list instead of leads and the same patter
 unique product description per product per storefront — no duplicate content across sites.
 No credentials required by the Spintax node; everything runs locally in your n8n.
 
-**Gallery:** workflow 17930 — **Pending, awaiting changes from us.**
+**Gallery:** workflow 17930 — rebuilt and ready to resubmit, but the portal allows only one template under review at a time, so it waits for 18308.
 
 ## product-copy-pool.json
 
@@ -47,7 +47,7 @@ that distinguishes "twelve different documents" from "one skeleton wearing twelv
 on real pools: one template 0.962, six templates 0.017). The LLM runs once; every future run of
 the pool costs nothing. No credentials on the Spintax side.
 
-**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Submitted to the gallery 2026-08-16 as workflow 18308 — **Pending, awaiting changes from us**; the canvas image the gallery description needs is `product-copy-pool.png` beside this file.
+**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Submitted to the gallery 2026-08-16 as workflow 18308, rebuilt stickies resubmitted 2026-08-20 — **Under review**; the canvas image the gallery description needs is `product-copy-pool.png` beside this file.
 
 ## ai-authoring-funnel.json
 

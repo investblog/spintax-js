@@ -576,14 +576,29 @@ plural's count slot no longer deleting the block, and two expansion bombs where 
 template ended the Node process. A Render node fed author-supplied templates took the workflow
 down with it, so treat 0.2.6 as the floor.
 
-**Gallery — two records, both awaiting changes from us (2026-08-20).**
+**Gallery — 18308 resubmitted 2026-08-20, 17930 blocked behind it.**
 
 - **17930** (cold-email bridge) — bounced 2026-08-14 as "too basic". The record was measured stuck
   at the time (`PUT https://api.n8n.io/api/workflows/17930` answered **400** on *Upload new
   version*, and *Delete* failed too), and that is no longer the state: the Creator hub now lists it
   **Pending** with an **Implement changes** action. It is a live record to fix, not a dead slot.
-- **18308** (product-copy pool), submitted 2026-08-16 — also **Pending / Implement changes**. The
-  reviewer's mail names one thing: sticky notes. To revisit either: `creators.n8n.io/workflows/<id>/edit`.
+- **18308** (product-copy pool), submitted 2026-08-16 — was also Pending / Implement changes; the
+  reviewer's mail names one thing: sticky notes. The rebuilt JSON went up 2026-08-20 and it is
+  **Under review** again.
+- **17930 could not follow it the same day.** The portal enforces *one template under review at a
+  time*: with 18308 in, Submit greys out and the tooltip reads "You've reached the maximum number of
+  templates under review. Wait for a review to complete before resubmitting." Its rebuilt JSON is
+  ready in the repo and goes up the moment 18308 clears. Note this is a different rule from the one
+  measured on 2026-08-16 — a *new* submission (POST) went through while 17930 sat pending, because
+  pending-with-changes does not count as under review.
+
+**The resubmission flow, since the old route is gone.** `creators.n8n.io/workflows/<id>/edit` now
+redirects to the dashboard; the way in is the **Implement changes** badge on the card itself, which
+opens a modal with a JSON dropzone, a "Copy your last submitted JSON" link and **Submit for human
+review**. There is no description form on this path — title and the structured description survive
+from the original submission, so a resubmission is JSON-only. Two traps worth avoiding: the top-right
+"Share new template" button opens a *new* submission dialog that looks almost identical, and closing
+the modal with a file staged raises a Discard prompt (discarding loses only the staged file).
 
 **The sticky-note rules, taken from n8n's own generator rather than inferred.** The reviewer's mail
 points at their template **13868** ("Auto-generate sticky notes and rename nodes"). Its description
