@@ -7,7 +7,10 @@
       "name": "When clicking 'Execute workflow'",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 400]
+      "position": [
+        0,
+        400
+      ]
     },
     {
       "parameters": {
@@ -26,7 +29,10 @@
       "name": "Your brief",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [200, 400]
+      "position": [
+        200,
+        400
+      ]
     },
     {
       "parameters": {
@@ -35,8 +41,16 @@
         "useItemFieldNames": false,
         "allowedVariables": {
           "variable": [
-            { "name": "first_name", "case": "", "note": "recipient's first name" },
-            { "name": "company", "case": "", "note": "recipient's company" }
+            {
+              "name": "first_name",
+              "case": "",
+              "note": "recipient's first name"
+            },
+            {
+              "name": "company",
+              "case": "",
+              "note": "recipient's company"
+            }
           ]
         },
         "channel": "email",
@@ -46,7 +60,10 @@
       "name": "Build authoring prompt",
       "type": "n8n-nodes-spintax.spintax",
       "typeVersion": 1,
-      "position": [400, 400]
+      "position": [
+        400,
+        400
+      ]
     },
     {
       "parameters": {
@@ -64,7 +81,10 @@
       "name": "Your LLM",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.5,
-      "position": [620, 400]
+      "position": [
+        620,
+        400
+      ]
     },
     {
       "parameters": {
@@ -75,7 +95,10 @@
       "name": "OpenAI Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
-      "position": [640, 620]
+      "position": [
+        640,
+        620
+      ]
     },
     {
       "parameters": {
@@ -89,7 +112,10 @@
       "name": "Validate draft",
       "type": "n8n-nodes-spintax.spintax",
       "typeVersion": 1,
-      "position": [860, 400]
+      "position": [
+        860,
+        400
+      ]
     },
     {
       "parameters": {
@@ -102,7 +128,10 @@
       "name": "Build repair prompt",
       "type": "n8n-nodes-spintax.spintax",
       "typeVersion": 1,
-      "position": [1080, 560]
+      "position": [
+        1080,
+        560
+      ]
     },
     {
       "parameters": {
@@ -120,7 +149,10 @@
       "name": "LLM (repair)",
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.5,
-      "position": [1300, 560]
+      "position": [
+        1300,
+        560
+      ]
     },
     {
       "parameters": {
@@ -134,7 +166,10 @@
       "name": "Validate (attempt 2)",
       "type": "n8n-nodes-spintax.spintax",
       "typeVersion": 1,
-      "position": [1520, 560]
+      "position": [
+        1520,
+        560
+      ]
     },
     {
       "parameters": {},
@@ -142,7 +177,10 @@
       "name": "Still invalid — stop (loop is capped)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1740, 700]
+      "position": [
+        1740,
+        700
+      ]
     },
     {
       "parameters": {
@@ -153,8 +191,16 @@
         "useIncomingItem": false,
         "fixedVariables": {
           "pair": [
-            { "name": "first_name", "value": "Ada", "neutralize": false },
-            { "name": "company", "value": "Brightline Gear", "neutralize": false }
+            {
+              "name": "first_name",
+              "value": "Ada",
+              "neutralize": false
+            },
+            {
+              "name": "company",
+              "value": "Brightline Gear",
+              "neutralize": false
+            }
           ]
         }
       },
@@ -162,82 +208,208 @@
       "name": "Render 5 variants",
       "type": "n8n-nodes-spintax.spintax",
       "typeVersion": 1,
-      "position": [1740, 400]
+      "position": [
+        1740,
+        400
+      ]
     },
     {
       "parameters": {
-        "content": "## The funnel\n\nBrief → **Build Authoring Prompt** → your LLM → **Validate** → (one **repair** round) → **Render Many**.\n\nConnect credentials on the OpenAI model node — or swap the chain for ANY LLM node. The Spintax nodes are provider-agnostic: they emit plain `systemPrompt`/`userPrompt` and read back plain text.",
-        "height": 280,
-        "width": 460
+        "content": "## Spintax AI authoring funnel — brief → LLM → validate → repair → variants\n\n### How it works\n\n1. Your brief becomes an authoring prompt, and your LLM writes ONE spintax template from it — the model runs once, not once per variant.\n2. The draft is validated before anything is rendered, so a broken template never reaches your output.\n3. An invalid draft gets exactly one repair round, aimed at the line, column and code of each diagnostic.\n4. A valid template renders five distinct variants and reports how many it actually produced.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Add credentials to the two chat model nodes, or swap in your own model.\n- [ ] Put your brief, locale and allowed variables in **Your brief**.\n- [ ] Run it once — a valid draft goes straight to variants.\n\n### Customization\n\nRaise the variant count on **Render 5 variants**; `produced` tells you when a template runs out of distinct combinations. Add a second repair round by copying the three repair nodes — the cap is the wiring, so it is yours to change.",
+        "width": 480,
+        "height": 784
       },
-      "id": "fx-note-1",
-      "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [0, 60]
+      "position": [
+        -608,
+        128
+      ],
+      "id": "c3d4e5f6-0000-4a11-9c01-5f1a2b3c4d00",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## spintaxMeta\n\nAuthoring stamps the locale + allowed variables into `spintaxMeta`. LLM nodes drop unknown fields, so Validate/Repair read it **straight off the authoring node** (`$('Build authoring prompt')`) — one locale and one variable list end to end. `Clean Model Output` strips the code fences models love to add; diagnostics then point into the cleaned text.",
-        "height": 280,
-        "width": 460
+        "content": "## Start and set your brief\n\nOne Set node holds the brief, the locale and the allowed variable names. They travel the whole funnel as `spintaxMeta`.",
+        "width": 384,
+        "height": 320,
+        "color": 7
       },
-      "id": "fx-note-2",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [860, 60]
+      "position": [
+        -48,
+        240
+      ],
+      "id": "c3d4e5f6-0001-4a11-9c01-5f1a2b3c4d01",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## The loop is capped by wiring\n\nExactly ONE repair attempt, then stop. Models usually fix a template on the first try — the repair prompt points at the exact offending token (line/column). Add a third round only deliberately.\n\n`Render 5 variants` is honest: `produced` may be < `requested` on a low-variety template — independent draws, not distinct results.",
-        "height": 280,
-        "width": 420
+        "content": "## Build the authoring prompt\n\nThe node emits a system/user prompt pair for your model — any model, OpenAI is only the one wired here. `Clean Model Output` strips the code fences models add whatever the prompt says.",
+        "width": 432,
+        "height": 560,
+        "color": 7
       },
-      "id": "fx-note-3",
-      "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1520, 60]
+      "position": [
+        352,
+        224
+      ],
+      "id": "c3d4e5f6-0002-4a11-9c01-5f1a2b3c4d02",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Validate, then repair once\n\nValid means no error-level diagnostics; a valid draft goes straight right. The repair prompt carries the line, column and code of each problem, so the model is pointed at the offending token rather than asked to guess.",
+        "width": 848,
+        "height": 480,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        816,
+        240
+      ],
+      "id": "c3d4e5f6-0003-4a11-9c01-5f1a2b3c4d03",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## Where the funnel ends\n\nA good template renders five distinct variants and reports `produced` against `requested`. A draft that survives two rounds stops here — the loop is capped by wiring, not by a counter.",
+        "width": 240,
+        "height": 736,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        128
+      ],
+      "id": "c3d4e5f6-0005-4a11-9c01-5f1a2b3c4d05",
+      "name": "Sticky Note4"
     }
   ],
   "connections": {
     "When clicking 'Execute workflow'": {
-      "main": [[{ "node": "Your brief", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Your brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Your brief": {
-      "main": [[{ "node": "Build authoring prompt", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build authoring prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build authoring prompt": {
-      "main": [[{ "node": "Your LLM", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Your LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Your LLM": {
-      "main": [[{ "node": "Validate draft", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validate draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "OpenAI Chat Model": {
       "ai_languageModel": [
         [
-          { "node": "Your LLM", "type": "ai_languageModel", "index": 0 },
-          { "node": "LLM (repair)", "type": "ai_languageModel", "index": 0 }
+          {
+            "node": "Your LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "LLM (repair)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
         ]
       ]
     },
     "Validate draft": {
       "main": [
-        [{ "node": "Render 5 variants", "type": "main", "index": 0 }],
-        [{ "node": "Build repair prompt", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Render 5 variants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build repair prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build repair prompt": {
-      "main": [[{ "node": "LLM (repair)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "LLM (repair)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "LLM (repair)": {
-      "main": [[{ "node": "Validate (attempt 2)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validate (attempt 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validate (attempt 2)": {
       "main": [
-        [{ "node": "Render 5 variants", "type": "main", "index": 0 }],
-        [{ "node": "Still invalid — stop (loop is capped)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Render 5 variants",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Still invalid — stop (loop is capped)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

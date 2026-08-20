@@ -49,7 +49,8 @@ post-publish, and R1 assumes verification unavailable until n8n confirms eligibi
 > campaign); ported here with their measurements kept as the rationale. New gallery template
 > `templates/product-copy-pool.json` runs the whole lane. Node suite: 101 tests.
 >
-> **Gallery status (2026-08-14) — SUPERSEDED by §6.1:** the cold-email bridge (17930) was
+> **Gallery status (2026-08-14) — SUPERSEDED by §6.1**, which has 17930 open again and awaiting
+> changes, not closed: the cold-email bridge (17930) was
 > **rejected** — "too basic",
 > after a first round about sticky-note overlap. The layout fix never reached the reviewer (the
 > Creator Portal locked the submission with the old JSON), but the verdict is about substance, not
@@ -575,17 +576,41 @@ plural's count slot no longer deleting the block, and two expansion bombs where 
 template ended the Node process. A Render node fed author-supplied templates took the workflow
 down with it, so treat 0.2.6 as the floor.
 
-**Gallery — two records, one live.**
+**Gallery — two records, both awaiting changes from us (2026-08-20).**
 
-- **17930** (cold-email bridge) — rejected 2026-08-14 as "too basic", and the record is now stuck:
-  `PUT https://api.n8n.io/api/workflows/17930` answers **400** on *Upload new version* ("Could not
-  upload new version"), and *Delete* fails as well. Nothing on our side clears it; only a mail to
-  the reviewer would. It costs one of the two pending slots and nothing else — leave it.
-- **18308 — "Generate unique product description pools with OpenAI and Spintax", submitted
-  2026-08-16, status Under review** (their stated turnaround: 3–5 business days). The JSON is ours
-  (`templates/product-copy-pool.json`); the title and the Quick overview / How it works / Setup
-  copy were written by the portal's AI review and are accurate; we filled Requirements,
-  Customization and Additional info by hand. To revisit it: `creators.n8n.io/workflows/18308/edit`.
+- **17930** (cold-email bridge) — bounced 2026-08-14 as "too basic". The record was measured stuck
+  at the time (`PUT https://api.n8n.io/api/workflows/17930` answered **400** on *Upload new
+  version*, and *Delete* failed too), and that is no longer the state: the Creator hub now lists it
+  **Pending** with an **Implement changes** action. It is a live record to fix, not a dead slot.
+- **18308** (product-copy pool), submitted 2026-08-16 — also **Pending / Implement changes**. The
+  reviewer's mail names one thing: sticky notes. To revisit either: `creators.n8n.io/workflows/<id>/edit`.
+
+**The sticky-note rules, taken from n8n's own generator rather than inferred.** The reviewer's mail
+points at their template **13868** ("Auto-generate sticky notes and rename nodes"). Its description
+links a Notion page that is JS-rendered and unreadable to a fetcher, but the workflow itself is
+readable — `https://api.n8n.io/api/templates/workflows/13868` — and it *is* the specification,
+because it is the thing that produces conforming templates:
+
+- **At least `ceil(nodeCount / 3)` groups**, each a spatially tight cluster, titled in sentence case
+  in 3–6 words (`AI Groups Logically`). Three tall column stickies over sixteen nodes is the shape
+  that gets bounced; six small ones is the shape that passes.
+- **Geometry is arithmetic, not taste** (`Compute Bounding Boxes`): pad a cluster's bounding box by
+  48 either side and 64 below, reserve a computed text height above it (minimum 80), snap everything
+  to a 16px grid, floor at 240×180. Group stickies are `color: 7`; the overview carries no colour key.
+- **The overview sticky is 480 wide, placed at `minX − 480 − 80`**, height clamped to **420–900** —
+  and their own height estimator is the check: content over 900px is silently clipped in the canvas,
+  so the copy is written to fit the box rather than the box stretched to the copy.
+- **Its shape is fixed**: `## <workflow name>`, `### How it works` as a **numbered list of 2–6
+  items**, `### Setup steps` as `- [ ]` checkboxes, optional `### Customization`. Our earlier
+  recorded rule said `### Setup` and free prose — that came from reading finished templates, and
+  this supersedes it.
+
+All three templates in `templates/` were rebuilt to this on 2026-08-20 by a faithful port of those
+two Code nodes, with two assertions their pipeline does not need because it resolves collisions
+iteratively and we do not: **no two stickies overlap**, and the group count clears the ceiling. The
+port also flagged the real trap — a single-node group is floored at 240 wide, which is wider than
+the node's own padded box, so it reaches further right than the cluster does and can collide with
+the next group. In the funnel that forced Validate and Repair into one group.
 
 **How the portal actually behaves** (measured, because the documented rules are not the whole
 story):
@@ -612,10 +637,10 @@ story):
 **workflow image at the top of the description** — the gallery preview does not render for one, so
 without it a reviewer never sees the canvas (the likeliest reason 17930 read as "too basic"). The
 image lives in this repo at `templates/product-copy-pool.png` and is referenced by its raw GitHub
-URL. Sticky rules are numeric: exactly one yellow overview, top-left, 100–300 words, carrying
-`### How it works` and `### Setup`; grey section stickies under 50 words each, stretched across
-several nodes. And n8n renders a lone newline inside a sticky paragraph as a line break, so each
-paragraph is emitted on one physical line by the generator.
+URL. The sticky rules are above, from their generator; the word budgets we had measured still hold
+inside it (overview 100–300 words, each group sticky under 50). And n8n renders a lone newline
+inside a sticky paragraph as a line break, so each paragraph is emitted on one physical line by the
+generator.
 
 **Live verification (2026-08-15/16).** n8n 2.34.6 installed under `temp/n8n-local` (removed
 afterwards), the published node installed into `~/.n8n/nodes`, the workflow imported with

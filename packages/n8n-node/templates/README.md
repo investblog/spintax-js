@@ -7,6 +7,12 @@ JSON file here, or download and use **Import from File…**.
 The texts below double as the n8n workflow-gallery listing copy (submission is manual, via a
 creator account).
 
+Sticky notes in all three files are generated to n8n's own rules — the ones their template 13868
+implements, not the ones we inferred from finished templates. See `docs/spec-n8n-node.md` §6.1 for
+the constants; the short version is at least `ceil(nodes / 3)` tight groups, an overview sticky 480
+wide whose content must fit 900px, and `### How it works` as a numbered list with `### Setup steps`
+as checkboxes.
+
 ## cold-email-bridge.json
 
 **Title:** Generate unique cold-email copy per lead with Spintax (works for product catalogs too)
@@ -19,6 +25,8 @@ Replace the sample Code node with Google Sheets or your CRM, and the last node w
 ESP/Gmail/SMTP node. Feed it a product list instead of leads and the same pattern writes a
 unique product description per product per storefront — no duplicate content across sites.
 No credentials required by the Spintax node; everything runs locally in your n8n.
+
+**Gallery:** workflow 17930 — **Pending, awaiting changes from us.**
 
 ## product-copy-pool.json
 
@@ -35,7 +43,7 @@ that distinguishes "twelve different documents" from "one skeleton wearing twelv
 on real pools: one template 0.962, six templates 0.017). The LLM runs once; every future run of
 the pool costs nothing. No credentials on the Spintax side.
 
-**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Submitted to the gallery 2026-08-16 as workflow 18308 — under review; the canvas image the gallery description needs is `product-copy-pool.png` beside this file.
+**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Submitted to the gallery 2026-08-16 as workflow 18308 — **Pending, awaiting changes from us**; the canvas image the gallery description needs is `product-copy-pool.png` beside this file.
 
 ## ai-authoring-funnel.json
 

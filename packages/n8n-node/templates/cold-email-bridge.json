@@ -2,69 +2,6 @@
   "name": "Spintax cold-email bridge — unique copy per lead (and per product)",
   "nodes": [
     {
-      "parameters": {
-        "content": "## Cold-email bridge — render here, send there\n\n### How it works\n\nSending platforms parse flat `{a|b|c}` at best — so this flow renders full-syntax spintax first and hands finished text to your sender. It loads lead rows, renders a unique subject and body per row (every top-level row field automatically becomes a `%variable%`), and ends at a placeholder where your sending integration connects.\n\n### Setup steps\n\n- Replace \"Load Sample Leads\" with your real source — Google Sheets, Airtable, a CRM or a database query.\n- Edit the spintax templates in the subject/body nodes to match your offer and fields.\n- Replace the final placeholder with your email node (Gmail, SMTP, an ESP API) and map the rendered `subject` + `body`.\n\n### Customization\n\n- Feed a **product catalog** instead of leads — the same Render-per-row flow writes a unique product description per product per storefront, with no duplicate content across sites.\n- Seeds are per-row expressions (`company + ':subject'`): every lead keeps a **stable, reproducible** variant across re-runs. Change the suffix to re-roll everyone, or seed by product + storefront (`:site-a`, `:site-b`) for multi-site catalogs.\n- Incoming values are **neutralized by default** — scraped data containing `{` or `|` stays text, never markup. Fixed variables you type yourself may deliberately contain spintax (e.g. `{Mr|Ms}`).",
-        "width": 520,
-        "height": 768
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -608,
-        32
-      ],
-      "id": "120309ae-82bc-4c80-8034-a29dda68c445",
-      "name": "Sticky Note"
-    },
-    {
-      "parameters": {
-        "content": "## Start and load leads\n\nManual execution starts the workflow and the sample code node provides lead records, intended to be replaced by a real lead source such as a CRM, spreadsheet, or database.",
-        "width": 416,
-        "height": 336,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        80
-      ],
-      "id": "e2e957de-92cd-4a8e-ab11-200b16c0f11f",
-      "name": "Sticky Note1"
-    },
-    {
-      "parameters": {
-        "content": "## Render email copy\n\nTwo nearby spintax nodes generate unique variations for each lead, first rendering the email subject and then the email body. Conditionals (`{?has_discount?…|…}`) switch copy on data fields, and `{plural %in_stock%: unit|units}` keeps counts grammatical.",
-        "width": 416,
-        "height": 320,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        400,
-        96
-      ],
-      "id": "3cd82464-62c1-4678-9582-cc68053933d8",
-      "name": "Sticky Note2"
-    },
-    {
-      "parameters": {
-        "content": "## Send prepared emails\n\nA placeholder pass-through node marks where the rendered subject and body should be handed off to the user's actual email-sending tool.",
-        "width": 240,
-        "height": 384,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        864,
-        32
-      ],
-      "id": "dd669efb-eaf8-4362-87fc-1a6647ed956c",
-      "name": "Sticky Note3"
-    },
-    {
       "id": "sx-trigger",
       "name": "Manual Workflow Trigger",
       "type": "n8n-nodes-base.manualTrigger",
@@ -130,6 +67,69 @@
       ],
       "parameters": {},
       "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "content": "## Spintax cold-email bridge — unique copy per lead (and per product)\n\n### How it works\n\n1. Sending platforms parse flat `{a|b|c}` at best, so this flow renders the full syntax first and hands your sender finished text.\n2. Lead rows come in, and every top-level field of a row becomes a `%variable%` the template can address.\n3. Each lead gets its own subject and body drawn from one template — no model call and no per-lead copywriting.\n4. The flow ends at a placeholder node where your own sending integration connects.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Replace **Load Sample Leads** with your real source.\n- [ ] Edit the templates in the two Spintax nodes to match your offer.\n- [ ] Swap the placeholder for your sending node and run it.\n\n### Customization\n\nPost-processing is on, so spacing and capitalisation come out clean after a variable drops in. Turn on Protect Placeholders if your sender injects its own `{{ }}` merge tags and you want them left untouched.",
+        "width": 480,
+        "height": 752
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        48
+      ],
+      "id": "b2c3d4e5-0000-4a11-9c01-5f1a2b3c4d00",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Start and load leads\n\nThe sample code node stands in for your real source — a CRM, a sheet or a database query. Every top-level field of a row becomes a `%variable%`.",
+        "width": 416,
+        "height": 336,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        80
+      ],
+      "id": "b2c3d4e5-0001-4a11-9c01-5f1a2b3c4d01",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Render subject and body\n\nTwo Spintax nodes render one unique subject and body per lead. Conditionals switch copy on a data field and plurals keep counts grammatical — syntax no sending platform can parse.",
+        "width": 416,
+        "height": 336,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        384,
+        80
+      ],
+      "id": "b2c3d4e5-0002-4a11-9c01-5f1a2b3c4d02",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Hand off to your sender\n\nReplace this pass-through with your sending node. It receives finished text, so nothing downstream has to understand spintax.",
+        "width": 240,
+        "height": 368,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        864,
+        48
+      ],
+      "id": "b2c3d4e5-0003-4a11-9c01-5f1a2b3c4d03",
+      "name": "Sticky Note3"
     }
   ],
   "connections": {

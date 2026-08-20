@@ -334,66 +334,114 @@
     },
     {
       "parameters": {
-        "content": "## One template, a whole pool - and proof the pool is actually different\n\nAn LLM writes ONE spintax template from your brief; the Spintax node then generates variants from it forever, offline and free. The interesting half is what comes after.\n\n### How it works\n\n1. Your brief goes to **Build Authoring Prompt**, which emits the prompt pair for your own LLM node.\n2. **Validate** routes the draft to Valid or Invalid; on Invalid, **Build Repair Prompt** points the model at the exact offending token and one repair round runs.\n3. **Render Many** turns the valid template into 12 documents.\n4. **Lint** reads each rendered document for defects that live in the combination of choices and never in the template: two slots picking the same word, a space before a comma.\n5. **Uniqueness** reads the surviving pool as a whole, drops near-duplicates and reports a footprint - the share of five-word windows that repeat across it. Measured on real pools of equal size: one template about 0.96, six templates about 0.02.\n\n### Setup\n\n1. Connect credentials on the **OpenAI Chat Model** node, or swap the chain for any LLM node you already use; the Spintax operations exchange plain text and ignore the provider.\n2. Edit **Your brief and product** - the brief and the four values are all in that one node.\n3. Execute. Everything after the LLM is deterministic: same base seed, same twelve documents.\n\n### Customization tips\n\nThe LLM runs once; every later run costs nothing. Put the strings every document repeats - product name, brand, a merge tag - into **Shared Strings**, or the metric measures your product name instead of your writing. Lower **Footprint Limit** to 0.15 to turn the footprint into a gate.",
-        "width": 640,
-        "height": 1000
+        "content": "## Generate a pool of unique product descriptions from one AI-written spintax template\n\n### How it works\n\n1. An LLM writes ONE spintax template from your brief; the Spintax node renders every variant from it, with no model call per document.\n2. The template is validated first, and an invalid draft gets one repair round aimed at the exact line and column.\n3. Twelve documents are rendered with a per-attempt seed, so a rerun reproduces the pool.\n4. Lint judges each document and returns a defective one for another draw.\n5. Uniqueness judges the whole pool and reports a footprint before it ships.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Add OpenAI credentials to the two chat model nodes.\n- [ ] Put your brief, product facts, locale and variables in **Your brief and product**.\n- [ ] Run it once — a valid draft renders twelve variants in one pass.\n\n### Customization\n\nFootprint Limit ships at 1, so Uniqueness reports instead of gating: one template about one product scores near 0.49. Ignored Strings already holds the product name and brand, which moves the same twelve documents from 0.209 to 0.107.",
+        "width": 480,
+        "height": 896
       },
-      "id": "Sticky Note",
-      "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -784,
-        -96
-      ]
+        -608,
+        64
+      ],
+      "id": "a1b2c3d4-0000-4a11-9c01-5f1a2b3c4d00",
+      "name": "Sticky Note"
     },
     {
       "parameters": {
-        "content": "## 1 - Author the template\n\nYour brief and the allowed variables become the canonical prompt for your own LLM. `spintaxMeta` carries one locale and one variable list through the whole run.",
-        "width": 856,
-        "height": 1000,
+        "content": "## Start and set your inputs\n\nOne Set node holds the brief, the product facts, the locale and the variable names. Everything downstream reads them from here.",
+        "width": 416,
+        "height": 320,
         "color": 7
       },
-      "id": "Sticky Note1",
-      "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -48,
-        -96
-      ]
+        96
+      ],
+      "id": "a1b2c3d4-0001-4a11-9c01-5f1a2b3c4d01",
+      "name": "Sticky Note1"
     },
     {
       "parameters": {
-        "content": "## 2 - Validate, repair once\n\nValid means no error-level diagnostics. The repair prompt points at the exact line and column, and the loop is capped at one round by wiring.",
-        "width": 856,
-        "height": 1000,
+        "content": "## Author the spintax template\n\nThe node builds the canonical authoring prompt from your brief and allowed variables; your model writes one template from it.",
+        "width": 416,
+        "height": 544,
         "color": 7
       },
-      "id": "Sticky Note2",
-      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        384,
+        96
+      ],
+      "id": "a1b2c3d4-0002-4a11-9c01-5f1a2b3c4d02",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Validate the draft\n\nValid means no error-level diagnostics. Valid drafts go straight to rendering; the rest take the repair path below.",
+        "width": 240,
+        "height": 368,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         832,
-        -96
-      ]
+        64
+      ],
+      "id": "a1b2c3d4-0003-4a11-9c01-5f1a2b3c4d03",
+      "name": "Sticky Note3"
     },
     {
       "parameters": {
-        "content": "## 3 - Generate, then check what came out\n\n**Lint** judges each rendered document; **Uniqueness** judges the pool and reports a footprint. One template about one product lands near 0.5. Footprint Limit is 1 here, so the number only reports; set 0.15 to make it a gate.",
-        "width": 856,
-        "height": 1000,
+        "content": "## Repair once, then stop\n\nThe repair prompt carries the exact line and column of each problem. The loop is capped at one round by wiring, so it cannot spin.",
+        "width": 640,
+        "height": 480,
         "color": 7
       },
-      "id": "Sticky Note3",
-      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        480
+      ],
+      "id": "a1b2c3d4-0004-4a11-9c01-5f1a2b3c4d04",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## Render and lint variants\n\nTwelve documents come out of one template. Lint judges each one and sends anything defective back for another draw.",
+        "width": 416,
+        "height": 512,
+        "color": 7
+      },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         1712,
-        -96
-      ]
+        96
+      ],
+      "id": "a1b2c3d4-0005-4a11-9c01-5f1a2b3c4d05",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Check pool uniqueness\n\nUniqueness judges the pool rather than a document and reports a footprint. Near-duplicates leave on the second output.",
+        "width": 416,
+        "height": 512,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2144,
+        96
+      ],
+      "id": "a1b2c3d4-0006-4a11-9c01-5f1a2b3c4d06",
+      "name": "Sticky Note6"
     }
   ],
   "connections": {
