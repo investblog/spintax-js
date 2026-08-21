@@ -79,6 +79,37 @@ Sections, in order:
 6. **Self-check** — before answering: mentally render ~5 variants; if any reads awkwardly or breaks
    agreement, fix the branch, not the sentence.
 
+### Markup and document structure are out of scope — deliberately
+
+Hard rule 4 forbids everything outside the syntax list: **no markdown, no HTML**, and there is no
+option on `AuthoringPromptOptions` that relaxes it. `Channel` changes **length and tone only** —
+`landing` means "a headline plus one supporting sentence", not landing-page markup — and every
+channel, `generic` included, describes **short copy**. A host that reads only the type surface can
+reasonably assume otherwise, so it is stated here: the prompt writes **the prose of one block**.
+
+A host that needs structure — an article body of `<h2>` / `<p>` / `<h3>` / `<ul>`, a document of
+several sections — **calls the prompt once per block and composes the structure itself**: wraps each
+block in its tag, builds the block-level permutations, writes the separators. That is not a
+workaround, it is the better division of labour, and it was measured rather than argued
+([#76](https://github.com/investblog/spintax-js/issues/76), from the first external consumer, the
+day after the package went to npm). A whole class of template defects becomes **unreachable by
+construction** instead of being checked for afterwards: a literal `
+` inside a permutation's `sep=`,
+a permutation element with no opening tag leaving a dangling `</p>`, a violated title convention, a
+triple newline left by an empty block-level branch — each of which had bitten that host while
+writing templates by hand. The model is better spent on prose than on markup it has been told not to
+emit, and the engine's own boundary says the same thing from the other side: no engine diagnostic
+knows what `<p>` is (see `CLAUDE.md`, "What belongs in the engine").
+
+A `longform` / `article` channel with a markup allow-list is therefore **not planned**. It would be
+added only if a second real host needed the prompt itself to emit structure — the first one
+explicitly does not.
+
+**Length is calibrated through the brief, not the channel.** `generic` biases toward short copy,
+which is right for its stated purpose; a host that wants a 4–5 sentence paragraph for a block says
+so in `brief` ("one paragraph of four to five sentences about …"). The channel block is a default,
+the brief is the instruction.
+
 ### Language is not a cosmetic knob
 
 Grammar-safety is **language-specific, and the Slavic languages are the hard case** (gender /
@@ -168,7 +199,9 @@ Not one long page — a **compact operational prompt** assembled from the existi
   and publish the valid-rate.*
 - **Q2 — one prompt or a family?** Channel (email / SMS / push / landing) probably changes length
   and tone rules only. Start with one prompt + parameters; split only if the suite shows a channel
-  dragging the valid-rate down.
+  dragging the valid-rate down. *Holding as of 2026-08-21: channel is length and tone, nothing
+  else — and the first request that looked like a new channel (long-form HTML bodies, #76) turned
+  out to be composition, answered per block by the host (§3 above), not a prompt variant.*
 - **Q3 — does the prompt own `neutralize()`?** No — shielding untrusted data is a *host* job at
   render time. But the prompt must know that `%var%` values arrive from the host and must never be
   invented. (See the n8n spec's Q3.)

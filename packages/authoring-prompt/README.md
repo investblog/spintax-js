@@ -54,6 +54,18 @@ Pass the **same `locale`** to the prompt, to `validate()` and later to `render()
 grammar block and the plural arity the model is taught, and a mismatch is the bug the repair
 prompt exists to fix.
 
+## What it does not do
+
+The prompt writes **the prose of one block** and never emits markdown or HTML; `channel` sets length
+and tone only (`landing` is a headline plus one sentence, not page markup), and no option relaxes
+that. If you need structure — an article of `<h2>` / `<p>` / `<ul>`, a document of sections — call
+the prompt **once per block** and compose the structure in your code: wrap each block in its tag,
+build the block-level permutations, write the separators yourself. That puts a whole class of
+template defects (a literal `
+` in a `sep=`, a dangling `</p>`, a triple newline from an empty
+branch) out of reach by construction. Want a longer block? Ask for it in `brief` — the channel is a
+default, the brief is the instruction.
+
 ## API
 
 - `buildAuthoringPrompt(opts): BuiltPrompt` — `brief`, optional `locale`, `allowedVariables`

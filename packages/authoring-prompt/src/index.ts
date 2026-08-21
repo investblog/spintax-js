@@ -18,6 +18,18 @@ import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 export const PROMPT_VERSION = '2';
 
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
+
+/**
+ * Length and tone of ONE block of copy — nothing else.
+ *
+ * `landing` is "a headline plus one supporting sentence", not landing-page markup; every channel,
+ * `generic` included, describes short copy. The prompt never emits markdown or HTML (hard rule 4)
+ * and no option relaxes that. A host that needs structure — an article of `<h2>` / `<p>` / `<ul>`,
+ * a document of sections — calls the prompt once per block and composes the structure itself,
+ * which removes a whole class of template defects by construction (spec §3, #76). To get a longer
+ * block, say so in `brief` ("one paragraph of four to five sentences …"): the channel is a
+ * default, the brief is the instruction.
+ */
 export type Channel = 'email' | 'sms' | 'push' | 'landing' | 'generic';
 
 /**
