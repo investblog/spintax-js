@@ -1,18 +1,17 @@
 name: Release authoring prompt
 
-# Publishes @spintax/authoring-prompt to npm with a PROVENANCE attestation.
+# Publishes @spintax/authoring-prompt to npm with PROVENANCE via OIDC Trusted Publishing —
+# no tokens stored anywhere, no OTP. The Trusted Publisher entry exists as of 2026-08-21
+# (npmjs.com → @spintax/authoring-prompt → Settings → Trusted Publisher → GitHub Actions,
+# org/repo = investblog/spintax-js, workflow = release-prompt.yml). The @spintax/core and
+# @spintax/mcp entries do NOT cover this package; every package needs its own.
 #
-# FIRST PUBLISH (0.1.0) goes out on the NPM_TOKEN repo secret — the trap of a NEW package
-# that @spintax/mcp 0.1.0 and the n8n node both hit: a Trusted Publisher entry cannot
-# precede the first publish, because there is no package to attach it to. Provenance still
-# applies, because it comes from `id-token: write` + `--provenance`, not from trusted
-# publishing. The follow-up, once 0.1.0 is on npm (RELEASING.md has the checklist):
-#   1. npmjs.com → @spintax/authoring-prompt → Settings → Trusted Publisher → GitHub
-#      Actions, org/repo = investblog/spintax-js, workflow = release-prompt.yml;
-#   2. delete the `env: NODE_AUTH_TOKEN` block from the publish step below.
-# From then on npm exchanges the GitHub OIDC token for a short-lived publish token by
-# itself. The @spintax/core and @spintax/mcp entries do NOT cover this package; every
-# package needs its own.
+# 0.1.0 was different, and it is the trap of a NEW package (mcp 0.1.0 and the n8n node hit
+# it too): a Trusted Publisher entry cannot precede the first publish — there is no package
+# to attach it to — so it went out on the NPM_TOKEN repo secret. Provenance still applied,
+# because it comes from `id-token: write` + `--provenance` rather than from trusted
+# publishing. From 0.1.1 on, this workflow carries no NODE_AUTH_TOKEN and npm exchanges the
+# GitHub OIDC token for a short-lived publish token by itself.
 #
 # Release flow: bump packages/authoring-prompt/package.json (one file — the package has no
 # version constant of its own; PROMPT_VERSION is the prompt TEXT's version and moves
@@ -102,10 +101,9 @@ jobs:
       - name: Authoring-prompt tarball smoke (peer engine from the local pack)
         run: npm run smoke:pack:prompt
 
-      # NODE_AUTH_TOKEN is here for the FIRST publish only — see the header. Once the
-      # Trusted Publisher entry exists, delete the `env` block: npm then exchanges the
-      # GitHub OIDC token for a short-lived publish token by itself.
-      - name: Publish @spintax/authoring-prompt (provenance)
+      # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
+      # publish token automatically, and attaches a provenance attestation. The
+      # NPM_TOKEN repo secret still exists for bootstrapping the NEXT new package, but
+      # this workflow no longer uses it.
+      - name: Publish @spintax/authoring-prompt (provenance via OIDC)
         run: npm publish -w @spintax/authoring-prompt --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

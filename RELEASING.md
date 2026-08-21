@@ -57,9 +57,9 @@ manually from the Actions tab (**workflow_dispatch**) after tagging.
   (see `packages/core/package.json` `files`). `prepack`/`prepublishOnly` rebuild + test
   as a backstop even outside CI.
 - `@spintax/*` is owned via the `spintax` npm account (username = scope). Every package needs
-  its own Trusted Publisher entry pointing at its own publish workflow: `@spintax/core` and
-  `@spintax/mcp` have theirs; `@spintax/authoring-prompt`'s is pending its first publish (see
-  its section — do not remove `NPM_TOKEN` from its workflow before 0.1.0 is out); a further
+  its own Trusted Publisher entry pointing at its own publish workflow: `@spintax/core`,
+  `@spintax/mcp` and `@spintax/authoring-prompt` have theirs (the last since 2026-08-21, see
+  its section); a further
   package (`@spintax/conformance`, `@spintax/cli`) would need one too.
 
 ## Releasing `n8n-nodes-spintax`
@@ -163,15 +163,18 @@ entry is written; the first release is only `git tag -a prompt-v0.1.0` on that c
 push of the tag. Running `npm version patch` first would produce `0.1.1`, the workflow would
 accept `prompt-v0.1.1` perfectly happily, and 0.1.0 would never exist.
 
-**Trusted Publisher status: pending the first publish.** `0.1.0` goes out on the `NPM_TOKEN`
-repo secret, exactly as `@spintax/mcp` 0.1.0 did (see above: publish-then-connect, never
-the other way round). Provenance still applies. The follow-up, once `npm view
-@spintax/authoring-prompt version` answers:
+The Trusted Publisher entry is **in place since 2026-08-21** (npmjs.com →
+`@spintax/authoring-prompt` → Settings → Trusted Publisher → GitHub Actions, org
+`investblog`, repo `spintax-js`, workflow `release-prompt.yml`), so releases from `0.1.1`
+on need no token.
 
-- [ ] npmjs.com → `@spintax/authoring-prompt` → Settings → Trusted Publisher → GitHub
-      Actions, org `investblog`, repo `spintax-js`, workflow `release-prompt.yml`;
-- [ ] delete the `env: NODE_AUTH_TOKEN` block from the publish step in
-      `release-prompt.yml` and tick these boxes.
+**`0.1.0` went out on the `NPM_TOKEN` repo secret**, exactly as `@spintax/mcp` 0.1.0 did
+(publish-then-connect, never the other way round); provenance still applied. Both
+follow-up steps — the entry, then deleting the `env: NODE_AUTH_TOKEN` block from the
+publish step — are **done**. One registry note from that day: after `npm publish` the
+`dist-tags` endpoint answered at once, while the full packument (what `npm install` and
+`npm view` read) took about five minutes — the first 404s were replication, not a failed
+publish.
 
 Verify with a consumer, not just the registry: the tarball smoke
 (`npm run smoke:pack:prompt`) installs the package next to a locally packed
