@@ -1,5 +1,5 @@
 /**
- * Canonical LLM Spintax authoring prompt (v1) — spec `docs/spec-llm-authoring-prompt.md`.
+ * Canonical LLM Spintax authoring prompt — spec `docs/spec-llm-authoring-prompt.md`.
  *
  * ONE prompt, shared by every surface (Telegram bot, n8n node, playground, API), so that a
  * template drafted anywhere is drafted the same way. Product content, deliberately NOT part of

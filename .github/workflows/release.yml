@@ -83,6 +83,9 @@ jobs:
       - name: MCP server tarball smoke (bin over stdio + engine as a dependency)
         run: npm run smoke:pack:mcp
 
+      - name: Authoring-prompt tarball smoke (peer engine from the local pack)
+        run: npm run smoke:pack:prompt
+
       # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
       # publish token automatically, and attaches a provenance attestation.
       - name: Publish @spintax/core (provenance via OIDC)

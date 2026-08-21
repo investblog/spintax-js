@@ -443,8 +443,9 @@ at submission time**):
   `noExternal` — the published manifest has an empty `dependencies`, and `peerDependencies` is
   exactly `{ "n8n-workflow": "*" }` — the literal value n8n's `valid-peer-dependencies` lint rule
   enforces. This also **settles the launch-checklist "publish-or-bundle" question for the node:
-  bundle, forced.** Publishing `@spintax/authoring-prompt` to npm stays desirable for
-  spintax.net's skill-drift check (drop the sibling-checkout hack) but is no longer a gate here.
+  bundle, forced.** `@spintax/authoring-prompt` is on npm since 0.1.0 (#75, 2026-08-21) for the
+  consumers that import rather than bundle; the node keeps bundling it regardless — the zero-dep rule
+  above does not care whether the sibling is published.
 - **GitHub Actions + provenance is mandatory** for verified nodes since May 2026 — our OIDC
   release pipeline already works exactly this way.
 - **English-only** node interface and docs (parameter names, descriptions, errors, README).

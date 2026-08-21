@@ -1,10 +1,14 @@
-# Canonical LLM Spintax Authoring Prompt (spec draft)
+# Canonical LLM Spintax Authoring Prompt
 
-Status: **IMPLEMENTED — v1 shipped.** `packages/authoring-prompt` exists (merged in
+Status: **IMPLEMENTED — shipped, and published.** `packages/authoring-prompt` exists (merged in
 [#46](https://github.com/investblog/spintax-js/pull/46)); the Telegram bot is its first consumer.
+Since 2026-08-21 it is on npm as `@spintax/authoring-prompt` (0.1.0,
+[#75](https://github.com/investblog/spintax-js/issues/75)), so an external pipeline imports the
+prompt instead of copying its text — the drift §1 describes is exactly what a copy recreates.
 This document is now the **rationale**, not a plan — read it for *why* the prompt is shaped this
-way. The one part still outstanding is §4, the prompt-conformance suite, tracked as
-[#47](https://github.com/investblog/spintax-js/issues/47).
+way. §4, the prompt-conformance suite, is done too
+([#47](https://github.com/investblog/spintax-js/issues/47), closed): `npm run prompt:conformance`
+holds a committed 100% baseline on claude-opus-5 (`packages/authoring-prompt/conformance/reports/`).
 Owner: 301st
 Tracking issue: [#45](https://github.com/investblog/spintax-js/issues/45) — **closed, delivered**.
 Prerequisite for: [`spec-n8n-node.md`](./spec-n8n-node.md) (#44) — **satisfied**.
@@ -45,16 +49,19 @@ The material to consolidate is already written, as guides on spintax.net (§6).
 A canonical prompt that lives only as a page at `spintax.net/docs/llm-authoring-prompt/` will be
 **copy-pasted by each consumer and will drift** — which is the exact failure we are fixing.
 
-**Canonical source: `packages/authoring-prompt/`** in this repo — a tiny zero-dependency package
-that exports the prompt and a builder. The website *renders* it; it is not the source.
+**Canonical source: `packages/authoring-prompt/`** in this repo — a small package that exports the
+prompt and a builder, with one runtime dependency, a **peer** on `@spintax/core`: the prompt asks
+the engine for plural arity rather than keeping a copy of the table, which drifted twice (see the
+header of `src/index.ts`). The website *renders* it; it is not the source.
 
 - Consumers: the Telegram bot, the n8n node, the browser playground, a future API — all import it.
 - **NOT part of `@spintax/core`.** The core is the engine; a prompt is product content (§2.2, small
   core). The engine must not grow authoring opinions.
 - Same shape as the golden corpus: one language-neutral source of truth, many consumers. *The
   corpus is the engine's contract; the prompt is the authoring contract.*
-- Ships a `promptVersion` (`"1"`), emitted by consumers alongside output, so any generated template
-  is traceable to the prompt that produced it.
+- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"2"`; it moves when the text changes in a way
+  that can change model output, independently of the package version), emitted by consumers
+  alongside output, so any generated template is traceable to the prompt that produced it.
 
 ## 3. The prompt contract (v1)
 

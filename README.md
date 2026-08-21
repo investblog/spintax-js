@@ -73,7 +73,7 @@ Full authoring reference lives in the parent project's `docs/gtw-syntax-referenc
 packages/
   core/              # @spintax/core — the engine (published)
   conformance/       # the shared golden corpus — the cross-engine parity gate
-  authoring-prompt/  # the canonical LLM prompt for writing spintax (shared by every surface)
+  authoring-prompt/  # @spintax/authoring-prompt — the canonical LLM prompt for writing spintax (published)
 examples/
   worker/            # Cloudflare Worker — HTTP API (validate/render/extract/analyze); deployed
   telegram-bot/      # Telegram bot @spintaxnetbot — validate + preview + AI /draft; deployed

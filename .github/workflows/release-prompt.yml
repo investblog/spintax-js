@@ -1,0 +1,111 @@
+name: Release authoring prompt
+
+# Publishes @spintax/authoring-prompt to npm with a PROVENANCE attestation.
+#
+# FIRST PUBLISH (0.1.0) goes out on the NPM_TOKEN repo secret — the trap of a NEW package
+# that @spintax/mcp 0.1.0 and the n8n node both hit: a Trusted Publisher entry cannot
+# precede the first publish, because there is no package to attach it to. Provenance still
+# applies, because it comes from `id-token: write` + `--provenance`, not from trusted
+# publishing. The follow-up, once 0.1.0 is on npm (RELEASING.md has the checklist):
+#   1. npmjs.com → @spintax/authoring-prompt → Settings → Trusted Publisher → GitHub
+#      Actions, org/repo = investblog/spintax-js, workflow = release-prompt.yml;
+#   2. delete the `env: NODE_AUTH_TOKEN` block from the publish step below.
+# From then on npm exchanges the GitHub OIDC token for a short-lived publish token by
+# itself. The @spintax/core and @spintax/mcp entries do NOT cover this package; every
+# package needs its own.
+#
+# Release flow: bump packages/authoring-prompt/package.json (one file — the package has no
+# version constant of its own; PROMPT_VERSION is the prompt TEXT's version and moves
+# independently) → CHANGELOG → commit → tag prompt-vX.Y.Z → push tag. The prefix keeps
+# it out of release.yml's `v*` glob.
+
+on:
+  push:
+    tags: ['prompt-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required: OIDC token for provenance (and later for trusted publishing)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing / provenance needs npm >= 11.5.1 — newer than the npm
+      # bundled with the Node runtime, so upgrade it.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - name: Install
+        run: npm ci
+
+      # Safety: publishes happen ONLY from a prompt-vX.Y.Z tag ref, and the tag must
+      # match the version we're about to publish, so a stale/mismatched tag — or a
+      # workflow_dispatch pointed at a branch — fails loudly instead of publishing an
+      # untagged commit. (Dispatch from a tag ref is still allowed:
+      # `gh workflow run --ref prompt-vX.Y.Z`.)
+      - name: Verify ref is a release tag matching the package version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/prompt-v*) ;;
+            *)
+              echo "::error::Refusing to publish from '$GITHUB_REF' — run this workflow from a prompt-vX.Y.Z tag"
+              exit 1
+              ;;
+          esac
+          TAG="${GITHUB_REF_NAME#prompt-v}"
+          PKG="$(node -p "require('./packages/authoring-prompt/package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Tag prompt-v$TAG does not match @spintax/authoring-prompt version $PKG"
+            exit 1
+          fi
+          echo "Publishing @spintax/authoring-prompt@$PKG"
+
+      # A tag can point at ANY commit — main's CI passing is not a precondition for
+      # publishing. So the release job re-runs the full CI gate set rather than
+      # trusting an upstream green. Keep these steps in sync with ci.yml.
+      - name: Validate golden corpus (schema)
+        run: npm run conformance:validate
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Package checks (publint + attw)
+        run: npm run check:pkg
+
+      - name: Tarball smoke (install + ESM/CJS import)
+        run: npm run smoke:pack
+
+      - name: n8n node tarball smoke (require + bundled engine)
+        run: npm run smoke:pack:n8n
+
+      - name: MCP server tarball smoke (bin over stdio + engine as a dependency)
+        run: npm run smoke:pack:mcp
+
+      - name: Authoring-prompt tarball smoke (peer engine from the local pack)
+        run: npm run smoke:pack:prompt
+
+      # NODE_AUTH_TOKEN is here for the FIRST publish only — see the header. Once the
+      # Trusted Publisher entry exists, delete the `env` block: npm then exchanges the
+      # GitHub OIDC token for a short-lived publish token by itself.
+      - name: Publish @spintax/authoring-prompt (provenance)
+        run: npm publish -w @spintax/authoring-prompt --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

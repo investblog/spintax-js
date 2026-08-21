@@ -1,10 +1,31 @@
 {
   "name": "@spintax/authoring-prompt",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Canonical LLM prompt for authoring spintax templates — one prompt, shared by the bot, the n8n node, the playground and the API (DRAFT, not published)",
+  "version": "0.1.0",
+  "description": "Canonical LLM prompt for authoring spintax templates — one prompt, shared by the bot, the n8n node, the playground, the API and any pipeline that drafts templates with a model",
+  "keywords": [
+    "spintax",
+    "prompt",
+    "llm",
+    "ai",
+    "claude",
+    "authoring",
+    "text-spinning",
+    "text-generation",
+    "content-generation",
+    "template",
+    "typescript"
+  ],
   "license": "MIT",
   "author": "301st (https://301.st)",
+  "homepage": "https://spintax.net",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/investblog/spintax-js.git",
+    "directory": "packages/authoring-prompt"
+  },
+  "bugs": {
+    "url": "https://github.com/investblog/spintax-js/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -20,18 +41,26 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
+    "check:pkg": "publint --strict && attw --pack .",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run build && npm test",
     "conformance": "node --env-file-if-exists=../../.env conformance/run.mjs"
   },
   "peerDependencies": {

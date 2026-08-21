@@ -1,7 +1,9 @@
-# Releasing `@spintax/core` (plus `n8n-nodes-spintax` and `@spintax/mcp` — see the last two sections)
+# Releasing `@spintax/core` (plus `n8n-nodes-spintax`, `@spintax/mcp` and `@spintax/authoring-prompt` — see the last three sections)
 
 Releases publish from GitHub Actions (`.github/workflows/release.yml`) using npm
-**Trusted Publishing (OIDC)** — no npm tokens are stored anywhere, and every release
+**Trusted Publishing (OIDC)** — no npm token is used for any established package (the one
+exception is the first publish of a NEW package, which has no Trusted Publisher entry yet —
+see the `@spintax/mcp` and `@spintax/authoring-prompt` sections), and every release
 carries a **provenance** attestation linking the published tarball to the exact repo,
 commit, and workflow run.
 
@@ -54,9 +56,11 @@ manually from the Actions tab (**workflow_dispatch**) after tagging.
 - The engine ships zero runtime dependencies; the published tarball is `dist/` + docs
   (see `packages/core/package.json` `files`). `prepack`/`prepublishOnly` rebuild + test
   as a backstop even outside CI.
-- `@spintax/*` is owned via the `spintax` npm account (username = scope). Additional
-  packages (`@spintax/conformance`, `@spintax/cli`) would each need their own Trusted
-  Publisher entry pointing at their publish workflow.
+- `@spintax/*` is owned via the `spintax` npm account (username = scope). Every package needs
+  its own Trusted Publisher entry pointing at its own publish workflow: `@spintax/core` and
+  `@spintax/mcp` have theirs; `@spintax/authoring-prompt`'s is pending its first publish (see
+  its section — do not remove `NPM_TOKEN` from its workflow before 0.1.0 is out); a further
+  package (`@spintax/conformance`, `@spintax/cli`) would need one too.
 
 ## Releasing `n8n-nodes-spintax`
 
@@ -132,3 +136,53 @@ then tested against an engine nobody is shipping. `test/artifact.test.ts` fails 
 that, and it is there because it happened. The smoke packs `@spintax/core` locally rather
 than pulling it from the registry, so a range naming an unpublished version is not a
 chicken-and-egg problem: release core first, and this gate is green the whole way through.
+
+## Releasing `@spintax/authoring-prompt`
+
+Same machinery, own workflow (`.github/workflows/release-prompt.yml`), own tag prefix —
+`prompt-vX.Y.Z`. First release: 0.1.0 (2026-08-21,
+[#75](https://github.com/investblog/spintax-js/issues/75)), so a pipeline can import the
+prompt instead of copying its text.
+
+**Two version numbers, deliberately.** The package version is semver over the exported API.
+`PROMPT_VERSION` (`src/index.ts`) is the version of the prompt TEXT — bump it when a wording
+change can change model output, because consumers assert it and conformance reports are
+filed under it (`conformance/reports/`). A wording change is therefore two bumps; an API
+change that leaves the text alone is one. No test ties them together, on purpose.
+
+```sh
+npm version patch -w @spintax/authoring-prompt   # NOT for 0.1.0 — see below
+# update packages/authoring-prompt/CHANGELOG.md (and PROMPT_VERSION if the text moved)
+git add -A && git commit -m "release(authoring-prompt): @spintax/authoring-prompt X.Y.Z"
+git tag -a prompt-vX.Y.Z -m "@spintax/authoring-prompt X.Y.Z"
+git push origin main && git push origin prompt-vX.Y.Z
+```
+
+**The bootstrap release skips the bump.** The manifest already says `0.1.0` and its CHANGELOG
+entry is written; the first release is only `git tag -a prompt-v0.1.0` on that commit and a
+push of the tag. Running `npm version patch` first would produce `0.1.1`, the workflow would
+accept `prompt-v0.1.1` perfectly happily, and 0.1.0 would never exist.
+
+**Trusted Publisher status: pending the first publish.** `0.1.0` goes out on the `NPM_TOKEN`
+repo secret, exactly as `@spintax/mcp` 0.1.0 did (see above: publish-then-connect, never
+the other way round). Provenance still applies. The follow-up, once `npm view
+@spintax/authoring-prompt version` answers:
+
+- [ ] npmjs.com → `@spintax/authoring-prompt` → Settings → Trusted Publisher → GitHub
+      Actions, org `investblog`, repo `spintax-js`, workflow `release-prompt.yml`;
+- [ ] delete the `env: NODE_AUTH_TOKEN` block from the publish step in
+      `release-prompt.yml` and tick these boxes.
+
+Verify with a consumer, not just the registry: the tarball smoke
+(`npm run smoke:pack:prompt`) installs the package next to a locally packed
+`@spintax/core`, builds a real prompt, validates every example the prompt teaches from
+under a 3-form locale, and asserts the engine it resolved is the one packed — the one
+thing a peer-dependency package breaks on that build and test cannot see.
+
+**`@spintax/core` is a PEER, and the range (`>=0.2.0`) is open above on purpose.** The
+prompt reads two things from the engine — `pluralArity` and `normalizeBaseLang` — and
+must agree with the engine the host validates with, which a peer guarantees and a nested
+dependency would not. When a core release changes what those two answer (a locale added
+to the 3-form table, a normalization rule), cut a prompt release in the same wave and say
+so in its CHANGELOG; the smoke packs core locally, so the pair is provable before either
+is on npm.
