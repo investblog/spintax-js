@@ -1,6 +1,6 @@
 {
   "name": "@spintax/authoring-prompt",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Canonical LLM prompt for authoring spintax templates — one prompt, shared by the bot, the n8n node, the playground, the API and any pipeline that drafts templates with a model",
   "keywords": [
     "spintax",

@@ -8,6 +8,49 @@ the prompt TEXT changes in a way that can change model output — it is what a c
 against, and what a conformance report is filed under. The package version follows semver over
 the exported API.
 
+## 0.2.1 — 2026-08-23
+
+`PROMPT_VERSION` `'3'` → `'4'`. No API change. Two fixes in the Slavic grammar teaching, both
+raised by the spintax.net session and both verified against the engine before being taken.
+
+**A WRONG/RIGHT pair that rendered identically.** The east-slavic block taught
+`в {городе|деревню}` → `{в городе|в деревню}`, and both forms produce the same output set
+(`В городе` / `В деревню`): the preposition never varied, so moving it inside changed nothing. The
+model was being shown a distinction it could not observe. Replaced with
+`{после|при} первом заказе` → `{после первого заказа|при первом заказе}`, which renders
+`После первом заказе` before (ungrammatical — `после` takes the genitive) and is clean after. BCS
+had the same inert shape (`u {gradu|selo}`) and gets `{u|iz} gradu` → `{u gradu|iz grada}`. A test
+now asserts the output sets DIFFER, so an inert pair cannot ship again.
+
+**How to spin a declined noun — the ladder that was missing entirely.** A definition correlates a
+name with ITSELF; nothing in the engine correlates two names. So two per-case definitions are two
+independent rolls, and `#def %V% = {посетители|гости}` beside
+`#def %VG% = {посетителей|гостей}` renders `Гости — для посетителей`. The first draft of this
+advice said "one word per family, never a list" — which throws away the variety `#def` exists to
+provide, and the owner rejected it. The correct rule keeps the list and collapses the roll:
+
+1. Choose synonyms that **decline alike** and keep the endings outside the definition, so one roll
+   serves every case: `#def %e% = {магазин|сайт|проект}` → `О %e%е, для %e%а, к %e%у`. Test every
+   branch against every case — one differing ending disqualifies the branch, and `{больш|нов}`
+   breaks in the nominative alone (`Большый проект`), which is the kind of defect that survives
+   proofreading.
+2. Endings agree, stems differ — cut at the stem and name the cases by REFERENCING it:
+   `#def %s% = {посетител|гост}`, `#def %V% = %s%и`, `#def %VG% = %s%ей`. The stem must be `#def`:
+   under `#set` it re-rolls per use and the correlation is lost. This is where the `#def`/`#set`
+   distinction is at its most destructive, and the prompt now shows it there.
+3. They genuinely decline differently — the whole span in one enumeration.
+
+Every rung is asserted in the suite against the real engine, including the anti-pattern.
+
+Conformance re-run: `conformance/reports/v4-claude-opus-5-2026-08-23.json`, **24/24 valid**, all
+four secondary metrics at 100%.
+
+Also from the same review, and NOT taken into the engine: `validate()` suppresses `plural.arity`
+when a form slot holds a variable, while `render()` degrades the block to the fullwidth fallback —
+so a host cannot pre-screen for it. That suppression is the deliberate #66 rule; what was missing
+was any record of what the renderer does instead. Written up in
+`packages/conformance/README.md` with the minimal repro and what would move it into work.
+
 ## 0.2.0 — 2026-08-23
 
 `PROMPT_VERSION` `'2'` → `'3'`. No API change: same exports, same types. The prompt TEXT gained

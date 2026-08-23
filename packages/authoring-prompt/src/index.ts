@@ -15,7 +15,7 @@
 import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 
 /** Bump when the prompt text changes in a way that can change model output. */
-export const PROMPT_VERSION = '3';
+export const PROMPT_VERSION = '4';
 
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
 
@@ -388,10 +388,32 @@ function grammarBlock(locale: string | undefined): string {
 - Every option inside {…} must preserve GENDER, CASE and NUMBER agreement with the words around it.
     WRONG: {хороший|отличная} курс     ← gender breaks in the second branch
     RIGHT: {хороший|отличный} курс
-- If a branch changes the noun, any adjective, participle or preposition that governs it may have
-  to change too. In that case move them INSIDE the branch:
-    WRONG: в {городе|деревню}
-    RIGHT: {в городе|в деревню}
+- If a branch changes the case the sentence needs, the preposition that governs it must move INSIDE
+  the branch. A preposition left outside governs both branches, and only one of them survives:
+    WRONG: {после|при} первом заказе   ← "после первом заказе": после takes the genitive
+    RIGHT: {после первого заказа|при первом заказе}
+- SPINNING A DECLINED NOUN OR ADJECTIVE. One rule underneath all of it: forms that must agree have
+  to come from ONE roll. In order of preference:
+  1. Choose synonyms that DECLINE ALIKE and keep the endings OUTSIDE the definition — then a single
+     roll serves every case at once:
+        #def %e% = {магазин|сайт|проект}
+        О %e%е говорят, для %e%а есть скидка, к %e%у можно вернуться.
+     Test every branch against every case you need. ONE differing ending disqualifies the branch:
+     {больш|нов} breaks in the nominative alone ("Большый проект") and is correct everywhere else —
+     exactly the kind of defect that survives proofreading and shows up in one variant out of many.
+  2. Endings agree but the stems differ — cut at the STEM, and name the cases by REFERENCING it, so
+     they still come from that one roll:
+        #def %s%  = {посетител|гост}
+        #def %V%  = %s%и
+        #def %VG% = %s%ей
+        %V% — для %VG%.
+     The stem must be #def. Under #set it re-rolls at every use and you get "Гости — для
+     посетителей".
+  3. They genuinely decline differently — put the whole span inside ONE enumeration:
+        #def %p% = {посетители — для посетителей|гости — для гостей}
+  NEVER give each case its own list. Two definitions are two independent rolls:
+        WRONG: #def %V% = {посетители|гости}
+               #def %VG% = {посетителей|гостей}     ← renders "Гости — для посетителей"
 - NEVER hand-roll count forms: {товар|товара|товаров} is WRONG. Write {plural %n%: товар|товара|товаров}
   and let the engine choose the bucket for the actual number — you cannot do it correctly, it depends
   on the count.`;
@@ -402,10 +424,16 @@ function grammarBlock(locale: string | undefined): string {
 - Every option inside {…} must preserve GENDER, CASE and NUMBER agreement with the words around it.
     WRONG: {dobar|odlična} kurs      ← gender breaks in the second branch
     RIGHT: {dobar|odličan} kurs
-- If a branch changes the noun, any adjective or preposition that governs it may have to change too.
-  In that case move them INSIDE the branch:
-    WRONG: u {gradu|selo}
-    RIGHT: {u gradu|u selo}
+- If a branch changes the case the sentence needs, the preposition that governs it must move INSIDE
+  the branch. A preposition left outside governs both branches, and only one of them survives:
+    WRONG: {u|iz} gradu     ← "iz gradu": iz takes the genitive
+    RIGHT: {u gradu|iz grada}
+- Forms that must AGREE have to come from ONE roll. Prefer synonyms that DECLINE ALIKE and keep the
+  endings outside the definition, so a single #def serves every case; test every branch against
+  every case you need, because one differing ending is enough to break it. NEVER give each case its
+  own list — two definitions roll independently, so the nominative from one and the genitive from
+  the other will not match. If the synonyms genuinely decline differently, put the whole span inside
+  one enumeration instead.
 - Counts take THREE buckets, same boundaries as Russian. NEVER hand-roll them:
   {bonus|bonusa|bonusa} is WRONG. Write {plural %n%: bonus|bonusa|bonusa} and let the engine pick.
 - Write the WHOLE template in ONE script. Do not mix Latin and Cyrillic inside a template or, worse,

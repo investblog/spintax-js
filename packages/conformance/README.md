@@ -93,6 +93,20 @@ expansion budget all suppress the count-based verdicts — `plural.arity` and
 `plural.locale-missing` alike. Silence on an unknowable input is the rule; a confident wrong
 answer is what it replaced. Predicting the roll was tried first and produced false errors.
 
+**The renderer does not stay silent, and a host cannot pre-screen for that.** The suppression is a
+validator policy; `render()` still has to decide, and it decides destructively — a form count that
+disagrees with the locale degrades the block to the lenient fullwidth `｛…｝` fallback, in the
+output the reader sees. Minimal case, no directives at all:
+
+    You have %n% {plural %n%: %B% a|%B% b|%B% c}.
+
+`validate(en)` and `analyze(en)` report no error; `render(en)` emits `｛plural 3: …｝`. So a host
+that gates on "no error-severity diagnostics" can ship the fallback. Reported here rather than
+fixed: closing it means the validator counting top-level separators before substitution, which is a
+verdict change in five engines for a victim that needs both a variable inside a form slot AND a
+form count wrong for the render locale. Measured 2026-08-23; what would move it into work is a
+host hitting it in production.
+
 One prediction is not a prediction: a `#set` named **directly** in the form slot is substituted
 verbatim and is still spintax when the plural is decided, so its brackets earn
 `plural.nested-brackets`. Reached through a `#def` it is rolled first and earns nothing.

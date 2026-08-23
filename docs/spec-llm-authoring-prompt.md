@@ -59,7 +59,7 @@ header of `src/index.ts`). The website *renders* it; it is not the source.
   core). The engine must not grow authoring opinions.
 - Same shape as the golden corpus: one language-neutral source of truth, many consumers. *The
   corpus is the engine's contract; the prompt is the authoring contract.*
-- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"3"`; it moves when the text changes in a way
+- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"4"`; it moves when the text changes in a way
   that can change model output, independently of the package version), emitted by consumers
   alongside output, so any generated template is traceable to the prompt that produced it.
 

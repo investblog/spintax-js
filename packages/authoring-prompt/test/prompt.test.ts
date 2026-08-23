@@ -143,6 +143,55 @@ describe('buildAuthoringPrompt', () => {
     expect(render('{?vip?Welcome back}', { seed: 1, context: {} })).toBe('');
   });
 
+  // A WRONG/RIGHT pair has to differ in what it RENDERS, or it teaches a distinction the model
+  // cannot observe. `в {городе|деревню}` → `{в городе|в деревню}` shipped for months and produced
+  // the identical output set both ways: the preposition never varied, so moving it inside changed
+  // nothing. The replacements break before and are clean after. Asserted per profile because the
+  // BCS block carries its own pair.
+  test.each([
+    ['ru', '{после|при} первом заказе', '{после первого заказа|при первом заказе}'],
+    ['hr', '{u|iz} gradu', '{u gradu|iz grada}'],
+  ])('[%s] the taught repair actually changes the output set', (locale, wrong, right) => {
+    const outs = (t: string) =>
+      [...new Set([1, 2, 3, 4, 5, 6, 7, 8].map((seed) => render(t, { seed, locale })))].sort();
+    expect(errorsIn(wrong, locale)).toEqual([]); // both are VALID — the defect is grammatical
+    expect(errorsIn(right, locale)).toEqual([]);
+    expect(outs(wrong)).not.toEqual(outs(right));
+
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x', locale });
+    expect(systemPrompt).toContain(wrong);
+    expect(systemPrompt).toContain(right);
+  });
+
+  // The case-family ladder, and why it is a ladder: a definition correlates a name with ITSELF,
+  // and nothing in the engine correlates two names. Every rung is a way of collapsing the forms
+  // that must agree into ONE roll — the list, and therefore the variety, is never given up.
+  test('teaches how to spin a declined noun without splitting the roll', () => {
+    const set = (t: string) =>
+      new Set([1, 3, 5, 7, 11, 13, 17, 19, 23].map((seed) => render(t, { seed, locale: 'ru' })));
+
+    // Rung 1: same declension, endings outside — one roll serves every case.
+    expect(set('#def %e% = {магазин|сайт|проект}\nО %e%е, для %e%а, к %e%у.')).toEqual(
+      new Set(['О сайте, для сайта, к сайту.', 'О проекте, для проекта, к проекту.', 'О магазине, для магазина, к магазину.']),
+    );
+
+    // Rung 2: stems differ — cut at the stem and REFERENCE it, so the cases still correlate.
+    const nested = '#def %s%  = {посетител|гост}\n#def %V%  = %s%и\n#def %VG% = %s%ей\n%V% — для %VG%.';
+    expect(set(nested)).toEqual(new Set(['Гости — для гостей.', 'Посетители — для посетителей.']));
+    // ...and only under #def. #set re-rolls per use, which is where the distinction bites hardest.
+    expect(set(nested.replace('#def %s%', '#set %s%'))).toContain('Гости — для посетителей.');
+
+    // The anti-pattern the ladder exists to prevent: two lists, two independent rolls.
+    expect(set('#def %V% = {посетители|гости}\n#def %VG% = {посетителей|гостей}\n%V% — для %VG%.')).toContain(
+      'Гости — для посетителей.',
+    );
+
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x', locale: 'ru' });
+    expect(systemPrompt).toContain('come from ONE roll');
+    expect(systemPrompt).toContain('ONE differing ending disqualifies the branch');
+    expect(systemPrompt).toContain('NEVER give each case its own list');
+  });
+
   // The scope boundary (#76) was stated in the spec and in the `Channel` doc comment — i.e. to
   // readers of the code, never to the model. A brief asking for an article therefore got one,
   // markup and all, because nothing in the 6.9 KB of system prompt mentioned length or structure.
