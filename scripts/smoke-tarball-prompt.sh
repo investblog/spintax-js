@@ -44,7 +44,11 @@ SMOKE_CORE_VERSION="$(node -p "require('$ROOT/packages/core/package.json').versi
 export SMOKE_CORE_VERSION
 
 node -e "const p=require('@spintax/authoring-prompt'); if(typeof p.buildAuthoringPrompt!=='function'){console.error('CJS entry missing buildAuthoringPrompt');process.exit(1)} console.log('  CJS require ok')"
-node --input-type=module -e "import('@spintax/authoring-prompt').then(p=>{ if(p.PROMPT_VERSION!=='2'){console.error('ESM entry: PROMPT_VERSION is '+p.PROMPT_VERSION+', expected 2');process.exit(1)} console.log('  ESM import ok') })"
+# Read the expected version from the SOURCE, never a literal: pinned to '2' here, this line
+# failed the release of every later prompt version instead of catching a broken tarball.
+SMOKE_PROMPT_VERSION="$(node -p "require('$ROOT/packages/authoring-prompt/dist/index.cjs').PROMPT_VERSION")"
+export SMOKE_PROMPT_VERSION
+node --input-type=module -e "import('@spintax/authoring-prompt').then(p=>{ const want=process.env.SMOKE_PROMPT_VERSION; if(p.PROMPT_VERSION!==want){console.error('ESM entry: PROMPT_VERSION is '+p.PROMPT_VERSION+', expected '+want);process.exit(1)} console.log('  ESM import ok') })"
 
 node -e "
 const assert = require('node:assert');

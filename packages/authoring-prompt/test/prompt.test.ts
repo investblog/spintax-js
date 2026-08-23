@@ -116,6 +116,42 @@ describe('buildAuthoringPrompt', () => {
     expect(systemPrompt).toContain('EMPTY branch makes a word optional');
     expect(systemPrompt).toContain('{a|b||c}');
   });
+
+  // A directive is line-anchored in the grammar, and the prompt used to leave that to inference
+  // from how the worked examples happen to be laid out. The cost of getting it wrong is unusual:
+  // the template stays VALID (the only diagnostic is a warning), so neither validate() nor a
+  // repair round built from it can catch the defect — the directive is simply printed to the
+  // reader. That makes the prompt the only place the rule can live, which is why it is a HARD
+  // RULE and not advice. The engine assertion below is the evidence, kept executable so the day
+  // mid-line directives start erroring is the day this test tells us the rule can be relaxed.
+  test('teaches that #def / #set own their line — the defect no validator reports', () => {
+    const midLine = 'Hello. #def %a% = {x|y} and %a% here.';
+    expect(errorsIn(midLine, 'en')).toEqual([]); // valid, and still broken
+    expect(render(midLine, { seed: 1 })).toContain('#def');
+
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x' });
+    expect(systemPrompt).toContain('START THEIR OWN LINE');
+    expect(systemPrompt).toContain('Check every #def and #set is alone on its own line');
+  });
+
+  // `{?VAR?then}` is what a host actually wants for a detail that disappears when the data is
+  // missing; taught only the two-branch form, a model invents filler for the else half.
+  test('teaches the one-branch conditional, not just {?VAR?then|else}', () => {
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x' });
+    expect(systemPrompt).toContain('{?VAR?then} emits NOTHING');
+    expect(errorsIn('{?vip?Welcome back}', 'en')).toEqual([]);
+    expect(render('{?vip?Welcome back}', { seed: 1, context: {} })).toBe('');
+  });
+
+  // The scope boundary (#76) was stated in the spec and in the `Channel` doc comment — i.e. to
+  // readers of the code, never to the model. A brief asking for an article therefore got one,
+  // markup and all, because nothing in the 6.9 KB of system prompt mentioned length or structure.
+  test('states its own scope to the model: one block, two passes', () => {
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x' });
+    expect(systemPrompt).toContain('SCOPE — you write ONE block of copy');
+    expect(systemPrompt).toContain('TWO PASSES, never merged');
+    expect(systemPrompt).toContain('once per block');
+  });
 });
 
 // Drawn from a real Russian template set (casino-platform): the author had to declare one variable

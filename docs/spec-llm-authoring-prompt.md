@@ -59,7 +59,7 @@ header of `src/index.ts`). The website *renders* it; it is not the source.
   core). The engine must not grow authoring opinions.
 - Same shape as the golden corpus: one language-neutral source of truth, many consumers. *The
   corpus is the engine's contract; the prompt is the authoring contract.*
-- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"2"`; it moves when the text changes in a way
+- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"3"`; it moves when the text changes in a way
   that can change model output, independently of the package version), emitted by consumers
   alongside output, so any generated template is traceable to the prompt that produced it.
 
@@ -70,11 +70,15 @@ Sections, in order:
 1. **Role** — "you write valid Spintax templates".
 2. **Goal** — **readable template first, variety second.** Every resolved variant must read like a
    human wrote it. (From *Reverse Authoring Mindset*: write the final text first, add markup last.)
+   Since v3 that ordering is stated to the model as **two passes that are never merged** — prose
+   straight through with no markup, then markup over the finished text — together with the scope
+   boundary below. See "The prompt has to be told its own scope".
 3. **Supported syntax** — the minimum viable set, nothing else exists:
    `{a|b}` · `[a|b]` · `%var%` · `{?VAR?then|else}` · `{plural %n%: one|few|many}`
 4. **Hard rules** — grammar-safe branches (all options must agree in the surrounding sentence);
    variables only from the supplied allow-list; **no unsupported syntax invented**; no nesting
-   deeper than needed.
+   deeper than needed; and (v3) **`#def` / `#set` start their own line** — the grammar is
+   line-anchored, and a mid-line directive is the one authoring defect no validator reports.
 5. **Output contract** — return the template and nothing else: no prose, no quotes, no code fences.
 6. **Self-check** — before answering: mentally render ~5 variants; if any reads awkwardly or breaks
    agreement, fix the branch, not the sentence.
@@ -109,6 +113,29 @@ explicitly does not.
 which is right for its stated purpose; a host that wants a 4–5 sentence paragraph for a block says
 so in `brief` ("one paragraph of four to five sentences about …"). The channel block is a default,
 the brief is the instruction.
+
+### The prompt has to be told its own scope
+
+Everything above was written for **readers of this repo**. It sat in the spec and in the `Channel`
+doc comment — and nowhere in the prompt. Measured 2026-08-23 on the built v2 system prompt: 6 939
+characters, and **zero** occurrences of `long`, `block`, `paragraph`, `article` or `structure`. The
+only length signal in the whole prompt was the channel line in the *user* part —
+`CHANNEL: generic short marketing copy` — which is a default the brief is explicitly allowed to
+override.
+
+So a host that passed "write an 800-word article" got an 800-word article, with the markup the model
+invented to structure it, and nothing pushed back. The division of labour #76 established was real
+and correct; it was simply never communicated to the party that had to follow it.
+
+v3 states it in the system prompt: **SCOPE — one block of copy, never a document**, and if the brief
+describes something with structure, write the single block it most directly asks for. The host calls
+once per block. A brief asking for a whole document now yields one paragraph — a visible, cheap
+failure instead of a template that breaks in ways nobody can see in the source. That behaviour
+change is what `PROMPT_VERSION` exists to announce.
+
+The same measurement is why the two-pass instruction is now explicit rather than implied by "write
+the final copy as if for a human": the ordering matters most exactly where it was least stated —
+at length.
 
 ### Language is not a cosmetic knob
 

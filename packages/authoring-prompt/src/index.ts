@@ -15,7 +15,7 @@
 import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 
 /** Bump when the prompt text changes in a way that can change model output. */
-export const PROMPT_VERSION = '2';
+export const PROMPT_VERSION = '3';
 
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
 
@@ -177,7 +177,20 @@ const GOAL = `GOAL — readable template first, variety second.
 Write the final copy as if for a human, then add markup only where a word or clause could genuinely
 be said another way. EVERY variant the renderer can produce must read like a human wrote it. A
 template that can produce one awkward variant is a broken template, no matter how much variety it
-offers.`;
+offers.
+
+TWO PASSES, never merged. First write the copy straight through with NO markup at all, as one
+finished piece of text. Only then go back over that finished text and add the markup. Inventing the
+prose and choosing the branches at the same time is what produces variants that disagree with
+themselves, and the longer the copy, the more reliably it happens — past a few sentences the two
+passes stop being a preference and become the only way to get it right.
+
+SCOPE — you write ONE block of copy: a paragraph, a headline, a message. Never a document. No
+headings, no lists, no markdown, no HTML (hard rule 4), and no brief overrides that. If the brief
+describes something with structure — an article, several sections, a page — write only the single
+block it most directly asks for. The host calls you once per block and assembles the structure
+itself; a template that tries to hold a whole document breaks in ways nobody can see in the
+source.`;
 
 /**
  * Which language the prompt TEACHES IN for a locale — the examples, and the language-specific
@@ -322,6 +335,9 @@ ${indent(ex.permutation)}
 
 {?VAR?then|else}
     Conditional. Emits "then" if VAR has a truthy value, otherwise "else".
+    The "else" half is OPTIONAL: {?VAR?then} emits NOTHING when VAR is empty. That is the form to
+    use for a detail that should simply disappear when the host has no value for it — do not pad
+    it with a filler sentence.
     Use it when the copy must adapt to data that may be missing:
 ${indent(ex.conditional)}
 
@@ -340,7 +356,10 @@ const RULES = `HARD RULES
 3. Counts. Any number followed by a noun goes through {plural …}. You cannot pick bucket forms by
    hand — the engine does it per locale.
 4. No syntax outside the list above. No markdown, no HTML.
-5. Do not spin proper nouns, brand names, prices, URLs, or legal wording. Vary the copy AROUND them.`;
+5. Do not spin proper nouns, brand names, prices, URLs, or legal wording. Vary the copy AROUND them.
+6. Directives. #def and #set must START THEIR OWN LINE, one per line, above the copy that uses them.
+   A directive written mid-sentence is NOT a directive: it stays literal text and gets printed to
+   the reader, and nothing downstream reports it as an error.`;
 
 const OUTPUT = `OUTPUT CONTRACT
 Return the template and NOTHING else — no explanation, no quotes, no code fences, no "Template:"
@@ -351,7 +370,9 @@ const SELF_CHECK = `SELF-CHECK — do this before you answer
   rewrite the whole sentence.
 - Check every %var% against ALLOWED VARIABLES.
 - Check every [ … ] has a sep and really holds equal-weight items.
-- Check every count goes through {plural …}.`;
+- Check every count goes through {plural …}.
+- Check every #def and #set is alone on its own line, not buried in a sentence.
+- Check you returned ONE block, with no heading, list or markup of any kind.`;
 
 /**
  * Grammar is language-specific, and the Slavic cases are where a model quietly produces garbage:
