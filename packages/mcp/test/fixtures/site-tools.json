@@ -286,5 +286,54 @@
       "idempotentHint": true,
       "openWorldHint": false
     }
+  },
+  {
+    "name": "spintax_authoring_guide",
+    "title": "How to write a spintax template",
+    "description": "Read this BEFORE writing or editing a spintax template — it is the canonical authoring guide the whole spintax toolchain is written against, not a tutorial. Pass the locale you will author in: for ru/uk/be and sr/hr/bs it carries the agreement and case rules that decide whether the variants read as human writing, which is the hard part and the part a valid template can still get wrong. Returns text to read, not a template.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "locale": {
+          "type": "string",
+          "description": "Language you will author in, e.g. \"en\" or \"ru\". Selects the grammar rules and the worked examples. Omit for the language-neutral rules only."
+        },
+        "variationLevel": {
+          "type": "string",
+          "enum": [
+            "conservative",
+            "balanced",
+            "aggressive"
+          ],
+          "description": "How much markup to use. Omit to decide for yourself — the guide then states no level."
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "string",
+          "description": "The authoring rules, as text to read."
+        },
+        "promptVersion": {
+          "type": "string",
+          "description": "Version of the rules TEXT (@spintax/authoring-prompt PROMPT_VERSION). Moves when the wording changes in a way that can change what a model writes."
+        },
+        "locale": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rules",
+        "promptVersion"
+      ]
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
   }
 ]

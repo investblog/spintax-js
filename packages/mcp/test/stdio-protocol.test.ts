@@ -205,6 +205,7 @@ describe.skipIf(!built)('what a client actually calls', () => {
       'validate_spintax',
       'render_spintax',
       'analyze_spintax',
+      'spintax_authoring_guide',
     ]);
   });
 

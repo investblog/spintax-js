@@ -7,4 +7,4 @@
  * without the other fails the suite rather than shipping a server that misreports
  * itself.
  */
-export const VERSION = '0.2.3';
+export const VERSION = '0.3.0';

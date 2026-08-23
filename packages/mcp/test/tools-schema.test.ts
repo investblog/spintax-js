@@ -61,8 +61,11 @@ describe('uncapped (local) build', () => {
   it('omits maxLength and the "(max N characters)" note when there is no cap', () => {
     for (const tool of local) {
       const props = tool.inputSchema.properties as Record<string, Record<string, unknown>>;
+      // spintax_authoring_guide takes no template — it is asked before there is one — so
+      // there is no cap for it to omit. Skipping is the assertion, not an exemption.
+      if (props.template === undefined) continue;
       expect(props.template).not.toHaveProperty('maxLength');
-      expect(props.template!.description).not.toContain('max ');
+      expect(props.template.description).not.toContain('max ');
     }
   });
 

@@ -465,7 +465,7 @@ describe('modern era WITHOUT an envelope (stdio)', () => {
 
   it('treats a request with no _meta as a legacy follow-up, not an error', async () => {
     expect(result(await make().dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).tools).toHaveLength(
-      3,
+      4,
     );
   });
 });

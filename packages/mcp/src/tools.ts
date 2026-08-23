@@ -243,5 +243,60 @@ export function buildTools(opts: ToolBuildOptions): ToolDef[] {
       },
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
     },
+    {
+      // The only tool that is asked BEFORE there is a template, and the reason it exists:
+      // the other three verify, and verification cannot teach. `validate_spintax` calls
+      // `{fast|quick}` sound, because it IS sound — so an agent authoring from whatever
+      // notion of spintax it already has gets a clean verdict and never learns that #def
+      // is how two mentions agree, that a count belongs in {plural …}, or that a bare
+      // permutation joins with a space. Nothing in a verifying surface can report the
+      // absence of a construct: that is not a defect, it is an opportunity missed.
+      //
+      // A tool rather than a resource or the server `instructions`, for one decisive
+      // reason: the rules are locale-dependent (the Slavic block is most of their value)
+      // and the locale is only known at call time. `instructions` would also tax every
+      // session, including the many that only render, with ~2k tokens they never read.
+      name: 'spintax_authoring_guide',
+      title: 'How to write a spintax template',
+      description:
+        'Read this BEFORE writing or editing a spintax template — it is the canonical authoring ' +
+        'guide the whole spintax toolchain is written against, not a tutorial. Pass the locale ' +
+        'you will author in: for ru/uk/be and sr/hr/bs it carries the agreement and case rules ' +
+        'that decide whether the variants read as human writing, which is the hard part and the ' +
+        'part a valid template can still get wrong. Returns text to read, not a template.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          locale: {
+            type: 'string',
+            description:
+              'Language you will author in, e.g. "en" or "ru". Selects the grammar rules and the ' +
+              'worked examples. Omit for the language-neutral rules only.',
+          },
+          variationLevel: {
+            type: 'string',
+            enum: ['conservative', 'balanced', 'aggressive'],
+            description:
+              'How much markup to use. Omit to decide for yourself — the guide then states no level.',
+          },
+        },
+        additionalProperties: false,
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          rules: { type: 'string', description: 'The authoring rules, as text to read.' },
+          promptVersion: {
+            type: 'string',
+            description:
+              'Version of the rules TEXT (@spintax/authoring-prompt PROMPT_VERSION). Moves when the ' +
+              'wording changes in a way that can change what a model writes.',
+          },
+          locale: { type: 'string' },
+        },
+        required: ['rules', 'promptVersion'],
+      },
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+    },
   ];
 }

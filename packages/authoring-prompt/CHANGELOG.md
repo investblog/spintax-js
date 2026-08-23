@@ -8,6 +8,29 @@ the prompt TEXT changes in a way that can change model output — it is what a c
 against, and what a conformance report is filed under. The package version follows semver over
 the exported API.
 
+## 0.3.0 — 2026-08-23
+
+New export, `authoringRules({ locale?, variationLevel? })`. `PROMPT_VERSION` is unchanged at `'4'`:
+no wording moved, so the v4 conformance report still describes the text.
+
+The rules as a **document to read**, for a reader that is already a model. `buildAuthoringPrompt`
+drives a model on someone else's behalf — a host holds a brief, calls an LLM with these rules as its
+system prompt, and feeds the reply straight to the renderer. An agent reached over MCP is the other
+shape entirely: it already has the user, the brief and its own conversation, and it cannot install a
+system prompt for itself. Handing it `buildAuthoringPrompt({ brief: 'x' }).systemPrompt` and
+discarding the rest would be an abuse of the builder rather than a use of it.
+
+The difference is not cosmetic, which is why this is an export and not a caller-side `.systemPrompt`:
+**OUTPUT is excluded.** "Return the template and NOTHING else — your entire reply is fed straight
+into the renderer" is true for a host's LLM call and harmful for an agent that has to answer a
+person. Everything else is kept verbatim — same ROLE (it defines what a template IS), GOAL, syntax,
+grammar, variable rules, hard rules and self-check — and asserted to be, so the two surfaces cannot
+drift into teaching different craft. `variationLevel` is stated only when asked for: a reader
+choosing for itself needs no instruction.
+
+First consumer is `@spintax/mcp` 0.3.0's `spintax_authoring_guide` tool; see that changelog for why
+the MCP surface needed it (the other tools verify, and verification cannot teach).
+
 ## 0.2.1 — 2026-08-23
 
 `PROMPT_VERSION` `'3'` → `'4'`. No API change. Two fixes in the Slavic grammar teaching, both

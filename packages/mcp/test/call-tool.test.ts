@@ -220,3 +220,45 @@ describe('the output cap', () => {
     expect(out.kind).toBe('ok');
   });
 });
+
+/**
+ * The one tool that answers before there is a template.
+ *
+ * It exists because the other three verify, and verification cannot teach: `{fast|quick}`
+ * validates clean because it IS clean, so an agent authoring from whatever notion of spintax
+ * it arrived with gets a green verdict and never learns that #def is how two mentions agree.
+ * The absence of a construct is not a diagnostic, and no engine tool can report it.
+ */
+describe('spintax_authoring_guide', () => {
+  it('answers with no template — the guard the other tools share must not reach it', () => {
+    const out = callTool('spintax_authoring_guide', {}, CAPPED);
+    expect(out.kind).toBe('ok');
+    expect(out.kind === 'ok' && (out.structured.rules as string).length).toBeGreaterThan(1000);
+    expect(out.kind === 'ok' && out.structured.promptVersion).toBe('4');
+  });
+
+  it('carries the case rules for an inflected locale — most of the value is locale-gated', () => {
+    const ru = callTool('spintax_authoring_guide', { locale: 'ru' }, CAPPED);
+    const en = callTool('spintax_authoring_guide', { locale: 'en' }, CAPPED);
+    expect(ru.kind === 'ok' && ru.text).toContain('CASE IS PART OF THE VALUE');
+    expect(ru.kind === 'ok' && ru.text).toContain('come from ONE roll');
+    expect(en.kind === 'ok' && en.text).not.toContain('CASE IS PART OF THE VALUE');
+    expect(ru.kind === 'ok' && ru.structured.locale).toBe('ru');
+  });
+
+  // A reader that has to answer a person must not be told its whole reply goes to a renderer.
+  // That exclusion is the reason authoringRules() exists rather than a dummy-brief call into
+  // buildAuthoringPrompt, so it is asserted at THIS boundary too, not only in that package.
+  it('never hands the agent the output contract', () => {
+    const out = callTool('spintax_authoring_guide', { locale: 'ru' }, CAPPED);
+    expect(out.kind === 'ok' && out.text).not.toContain('fed straight into the renderer');
+    expect(out.kind === 'ok' && out.text).not.toContain('OUTPUT CONTRACT');
+  });
+
+  it('rejects an unknown variationLevel instead of silently ignoring it', () => {
+    const out = callTool('spintax_authoring_guide', { variationLevel: 'wild' }, CAPPED);
+    expect(out).toMatchObject({ kind: 'error' });
+    expect(out.kind === 'error' && out.message).toContain('conservative, balanced, aggressive');
+    expect(callTool('spintax_authoring_guide', { variationLevel: 'conservative' }, CAPPED).kind).toBe('ok');
+  });
+});

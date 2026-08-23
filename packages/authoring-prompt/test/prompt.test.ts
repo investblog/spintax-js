@@ -5,6 +5,7 @@ import { describe, expect, test } from 'vitest';
 import { pluralArity, render, validate } from '@spintax/core';
 import {
   PROMPT_VERSION,
+  authoringRules,
   buildAuthoringPrompt,
   buildRepairPrompt,
   cleanModelTemplate,
@@ -190,6 +191,29 @@ describe('buildAuthoringPrompt', () => {
     expect(systemPrompt).toContain('come from ONE roll');
     expect(systemPrompt).toContain('ONE differing ending disqualifies the branch');
     expect(systemPrompt).toContain('NEVER give each case its own list');
+  });
+
+  // The one block that must NOT reach a reader who has to talk to a person. Everything else is
+  // shared verbatim, and asserted to be, so the MCP surface and a host's LLM call cannot drift
+  // into teaching different craft.
+  test('authoringRules is the prompt minus the output contract', () => {
+    const rules = authoringRules({ locale: 'ru' });
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x', locale: 'ru' });
+
+    expect(rules).not.toContain('fed straight into the renderer');
+    expect(rules).not.toContain('OUTPUT CONTRACT');
+    for (const block of ['SPINTAX TEMPLATES', 'TWO PASSES', 'SCOPE — you write ONE block', 'SYNTAX —', 'LANGUAGE: ru', 'CASE IS PART OF THE VALUE', 'HARD RULES', 'SELF-CHECK']) {
+      expect(rules).toContain(block);
+      expect(systemPrompt).toContain(block);
+    }
+
+    // The level is stated only when asked for: a reader choosing for itself needs no instruction.
+    expect(authoringRules({})).not.toContain('VARIATION LEVEL');
+    expect(authoringRules({ variationLevel: 'conservative' })).toContain('VARIATION LEVEL: conservative');
+
+    // Locale still selects the grammar, which is where most of the value is.
+    expect(authoringRules({ locale: 'en' })).not.toContain('CASE IS PART OF THE VALUE');
+    expect(authoringRules({ locale: 'hr' })).toContain('{u gradu|iz grada}');
   });
 
   // The scope boundary (#76) was stated in the spec and in the `Channel` doc comment — i.e. to

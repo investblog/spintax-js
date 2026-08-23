@@ -1,9 +1,12 @@
 /**
- * The three tools, as thin wrappers over `@spintax/core`. Transport-free: this
- * returns a verdict, never a `Response` and never a line of stdout.
+ * The tools, as thin wrappers over `@spintax/core` (plus the canonical authoring rules).
+ * Transport-free: this returns a verdict, never a `Response` and never a line of stdout.
  */
 
+import { authoringRules, PROMPT_VERSION, type VariationLevel } from '@spintax/authoring-prompt';
 import { render, validate, analyze, SpintaxError, type Diagnostic } from '@spintax/core';
+
+const VARIATION_LEVELS: readonly VariationLevel[] = ['conservative', 'balanced', 'aggressive'];
 
 export interface IncludeProblem {
   ref: string;
@@ -92,6 +95,34 @@ export function callTool(
   args: Record<string, unknown>,
   opts: CallToolOptions,
 ): ToolOutcome {
+  // Before the template guard, because this is the one tool that has no template: it is
+  // asked BEFORE there is one. Every other tool judges a template the caller already wrote,
+  // which is exactly the gap — a validator cannot fail a template for being poorly authored,
+  // so verification alone never teaches. See tools.ts for the rest of the reasoning.
+  if (name === 'spintax_authoring_guide') {
+    const locale = typeof args.locale === 'string' ? args.locale : undefined;
+    const raw = args.variationLevel;
+    if (raw !== undefined && !VARIATION_LEVELS.includes(raw as VariationLevel)) {
+      return {
+        kind: 'error',
+        message: `Unknown variationLevel ${JSON.stringify(raw)}; expected one of ${VARIATION_LEVELS.join(', ')}.`,
+      };
+    }
+    const rules = authoringRules({
+      ...(locale === undefined ? {} : { locale }),
+      ...(raw === undefined ? {} : { variationLevel: raw as VariationLevel }),
+    });
+    return {
+      kind: 'ok',
+      text: rules,
+      structured: {
+        rules,
+        promptVersion: PROMPT_VERSION,
+        ...(locale === undefined ? {} : { locale }),
+      },
+    };
+  }
+
   const template = requireTemplate(args);
   if (template === null) {
     return { kind: 'error', message: 'Missing or empty "template" argument (string required).' };

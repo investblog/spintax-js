@@ -19,7 +19,11 @@ import { VERSION } from './version';
 const INSTRUCTIONS_BASE =
   'Spintax template tools backed by @spintax/core, the reference engine. ' +
   'validate_spintax returns diagnostics with line/column; render_spintax produces seeded ' +
-  'variants; analyze_spintax reports variables, directives and construct counts. ';
+  'variants; analyze_spintax reports variables, directives and construct counts. ' +
+  // Thirty tokens that decide whether the guide is ever read: the agent that most needs it
+  // is by definition the one that does not know it is missing anything.
+  'Before WRITING a template, call spintax_authoring_guide with your locale — validation ' +
+  'judges structure and cannot tell you the copy reads badly. ';
 
 async function main(): Promise<void> {
   const parsed = parseArgs(process.argv.slice(2), process.env, VERSION);

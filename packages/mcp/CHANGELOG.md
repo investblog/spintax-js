@@ -3,6 +3,49 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 — 2026-08-23
+
+A fourth tool, `spintax_authoring_guide`, and `@spintax/authoring-prompt` as a second real
+dependency. Minor rather than patch: the tool list is a contract, and services bind to it.
+
+**Why a tool at all.** The other three VERIFY, and verification cannot teach. `validate_spintax`
+calls `{fast|quick}` sound — because it is sound — so an agent authoring from whatever notion of
+spintax it arrived with gets a green verdict and never learns that `#def` is how two mentions
+agree, that a count belongs in `{plural …}`, or that a bare permutation joins with a space. The
+absence of a construct is not a diagnostic, and no engine tool can report it. The MCP surface was
+verification-only by construction, while the client reaching it is the one doing the writing.
+
+**Why a tool rather than a resource or a longer `instructions`.** The rules are locale-dependent —
+the Slavic block is most of their value — and the locale is only known at call time; a static
+resource can carry only the language-neutral half, which was the half that was already adequate.
+`instructions` would also charge every session, including the many that only render, ~2k tokens it
+never reads (en 7 183 characters, ru 10 066, hr 9 177). Tools are also the one MCP primitive every
+client implements. `instructions` does gain one sentence naming the guide: the agent that most
+needs it is by definition the one that does not know anything is missing.
+
+`spintax_authoring_guide({ locale?, variationLevel? })` → `{ rules, promptVersion, locale? }`,
+`readOnlyHint`, and **no template argument** — it is the one tool asked BEFORE there is a template,
+so it returns above the shared template guard in `callTool`.
+
+Backed by `authoringRules()`, new in `@spintax/authoring-prompt` 0.3.0: the authoring prompt minus
+the OUTPUT CONTRACT. That exclusion is the whole reason the export exists rather than a dummy-brief
+call into `buildAuthoringPrompt` — "your entire reply is fed straight into the renderer" is true
+for a host driving an LLM and harmful for an agent that has to answer a person. Everything else is
+shared verbatim and asserted to be, at both boundaries.
+
+The tool-list fixture (`test/fixtures/site-tools.json`) is regenerated, which its own header calls
+a deliberate act whose diff is meant to be read — this entry is that review. The hosted card must
+name the new tool before this ships: `parity-card.test.ts` fails until `spintax.net`'s
+`.well-known/mcp.json` description does.
+
+**The tarball smoke found a real defect and was widened.** It installed `@spintax/authoring-prompt`
+from the registry, which still served the release before the export this package had started using,
+so the installed artifact threw *does not provide an export named authoringRules* — the same trap
+the engine dependency was already packed locally to avoid, in its second instance. All three
+`@spintax` packages are packed locally now, the smoke drives the guide over stdio (the one call
+that proves the new dependency resolves in the installed tree), and it waits for `close` rather
+than `exit`, because the responses grew from a few hundred bytes to ~20 KB.
+
 ## 0.2.3 — 2026-08-18
 
 Depends on `@spintax/core` **^0.6.0**, which changes what `validate_spintax` returns for a template

@@ -520,6 +520,43 @@ export function buildAuthoringPrompt(opts: AuthoringPromptOptions): BuiltPrompt 
   };
 }
 
+export interface AuthoringRulesOptions {
+  /** Selects the grammar block. The rules are worth far more for an inflected locale. */
+  locale?: string;
+  /** Omit to leave the level unstated — a reader choosing for itself needs no instruction. */
+  variationLevel?: VariationLevel;
+}
+
+/**
+ * The authoring rules as a DOCUMENT TO READ, for a reader that is already a model.
+ *
+ * {@link buildAuthoringPrompt} drives a model on someone else's behalf: a host holds a brief, calls
+ * an LLM with these rules as its system prompt, and feeds the reply straight to the renderer. An
+ * agent reached over MCP is the other shape entirely — it already has the user, the brief and its
+ * own conversation, and what it lacks is the craft. It cannot install a system prompt for itself,
+ * so handing it `buildAuthoringPrompt({ brief: 'x' }).systemPrompt` and discarding the rest would
+ * be an abuse of the builder, not a use of it.
+ *
+ * The difference is not cosmetic, which is the reason this is an export and not a caller-side
+ * `.systemPrompt`: OUTPUT is deliberately EXCLUDED. It says "return the template and NOTHING else —
+ * your entire reply is fed straight into the renderer", which is true for a host's LLM call and
+ * false, even harmful, for an agent that has to talk to a person. Everything else is kept verbatim
+ * so the two surfaces cannot teach different craft: same ROLE (it defines what a template IS), same
+ * GOAL, syntax, grammar, variable and hard rules, same self-check.
+ */
+export function authoringRules(opts: AuthoringRulesOptions = {}): string {
+  return [
+    ROLE,
+    GOAL,
+    syntaxBlock(opts.locale),
+    grammarBlock(opts.locale),
+    variableRulesBlock(opts.locale),
+    ...(opts.variationLevel ? [levelBlock(opts.variationLevel)] : []),
+    RULES,
+    SELF_CHECK,
+  ].join('\n\n');
+}
+
 export interface RepairPromptOptions {
   /**
    * MUST be the same locale the template was authored under and will be rendered with — the

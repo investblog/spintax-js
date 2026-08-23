@@ -8,18 +8,25 @@
 # map, the dual ESM/CJS entries and — unlike the n8n node, which bundles the engine —
 # real resolution of @spintax/core as a DEPENDENCY.
 #
-# The engine is installed from a LOCAL tarball, not the registry. It used to come from
-# the registry, which quietly made this gate un-passable for a whole release: the mcp
-# manifest must name the core version it is being shipped against, and that version is
-# not on npm until core is released — while pinning the PREVIOUS range instead makes npm
-# nest a stale engine under packages/mcp, which the artifact guard (correctly) fails. Both
-# doors locked. Packing both means this proves the pair we are about to ship, at any point
-# in the cycle, which is the more useful claim anyway.
+# EVERY @spintax dependency is installed from a LOCAL tarball, not the registry. The engine
+# used to come from the registry, which quietly made this gate un-passable for a whole
+# release: the mcp manifest must name the core version it is being shipped against, and that
+# version is not on npm until core is released — while pinning the PREVIOUS range instead
+# makes npm nest a stale engine under packages/mcp, which the artifact guard (correctly)
+# fails. Both doors locked. Packing them means this proves the SET we are about to ship, at
+# any point in the cycle, which is the more useful claim anyway.
+#
+# @spintax/authoring-prompt joined that rule the moment it became a dependency, and proved
+# the rule generalizes on its first run: mcp used a brand-new export (authoringRules) while
+# npm still served the release before it, so the installed artifact threw
+# "does not provide an export named" — a real defect in the pair, reported as a smoke
+# failure exactly as intended. Add any future @spintax dependency here too.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/packages/mcp"
 CORE="$ROOT/packages/core"
+PROMPT="$ROOT/packages/authoring-prompt"
 
 # prepack builds a fresh dist and tsup prints to stdout, so don't capture pack's
 # stdout — silence everything and locate the tarball by glob instead.
@@ -28,23 +35,32 @@ npm pack >/dev/null 2>&1
 CORE_TARBALL="$(ls -t "$CORE"/spintax-core-*.tgz 2>/dev/null | head -1)"
 [ -n "$CORE_TARBALL" ] || { echo "npm pack produced no @spintax/core tarball"; exit 1; }
 
+cd "$PROMPT"
+npm pack >/dev/null 2>&1
+PROMPT_TARBALL="$(ls -t "$PROMPT"/spintax-authoring-prompt-*.tgz 2>/dev/null | head -1)"
+[ -n "$PROMPT_TARBALL" ] || { echo "npm pack produced no @spintax/authoring-prompt tarball"; exit 1; }
+
 cd "$PKG"
 npm pack >/dev/null 2>&1
 TARBALL="$(ls -t "$PKG"/spintax-mcp-*.tgz 2>/dev/null | head -1)"
 [ -n "$TARBALL" ] || { echo "npm pack produced no tarball"; exit 1; }
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP" "$TARBALL" "$CORE_TARBALL"' EXIT
+trap 'rm -rf "$TMP" "$TARBALL" "$CORE_TARBALL" "$PROMPT_TARBALL"' EXIT
 cp "$TARBALL" "$TMP/pkg.tgz"
 cp "$CORE_TARBALL" "$TMP/core.tgz"
+cp "$PROMPT_TARBALL" "$TMP/prompt.tgz"
 
 cd "$TMP"
 npm init -y >/dev/null 2>&1
-# Core first and explicitly, so the mcp manifest's range is satisfied by the build under
-# test. If the range and the packed core disagree, npm says so here — which is the check
-# this line replaces, moved earlier rather than dropped.
-npm install ./core.tgz ./pkg.tgz >/dev/null 2>&1
+# Dependencies first and explicitly, so the mcp manifest's ranges are satisfied by the
+# builds under test. If a range and its packed tarball disagree, npm says so here — which
+# is the check this line replaces, moved earlier rather than dropped.
+npm install ./core.tgz ./prompt.tgz ./pkg.tgz >/dev/null 2>&1
 SMOKE_CORE_VERSION="$(node -p "require('$ROOT/packages/core/package.json').version")"
 export SMOKE_CORE_VERSION
+# From the SOURCE, never a literal — the same lesson the prompt's own smoke learned.
+SMOKE_PROMPT_VERSION="$(node -p "require('$ROOT/packages/authoring-prompt/dist/index.cjs').PROMPT_VERSION")"
+export SMOKE_PROMPT_VERSION
 
 node -e "const s=require('@spintax/mcp'); if(typeof s.createDispatcher!=='function'){console.error('CJS entry missing createDispatcher');process.exit(1)} console.log('  CJS require ok')"
 node --input-type=module -e "import('@spintax/mcp').then(s=>{ if(typeof s.buildTools!=='function'){console.error('ESM entry missing buildTools');process.exit(1)} console.log('  ESM import ok') })"
@@ -58,7 +74,7 @@ const { spawn } = require('node:child_process');
 const pkg = require('@spintax/mcp/package.json');
 // The engine is a real dependency here, NOT bundled — that is the whole point of
 // this package existing alongside the n8n node, whose smoke asserts the opposite.
-assert.deepStrictEqual(Object.keys(pkg.dependencies ?? {}), ['@spintax/core']);
+assert.deepStrictEqual(Object.keys(pkg.dependencies ?? {}).sort(), ['@spintax/authoring-prompt', '@spintax/core']);
 assert.strictEqual(typeof pkg.bin, 'object');
 const binName = Object.keys(pkg.bin)[0];
 assert.strictEqual(binName, 'spintax-mcp');
@@ -89,23 +105,43 @@ child.stdin.write(JSON.stringify({
   jsonrpc: '2.0', id: 2, method: 'tools/call',
   params: { name: 'render_spintax', arguments: { template: '{a|a} %who%', context: { who: 'Ada' }, count: 1, seed: 1 } },
 }) + '\n');
+// The guide is the one tool whose answer comes from @spintax/authoring-prompt, so this
+// call is what proves that dependency RESOLVES in the installed tree. Not a duplicate of
+// the unit tests: the first run of this gate failed here, because npm still served the
+// prompt release before the export mcp had started using.
+child.stdin.write(JSON.stringify({
+  jsonrpc: '2.0', id: 3, method: 'tools/call',
+  params: { name: 'spintax_authoring_guide', arguments: { locale: 'ru' } },
+}) + '\n');
 child.stdin.end();
 const timer = setTimeout(() => { child.kill(); throw new Error('the server did not answer in time'); }, 20000);
-child.on('exit', (code) => {
+// 'close', not 'exit': 'exit' fires when the process ends, which can beat the last of its
+// stdout arriving here. 'close' is defined as after the stdio streams are done, which is
+// what these assertions actually depend on. Never observed to bite — but the responses
+// grew from a few hundred bytes to ~20 KB when the guide joined, and the race is the kind
+// that surfaces on someone else's slower machine, in CI, at release time.
+child.on('close', (code) => {
   clearTimeout(timer);
   assert.strictEqual(code, 0, 'the server must exit 0 on stdin EOF');
   assert.strictEqual(err, '', 'stderr must be empty on a clean run');
   const lines = out.split('\n').filter((l) => l !== '');
-  assert.strictEqual(lines.length, 2, 'two requests, two lines: got ' + lines.length);
+  assert.strictEqual(lines.length, 3, 'three requests, three lines: got ' + lines.length);
   const list = JSON.parse(lines[0]);
   assert.deepStrictEqual(list.result.tools.map((t) => t.name),
-    ['validate_spintax', 'render_spintax', 'analyze_spintax']);
+    ['validate_spintax', 'render_spintax', 'analyze_spintax', 'spintax_authoring_guide']);
   // No template cap on the local server: the property must be absent, not large.
   assert.ok(!('maxLength' in list.result.tools[0].inputSchema.properties.template));
   const call = JSON.parse(lines[1]);
   assert.strictEqual(call.result.isError, false);
   assert.deepStrictEqual(call.result.structuredContent.variants, ['A Ada']);
-  console.log('  bin over stdio: tools/list + render from the installed artifact ok');
+  const guide = JSON.parse(lines[2]);
+  assert.strictEqual(guide.result.isError, false, 'the guide must answer from the installed tree');
+  assert.ok(guide.result.structuredContent.rules.includes('CASE IS PART OF THE VALUE'),
+    'the ru guide must carry the case rules — that is most of its value');
+  assert.ok(!guide.result.structuredContent.rules.includes('fed straight into the renderer'),
+    'an agent must never be handed the output contract');
+  assert.strictEqual(guide.result.structuredContent.promptVersion, process.env.SMOKE_PROMPT_VERSION);
+  console.log('  bin over stdio: tools/list + render + authoring guide from the installed artifact ok');
 });
 "
 

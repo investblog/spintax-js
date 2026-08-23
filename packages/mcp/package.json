@@ -1,6 +1,6 @@
 {
   "name": "@spintax/mcp",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Local MCP server for spintax templates — validate, render and analyze over stdio with @spintax/core, no network and no size caps. Ships the shared tool module and JSON-RPC dispatcher the hosted server at spintax.net/mcp is built to run from.",
   "keywords": [
     "mcp",
@@ -69,6 +69,7 @@
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
+    "@spintax/authoring-prompt": "^0.3.0",
     "@spintax/core": "^0.6.0"
   },
   "devDependencies": {
