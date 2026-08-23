@@ -219,3 +219,49 @@ Three decisions worth keeping:
 Standing cost, unchanged: the registry entry names an exact package version, so releasing this
 package drags the card, `server.json`, the Function, the parity pin, an apex deploy and a registry
 publish, in that order. 0.2.2 went out as server `1.0.5`.
+
+## 9. A fourth tool, and why a verifying surface needed one (0.3.0)
+
+Everything above is verification. `validate_spintax`, `render_spintax` and `analyze_spintax` judge
+a template the caller already wrote, and the client on the other end of this server is a model —
+the party doing the writing. That asymmetry had a cost nobody could see from inside the tools:
+**a validator cannot fail a template for being poorly authored.** `{быстро|оперативно}` is sound,
+so it is reported sound; a missing `#def` where two mentions must agree, a count spelled by hand
+instead of through `{plural …}`, a bare permutation joining clauses with a space — none of these
+are defects, they are opportunities missed, and no diagnostic exists for an opportunity. An agent
+authoring from whatever notion of spintax it arrived with got a green verdict every time and never
+learned anything. The only pointer to the craft was a `llms.txt` URL in `instructions`.
+
+`spintax_authoring_guide({ locale?, variationLevel? })` returns the canonical authoring rules as
+text to read. It takes **no template** — it is the one tool asked BEFORE there is one — so it
+returns above the shared template guard in `callTool`.
+
+**Why a tool and not a resource or a longer `instructions`.** The decisive reason is that the rules
+are locale-dependent and the locale is known only at call time: the Slavic agreement block is most
+of their value, and a static resource or an `instructions` string can carry only the
+language-neutral half — which was the half that was already adequate. Measured on
+PROMPT_VERSION 4: en 7 183 characters, ru 10 066, hr 9 177. Putting that in `instructions` would
+also charge every session, including the many that only render, ~2k tokens it never reads. Tools
+are additionally the one MCP primitive every client implements, which matters now that other
+services bind to this surface. `instructions` does gain one sentence naming the guide: the agent
+that most needs it is by definition the one that does not know anything is missing.
+
+The text comes from `authoringRules()` in `@spintax/authoring-prompt`, new in its 0.3.0 — the
+authoring prompt **minus the OUTPUT CONTRACT**. That exclusion is why the export exists rather than
+a dummy-brief call into `buildAuthoringPrompt`: "your entire reply is fed straight into the
+renderer" is true for a host driving an LLM and harmful for an agent that has to answer a person.
+Everything else is shared verbatim and asserted to be, at both boundaries, so the two surfaces
+cannot drift into teaching different craft.
+
+**The tool list is now a contract.** Services bind to it, so 0.3.0 is a minor rather than a patch,
+and `test/fixtures/site-tools.json` was regenerated deliberately — its header says the diff is
+meant to be read, and the CHANGELOG entry is that review. The two-repo ordering worked the way it
+should: `spintax.net` landed the card naming the fourth tool *before* the tag was pushed, so
+`parity-card.test.ts` went green rather than being waived. Shipped as server `1.1.0`,
+registry `net.spintax/mcp` 1.1.0 → `@spintax/mcp@0.3.0`.
+
+One thing deliberately left: the registry-facing summary (100-character cap) still lists the three
+verifying verbs. It cannot be extended — the current string is 91 characters — so the fix is to
+change the verb list, not append to it: `Write, validate, render and analyze spintax templates.
+Backed by @spintax/core. No auth.` (88). Not worth a version of its own; it rides the next metadata
+release.

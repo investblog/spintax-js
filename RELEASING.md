@@ -126,16 +126,26 @@ sequence is publish-then-connect, never the other way round.
 Verify with the client, not just the registry: the tarball smoke
 (`npm run smoke:pack:mcp`) installs the package and drives the real `bin` over stdio,
 which is the only check that covers the shebang, the `bin` field, the exports map and
-resolution of `@spintax/core` as a dependency from the built artifact — the four
-things a first-`bin` package actually breaks on.
+resolution of `@spintax/core` and `@spintax/authoring-prompt` as dependencies from the built
+artifact — the things a first-`bin` package actually breaks on. Since 0.3.0 it also calls
+`spintax_authoring_guide` over stdio, because that is the one request whose answer comes from
+the prompt package: it proves that dependency resolves in the *installed* tree.
 
-**When the engine moves, bump `dependencies["@spintax/core"]` in the same wave.** The range
-is a real dependency, not a bundle, so leaving it on the previous major-zero range does not
-merely lag — npm installs that older engine *underneath* `packages/mcp`, and the package is
-then tested against an engine nobody is shipping. `test/artifact.test.ts` fails on exactly
-that, and it is there because it happened. The smoke packs `@spintax/core` locally rather
-than pulling it from the registry, so a range naming an unpublished version is not a
-chicken-and-egg problem: release core first, and this gate is green the whole way through.
+**When a sibling moves, bump its range in `dependencies` in the same wave.** These are real
+dependencies, not bundles, so leaving one on the previous major-zero range does not merely lag —
+npm installs the older copy *underneath* `packages/mcp`, and the package is then tested against
+something nobody is shipping. `test/artifact.test.ts` fails on exactly that, and it is there
+because it happened. The smoke packs **every `@spintax` dependency** locally rather than pulling
+from the registry, so a range naming an unpublished version is not a chicken-and-egg problem:
+**release the siblings first** (core, then the prompt, then mcp) and this gate is green the whole
+way through.
+
+That widening was not theoretical. `@spintax/authoring-prompt` became a dependency on
+2026-08-23 and the very first smoke run failed with *does not provide an export named
+authoringRules*: mcp was using a brand-new export while npm still served the release before it.
+Same trap as the engine's, one package over. **A new `@spintax` dependency means a new line in
+`scripts/smoke-tarball-mcp.sh`** — pack it, install it, and if it is what answers a particular
+tool, call that tool.
 
 ## Releasing `@spintax/authoring-prompt`
 
