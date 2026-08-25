@@ -5,7 +5,7 @@
     {
       "parameters": {},
       "id": "pool-trigger",
-      "name": "When clicking 'Execute workflow'",
+      "name": "Start a pool run",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
@@ -128,7 +128,7 @@
         "options": {}
       },
       "id": "pool-model",
-      "name": "OpenAI Chat Model",
+      "name": "Chat model for authoring and repair",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [
@@ -334,7 +334,7 @@
     },
     {
       "parameters": {
-        "content": "## Generate a pool of unique product descriptions from one AI-written spintax template\n\n### How it works\n\n1. An LLM writes ONE spintax template from your brief; the Spintax node renders every variant from it, with no model call per document.\n2. The template is validated first, and an invalid draft gets one repair round aimed at the exact line and column.\n3. Twelve documents are rendered with a per-attempt seed, so a rerun reproduces the pool.\n4. Lint judges each document and returns a defective one for another draw.\n5. Uniqueness judges the whole pool and reports a footprint before it ships.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Add OpenAI credentials to the two chat model nodes.\n- [ ] Put your brief, product facts, locale and variables in **Your brief and product**.\n- [ ] Run it once — a valid draft renders twelve variants in one pass.\n\n### Customization\n\nFootprint Limit ships at 1, so Uniqueness reports instead of gating: one template about one product scores near 0.49. Ignored Strings already holds the product name and brand, which moves the same twelve documents from 0.209 to 0.107.",
+        "content": "## Generate a pool of unique product descriptions from one AI-written spintax template\n\n### How it works\n\n1. An LLM writes ONE spintax template from your brief; the Spintax node renders every variant from it, with no model call per document.\n2. The template is validated first, and an invalid draft gets one repair round aimed at the exact line and column.\n3. Twelve documents are rendered with a per-attempt seed, so a rerun reproduces the pool.\n4. Lint judges each document and returns a defective one for another draw.\n5. Uniqueness judges the whole pool and reports a footprint before it ships.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Add OpenAI credentials to **Chat model for authoring and repair** — one node feeds both LLM steps.\n- [ ] Put your brief, product facts, locale and variables in **Your brief and product**.\n- [ ] Run it once — a valid draft renders twelve variants in one pass.\n\n### Customization\n\nFootprint Limit ships at 1, so Uniqueness reports instead of gating: one template about one product scores near 0.49. Ignored Strings already holds the product name and brand, which moves the same twelve documents from 0.209 to 0.107.",
         "width": 480,
         "height": 896
       },
@@ -381,35 +381,19 @@
     },
     {
       "parameters": {
-        "content": "## Validate the draft\n\nValid means no error-level diagnostics. Valid drafts go straight to rendering; the rest take the repair path below.",
-        "width": 240,
-        "height": 368,
+        "content": "## Validate, then repair once\n\nValid means no error-level diagnostics: those drafts go straight to rendering. The rest take the repair path, where the prompt carries the exact line and column of each problem. The loop is capped at one round by wiring, so it cannot spin.",
+        "width": 864,
+        "height": 880,
         "color": 7
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         832,
-        64
+        96
       ],
       "id": "a1b2c3d4-0003-4a11-9c01-5f1a2b3c4d03",
       "name": "Sticky Note3"
-    },
-    {
-      "parameters": {
-        "content": "## Repair once, then stop\n\nThe repair prompt carries the exact line and column of each problem. The loop is capped at one round by wiring, so it cannot spin.",
-        "width": 640,
-        "height": 480,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1056,
-        480
-      ],
-      "id": "a1b2c3d4-0004-4a11-9c01-5f1a2b3c4d04",
-      "name": "Sticky Note4"
     },
     {
       "parameters": {
@@ -445,17 +429,6 @@
     }
   ],
   "connections": {
-    "When clicking 'Execute workflow'": {
-      "main": [
-        [
-          {
-            "node": "Your brief and product",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Your brief and product": {
       "main": [
         [
@@ -484,22 +457,6 @@
           {
             "node": "Validate draft",
             "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Your LLM",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "LLM (repair)",
-            "type": "ai_languageModel",
             "index": 0
           }
         ]
@@ -605,6 +562,33 @@
           {
             "node": "Near-duplicates - dropped",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start a pool run": {
+      "main": [
+        [
+          {
+            "node": "Your brief and product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat model for authoring and repair": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Your LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "LLM (repair)",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]

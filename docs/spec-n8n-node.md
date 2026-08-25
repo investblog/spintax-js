@@ -601,21 +601,25 @@ from the original submission, so a resubmission is JSON-only. Two traps worth av
 "Share new template" button opens a *new* submission dialog that looks almost identical, and closing
 the modal with a file staged raises a Discard prompt (discarding loses only the staged file).
 
-**The sticky-note rules, taken from n8n's own generator rather than inferred.** The reviewer's mail
+**The sticky-note rules, taken from n8n's own generator rather than inferred.** *Superseded in
+part by §6.2 — three of the constants below are the generator's internals, not review criteria,
+and their own exemplar breaks them. Read §6.2 first; this paragraph is kept because the geometry
+arithmetic is still what the rebuild used.* The reviewer's mail
 points at their template **13868** ("Auto-generate sticky notes and rename nodes"). Its description
 links a Notion page that is JS-rendered and unreadable to a fetcher, but the workflow itself is
 readable — `https://api.n8n.io/api/templates/workflows/13868` — and it *is* the specification,
 because it is the thing that produces conforming templates:
 
 - **At least `ceil(nodeCount / 3)` groups**, each a spatially tight cluster, titled in sentence case
-  in 3–6 words (`AI Groups Logically`). Three tall column stickies over sixteen nodes is the shape
-  that gets bounced; six small ones is the shape that passes.
+  in 3–6 words (`AI Groups Logically`). — *Not a review criterion: their own exemplar 4817 carries
+  three section stickies over eleven nodes. Treat it as a hint that one tall column per third of the
+  canvas is too coarse, not as a floor to hit.*
 - **Geometry is arithmetic, not taste** (`Compute Bounding Boxes`): pad a cluster's bounding box by
   48 either side and 64 below, reserve a computed text height above it (minimum 80), snap everything
   to a 16px grid, floor at 240×180. Group stickies are `color: 7`; the overview carries no colour key.
-- **The overview sticky is 480 wide, placed at `minX − 480 − 80`**, height clamped to **420–900** —
-  and their own height estimator is the check: content over 900px is silently clipped in the canvas,
-  so the copy is written to fit the box rather than the box stretched to the copy.
+- **The overview sticky is 480 wide, placed at `minX − 480 − 80`**, height clamped to **420–900**.
+  — *The 900 ceiling is the generator's own clamp, not a canvas limit: exemplar 4817's overview is
+  460×**960** and renders. The written rule is 100–300 words; size the box to the copy.*
 - **Its shape is fixed**: `## <workflow name>`, `### How it works` as a **numbered list of 2–6
   items**, `### Setup steps` as `- [ ]` checkboxes, optional `### Customization`. Our earlier
   recorded rule said `### Setup` and free prose — that came from reading finished templates, and
@@ -660,6 +664,16 @@ inside it (overview 100–300 words, each group sticky under 50). And n8n render
 inside a sticky paragraph as a line break, so each paragraph is emitted on one physical line by the
 generator.
 
+**Live verification, updated 2026-08-25 for n8n 2.35.7.** Two things changed and both cost a
+session's worth of detours. `N8N_USER_MANAGEMENT_DISABLED` no longer exists — a fresh user
+folder lands on `/setup`, and `/workflows/demo` is behind auth too, so **a canvas screenshot now
+requires the owner to sign in**; there is no headless route to one. And the editor restores each
+workflow's last viewport and ignores the zoom-to-fit button on a canvas it has already drawn: the
+sequence that works is a **fresh tab**, then a click on empty canvas to take focus, then `1`.
+A canvas that stops responding is the known freeze — close the tab, do not retry in place. The
+extension caps captures at 1568px wide however large the window, so that is the ceiling on the
+image the gallery gets. The rest of the recipe below still holds.
+
 **Live verification (2026-08-15/16).** n8n 2.34.6 installed under `temp/n8n-local` (removed
 afterwards), the published node installed into `~/.n8n/nodes`, the workflow imported with
 `n8n import:workflow` (a UI-saved workflow is lost on restart) and executed headless with
@@ -690,6 +704,75 @@ lint` passes on the package (a control mutation makes it fail, so the check is r
 there stay human-judged: the "exactly one third-party service" rule against a node that integrates
 none, and "n8n isn't accepting Logic or Flow control nodes at the moment" against our three
 two-output routing operations.
+
+### 6.2 The submission checklist — what n8n wrote down, and what we inferred
+
+Written 2026-08-25, after 18308 came back a second time with a checklist that named nothing. The
+distinction this section exists to hold: **a rule n8n wrote down** versus **a rule we inferred from
+their generator**. When the two disagree the written one wins, and several of the inferred ones are
+simply false — measured against the exemplar both guideline pages hold up as the answer.
+
+Sources, all readable:
+
+- Template submission guidelines — `n8n.notion.site/Template-submission-guidelines-9959894476734da3b402c90b124b1f77`
+- Sticky note guidelines for templates — `n8n.notion.site/Sticky-note-guidelines-for-templates-2aa5b6e0c94f8058b0aefddd02655887`
+- The exemplar both pages link as *"your template should look something like this"* — n8n.io/workflows/**4817**,
+  whose JSON is at `api.n8n.io/api/templates/workflows/4817`. Measure against this, not against prose.
+
+**Written rules. These are the gate,** and `packages/n8n-node/test/templates.test.ts` enforces the
+mechanical ones on every `npm test` (three control mutations confirm it can see breakage):
+
+1. **Rename every node.** No n8n defaults. `When clicking 'Execute workflow'` and `OpenAI Chat Model`
+   are defaults, and 18308 shipped both.
+2. **Exactly one overview sticky** — yellow (colour 1 / no colour key), top-left, **100–300 words**,
+   carrying `### How it works` and `### Setup`.
+3. **Section stickies** — colour 7, under 50 words, and **each stretched over two or more nodes**.
+   The guidelines say "not just one" in those words. A cluster of one is floored at 240 wide by the
+   generator's arithmetic, so it silently becomes a label; 18308 shipped one.
+4. **Community node ⇒ the description needs BOTH** a self-hosted-only disclaimer **and** a workflow
+   image **at the top** — the gallery renders no canvas preview for a community node.
+5. **Title shape** — `Action verb + thing manipulated + to/on/in/from where`, sentence case, no emoji.
+6. **No hardcoded credentials, no personal identifiers** (sheet ids, channels, real addresses).
+7. **A Set node** grouping everything the user must configure.
+
+**Inferred rules that do not hold.** Each cost effort and none of them gates anything:
+
+| what we believed | where it came from | what the exemplar measures |
+|---|---|---|
+| overview must fit 900px or clip | generator 13868's clamp | 4817's overview is 460×**960** |
+| at least `ceil(nodes / 3)` sections | generator 13868 | 4817: **3** sections over **11** nodes |
+| section stickies under 50 words | written, but soft | 4817 runs **48–73** |
+| description ~200 words | written, but soft | 4817 is **315**; our published 17930 is ~400 |
+| a big workflow reads as messy | our own inference | 4817 spans **2660×500**; our pool spans 2520×640 |
+| `### Setup steps` supersedes `### Setup` | reading finished templates | sticky page says `### Setup`; 17930 passed with `Setup steps` |
+
+Size is the one worth stating twice, because it was our first theory and it is wrong: the exemplar
+is as wide as the template that was bounced.
+
+**What actually decided our two submissions.**
+
+- **17930 was published 2026-08-24 without going through the portal.** The reviewer took the JSON
+  from our 2026-08-13 mail and applied it himself. So the live template is that file — overview
+  640×800, three sections, five nodes in one row — and **not** the generator rebuild in this repo.
+  The repo copy has never been submitted; do not assume the two match.
+- **18308 was bounced 2026-08-20**, six hours after the resubmission, with the generic "clean up and
+  organize" boilerplate. The live record confirms the reviewer saw the rebuilt JSON, so this is a
+  verdict on the current layout, not a stale one.
+- Against the written rules the difference is exactly two items — **default node names** and a
+  **one-node section sticky** — and the template that passed breaks neither.
+- Beyond the rules, the reviewer has nothing to look at: no canvas preview, only our PNG, which the
+  portal renders at **858×256** from 1467×437. A canvas 3168 units wide is unreadable at that size.
+  Shoot the image so it survives 858px, or the reviewer is judging a smudge.
+
+**The AI pre-review deserves a re-reading.** Its `suggestedJson` renamed all sixteen nodes. We
+declined the whole thing on 2026-08-16 for three specific reasons — it mislabels the model, its
+Setup text references our node names, and our layout was canvas-verified while its was not. Two of
+those still hold. But the renaming was the part that was right, and it was the part that mattered.
+**Take the AI verdict apart and judge each change; do not accept or refuse the JSON whole.**
+
+**One stylistic note, not a rule.** The exemplar numbers its sections — `## 1. Convert Separate
+Images to Base64 Strings`, `## 2. …`, `## 3. …`. Ours are unnumbered; the first (rejected) pool
+canvas was numbered and we dropped the numbers in the rebuild. Nothing anywhere requires either.
 
 ## 7. Build plan
 

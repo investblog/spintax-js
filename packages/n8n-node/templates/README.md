@@ -11,11 +11,13 @@ Each file has a canvas image beside it (`*.png`), shot from a live n8n after the
 A gallery listing for a community node gets no rendered preview, so that image is the only way a
 reviewer sees the canvas — it belongs at the top of the description.
 
-Sticky notes in all three files are generated to n8n's own rules — the ones their template 13868
-implements, not the ones we inferred from finished templates. See `docs/spec-n8n-node.md` §6.1 for
-the constants; the short version is at least `ceil(nodes / 3)` tight groups, an overview sticky 480
-wide whose content must fit 900px, and `### How it works` as a numbered list with `### Setup steps`
-as checkboxes.
+Sticky notes and node names in all three files follow the rules n8n **wrote down**, in the two
+guideline pages and their own exemplar template 4817 — not the constants of their sticky generator,
+three of which turned out to be its internals rather than review criteria. `docs/spec-n8n-node.md`
+§6.2 has the checklist, the sources, and the table of what we had believed and what the exemplar
+measures. The mechanical half is a gate: `test/templates.test.ts` runs on every `npm test` and
+fails on a default node name, a section sticky covering fewer than two nodes, an overview outside
+100–300 words, overlapping stickies, or a connection naming a node that no longer exists.
 
 ## cold-email-bridge.json
 
@@ -30,7 +32,7 @@ ESP/Gmail/SMTP node. Feed it a product list instead of leads and the same patter
 unique product description per product per storefront — no duplicate content across sites.
 No credentials required by the Spintax node; everything runs locally in your n8n.
 
-**Gallery:** workflow 17930 — rebuilt and ready to resubmit, but the portal allows only one template under review at a time, so it waits for 18308.
+**Gallery:** workflow 17930 — **published 2026-08-24**. Note the live listing is the JSON we mailed on 2026-08-13, which the reviewer applied by hand; it is *not* this file. This copy has never been submitted, and since 2026-08-25 it also carries the §6.2 fixes (one section sticky was covering a single node).
 
 ## product-copy-pool.json
 
@@ -47,7 +49,7 @@ that distinguishes "twelve different documents" from "one skeleton wearing twelv
 on real pools: one template 0.962, six templates 0.017). The LLM runs once; every future run of
 the pool costs nothing. No credentials on the Spintax side.
 
-**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Submitted to the gallery 2026-08-16 as workflow 18308, rebuilt stickies resubmitted 2026-08-20 — **Under review**; the canvas image the gallery description needs is `product-copy-pool.png` beside this file.
+**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Gallery workflow 18308: submitted 2026-08-16, resubmitted 2026-08-20, **bounced again the same day** with a generic checklist. Fixed 2026-08-25 against §6.2 — two nodes carried n8n default names and `## Validate the draft` covered a single node. The canvas image the description needs is `product-copy-pool.png` beside this file; the portal renders it at 858px wide, so it has to stay legible there.
 
 ## ai-authoring-funnel.json
 

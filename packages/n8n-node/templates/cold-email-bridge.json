@@ -101,8 +101,8 @@
     },
     {
       "parameters": {
-        "content": "## Render subject and body\n\nTwo Spintax nodes render one unique subject and body per lead. Conditionals switch copy on a data field and plurals keep counts grammatical — syntax no sending platform can parse.",
-        "width": 416,
+        "content": "## Render, then hand off to your sender\n\nTwo Spintax nodes render one unique subject and body per lead: conditionals switch copy on a data field, plurals keep counts grammatical. Replace the pass-through with your sending node — it receives finished text, so nothing downstream understands spintax.",
+        "width": 704,
         "height": 336,
         "color": 7
       },
@@ -114,22 +114,6 @@
       ],
       "id": "b2c3d4e5-0002-4a11-9c01-5f1a2b3c4d02",
       "name": "Sticky Note2"
-    },
-    {
-      "parameters": {
-        "content": "## Hand off to your sender\n\nReplace this pass-through with your sending node. It receives finished text, so nothing downstream has to understand spintax.",
-        "width": 240,
-        "height": 368,
-        "color": 7
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        864,
-        48
-      ],
-      "id": "b2c3d4e5-0003-4a11-9c01-5f1a2b3c4d03",
-      "name": "Sticky Note3"
     }
   ],
   "connections": {

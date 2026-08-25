@@ -4,7 +4,7 @@
     {
       "parameters": {},
       "id": "fx-trigger",
-      "name": "When clicking 'Execute workflow'",
+      "name": "Start the authoring funnel",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
@@ -92,7 +92,7 @@
         "options": {}
       },
       "id": "fx-model",
-      "name": "OpenAI Chat Model",
+      "name": "Chat model for authoring and repair",
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [
@@ -215,7 +215,7 @@
     },
     {
       "parameters": {
-        "content": "## Spintax AI authoring funnel — brief → LLM → validate → repair → variants\n\n### How it works\n\n1. Your brief becomes an authoring prompt, and your LLM writes ONE spintax template from it — the model runs once, not once per variant.\n2. The draft is validated before anything is rendered, so a broken template never reaches your output.\n3. An invalid draft gets exactly one repair round, aimed at the line, column and code of each diagnostic.\n4. A valid template renders five distinct variants and reports how many it actually produced.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Add credentials to the two chat model nodes, or swap in your own model.\n- [ ] Put your brief, locale and allowed variables in **Your brief**.\n- [ ] Run it once — a valid draft goes straight to variants.\n\n### Customization\n\nRaise the variant count on **Render 5 variants**; `produced` tells you when a template runs out of distinct combinations. Add a second repair round by copying the three repair nodes — the cap is the wiring, so it is yours to change.",
+        "content": "## Spintax AI authoring funnel — brief → LLM → validate → repair → variants\n\n### How it works\n\n1. Your brief becomes an authoring prompt, and your LLM writes ONE spintax template from it — the model runs once, not once per variant.\n2. The draft is validated before anything is rendered, so a broken template never reaches your output.\n3. An invalid draft gets exactly one repair round, aimed at the line, column and code of each diagnostic.\n4. A valid template renders five distinct variants and reports how many it actually produced.\n\n### Setup steps\n\n- [ ] Install the community node `n8n-nodes-spintax`.\n- [ ] Add credentials to **Chat model for authoring and repair** — one node feeds both LLM steps — or swap in your own.\n- [ ] Put your brief, locale and allowed variables in **Your brief**.\n- [ ] Run it once — a valid draft goes straight to variants.\n\n### Customization\n\nRaise the variant count on **Render 5 variants**; `produced` tells you when a template runs out of distinct combinations. Add a second repair round by copying the three repair nodes — the cap is the wiring, so it is yours to change.",
         "width": 480,
         "height": 784
       },
@@ -294,17 +294,6 @@
     }
   ],
   "connections": {
-    "When clicking 'Execute workflow'": {
-      "main": [
-        [
-          {
-            "node": "Your brief",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Your brief": {
       "main": [
         [
@@ -333,22 +322,6 @@
           {
             "node": "Validate draft",
             "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "OpenAI Chat Model": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "Your LLM",
-            "type": "ai_languageModel",
-            "index": 0
-          },
-          {
-            "node": "LLM (repair)",
-            "type": "ai_languageModel",
             "index": 0
           }
         ]
@@ -407,6 +380,33 @@
           {
             "node": "Still invalid — stop (loop is capped)",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start the authoring funnel": {
+      "main": [
+        [
+          {
+            "node": "Your brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat model for authoring and repair": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Your LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "LLM (repair)",
+            "type": "ai_languageModel",
             "index": 0
           }
         ]
