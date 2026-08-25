@@ -719,3 +719,33 @@ rule), after the Worker proves the need — never speculatively.
    draft-from-brief, validate-pasted, show-N-variants, plain-language error explanation,
    export WP-ready body. Second independent dogfood path (§8).
 7. **M6 — browser playground** on `spintax.net` running the package client-side (SEO/edu).
+
+   **Idea filed against M6, not scheduled: a provenance mode on `render()`.** Proposed
+   2026-08-25 by the `content-gen` pipeline (nine campaigns, ~9000 articles). Today `render()`
+   returns a string, which is enough to get text and not enough to work with it: a lint finding
+   has a position in the OUTPUT, and turning that into "which branch of which slot produced it"
+   is currently done by eye. The ask is an opt-in map, default off:
+
+   ```js
+   const { text, provenance } = render(src, { locale: 'ru', seed: 'x', provenance: true });
+   // provenance: [{ start, end, path: [3, 'options', 2], kind: 'enumeration' }, …]
+   ```
+
+   The engine already has the information at render time; it just does not hand it out. The named
+   consumer is the playground itself — with the map it stops showing *what* came out and starts
+   showing *why*, and the recipe-shaped quick fixes the proposer catalogued
+   (`bind-into-branch`, `lift-to-#def`, `dedupe-root`) become node transformations rather than
+   text edits.
+
+   **Two things to settle before anyone starts.** First, cost: this means threading spans through
+   the renderer, and #68 is the measurement that we declined exactly that kind of threading
+   ("five helpers where three different separator rules meet on purpose") — so the proposer's own
+   "not free by speed" is likely an underestimate, and the flag must be off by default.
+
+   Second, and this is the part a future session will get wrong: **provenance is NOT parity-gated
+   and must never become a porting obligation.** It is not in the §3.1 contract — not syntax
+   surface, not a verdict, not a plural bucket, not post-process. It is a record of which branch
+   the RNG chose, and cross-engine RNG parity is an explicit NON-goal (§7), so two conforming
+   engines rendering the same template with the same seed may legitimately produce different
+   provenance. If this ships in TS it ships in TS alone, and the sibling engines — `spintax-php`,
+   `spintax-py`, `spintax-win`, `Spintax.Core` (.NET) — owe it nothing.
