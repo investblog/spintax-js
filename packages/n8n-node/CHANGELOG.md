@@ -3,6 +3,34 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.0
+
+**Lint's `repeat.word` no longer runs on a locale whose function words it does not know**
+(spintax-js#77). It used to: the lookup was `STOP_WORDS[language] ?? []`, so for every locale but
+`ru` and `en` an empty stop set meant "judge every preposition and article as content". Reported
+from a production pipeline of nine campaigns — on a live Spanish pool of 1000 articles the single
+word `para` produced **2303 findings**. Nothing crashed; the gate simply became unreadable, which
+is worse than no gate, because the real findings go out buried in the noise.
+
+Three changes, and the first is the one that matters:
+
+- **The rule is skipped where it cannot judge, and says so.** Lint's output gains `skipped`, an
+  array of the rules that did not run. A workflow branching on `lintClean` — or on the Clean
+  output — must now read it too: silence from a rule that never ran is not evidence. The
+  language-neutral punctuation rules are unaffected and keep running on every locale.
+- **New parameter, Function Words** (`stopWords`): the caller's own list for a locale we ship no
+  table for, merged with the built-in table rather than replacing it. This is what turns
+  `repeat.word` back on for an untabled locale, and it is deliberately the caller's call — we are
+  not going to assert the closed-class vocabulary of a language nobody here has measured.
+- **Tables for `de`, `es` and `pt`**, contributed by the reporting pipeline and grouped by
+  language as they had them, measured on real text rather than written from a grammar. `pt-BR`
+  resolves to `pt`.
+
+**This is a behaviour change on any locale outside `ru`/`en`/`de`/`es`/`pt`:** `repeat.word` used
+to report there and now reports nothing until you fill in Function Words. That is the point — what
+it reported was noise — but a workflow that was quietly tolerating it will see its Defective output
+go empty. Hence the minor bump rather than a patch.
+
 ## 0.2.8
 
 Bundles `@spintax/core` **0.6.1**: the engine no longer throws `RangeError` on deeply nested

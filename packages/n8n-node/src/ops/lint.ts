@@ -59,6 +59,16 @@ export interface LintOpOptions {
    * not a defect); at six every hit was real.
    */
   window?: number;
+  /**
+   * Function words for a locale we have no table for, so `repeat.word` can run there at all.
+   *
+   * Merged with the built-in table when one exists, matched lowercased and whole-word. Supplying
+   * anything here is what turns `repeat.word` on for an untabled locale — without it the rule is
+   * skipped rather than run blind, and `skipped` says so. This is NOT `ignore`: that one blanks
+   * the VALUES a render substituted (a brand, a merge tag), this one names the language's own
+   * grammar.
+   */
+  stopWords?: readonly string[];
 }
 
 export interface LintOpResult {
@@ -66,6 +76,12 @@ export interface LintOpResult {
   findings: LintFinding[];
   locale: string;
   window: number;
+  /**
+   * Rules that did NOT run, and therefore cannot have found anything. Empty on a locale we can
+   * judge. A caller treating `clean: true` as "checked and fine" must read this too — silence
+   * from a rule that never ran is not evidence.
+   */
+  skipped: LintCode[];
 }
 
 /** Stands in for a word of an ignored value: keeps the position, never compares. */
@@ -82,6 +98,27 @@ export const LINT_SAMPLE_MAX_COUNT = 500;
  * with no table falls back to the length filter alone, which is weaker but never
  * invents a rule for a language we have not looked at.
  */
+/**
+ * Function words `repeat.word` must not judge — a language repeats them by construction.
+ *
+ * These tables are MEASURED, not linguistic: each entry is a word that actually showed up as a
+ * false finding on real text — `ru`/`en` here, `de`/`es`/`pt` from the pipeline that reported the
+ * defect. That is also why there are five and not fifty, and why a locale with no table no longer
+ * falls back to an empty set. It used to, and the cost was reported from a
+ * production pipeline: on a live Spanish pool the single word `para` produced **2303 findings**.
+ * Nothing in the code was wrong — `STOP_WORDS[language] ?? []` simply meant "judge every function
+ * word as content" for every locale but two. A gate that shouts on every document is a gate people
+ * stop reading, which is worse than no gate. See issue #77.
+ *
+ * The rule now is the one this module already applies to Russian gender: judge where we can, stay
+ * silent where we cannot, and SAY which. A caller whose locale has no table supplies its own list
+ * through `stopWords` — the honest position, because otherwise we would be asserting the
+ * closed-class vocabulary of a language nobody here has measured against real text.
+ *
+ * The four-character floor in `repeatFindings` already hides the shortest ones (`de`, `la`, `el`),
+ * so a table only has to carry what is four characters and up. Shorter entries are kept where they
+ * read naturally and cost nothing.
+ */
 const STOP_WORDS: Record<string, readonly string[]> = {
   ru: [
     'и', 'а', 'но', 'не', 'на', 'в', 'с', 'по', 'о', 'об', 'от', 'до', 'из', 'за', 'то',
@@ -91,9 +128,36 @@ const STOP_WORDS: Record<string, readonly string[]> = {
   en: [
     'that', 'this', 'with', 'from', 'have', 'has', 'had', 'will', 'would', 'could',
     'should', 'they', 'them', 'their', 'there', 'these', 'those', 'your', 'yours',
-    'about', 'which', 'when', 'what', 'were', 'been', 'into', 'than', 'then', 'some',
+    'about', 'which', 'when', 'what', 'where', 'were', 'been', 'into', 'than', 'then', 'some',
     'more', 'most', 'less', 'fewer', 'just', 'like', 'also', 'only', 'even', 'very', 'much', 'each',
     'over', 'after', 'before', 'while', 'because', 'here',
+  ],
+  // de/es/pt come from the same pipeline that reported #77, grouped by language as they had
+  // them (`campaign/lint-render.cjs`, constant `STOP`) — measured across nine campaigns rather
+  // than written from a grammar. Their own set is ONE list shared by every locale; splitting it
+  // back per language is stronger, because a union can only suppress findings — but it also
+  // drops whatever one language's group was silently covering for another. `nada` was exactly
+  // that: filed under es, load-bearing for pt, and only the pt test below noticed. Expect more
+  // of those, and add them the same way — from a text that misfired, not from a grammar.
+  de: [
+    'der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einen', 'einem', 'einer',
+    'und', 'oder', 'aber', 'nicht', 'kein', 'keine', 'keinen', 'von', 'zu', 'zum', 'zur',
+    'mit', 'auf', 'aus', 'bei', 'nach', 'vor', 'um', 'im', 'ist', 'sind', 'war', 'wird',
+    'werden', 'sich', 'es', 'man', 'auch', 'noch', 'nur', 'schon', 'wenn', 'dass', 'als',
+    'was', 'wer', 'wie', 'wo', 'sie', 'ihr', 'dann', 'dabei', 'davon', 'daran',
+  ],
+  es: [
+    'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'o', 'pero', 'no', 'de',
+    'del', 'al', 'en', 'con', 'sin', 'por', 'para', 'que', 'se', 'lo', 'su', 'sus', 'es',
+    'son', 'era', 'ya', 'muy', 'mas', 'más', 'si', 'como', 'cuando', 'donde', 'quien',
+    'esto', 'eso', 'esta', 'este', 'algo', 'nada', 'todo', 'todos', 'cada', 'hay',
+  ],
+  // `languageOf` drops the region, so pt-BR lands here too.
+  pt: [
+    'os', 'as', 'um', 'uma', 'uns', 'umas', 'e', 'ou', 'mas', 'não', 'nao', 'da', 'do',
+    'das', 'dos', 'na', 'no', 'nas', 'nos', 'com', 'sem', 'por', 'que', 'se', 'seu', 'sua',
+    'é', 'sao', 'são', 'já', 'ja', 'muito', 'mais', 'como', 'quando', 'onde', 'quem',
+    'isso', 'isto', 'esse', 'este', 'algo', 'nada', 'tudo', 'cada', 'ao', 'aos', 'até', 'ate',
   ],
 };
 
@@ -156,7 +220,12 @@ export function lintOp(text: string, opts: LintOpOptions = {}): LintOpResult {
   const locale = opts.locale ?? 'en';
   const language = languageOf(locale);
   const window = Math.max(2, Math.trunc(opts.window ?? LINT_DEFAULT_WINDOW));
-  const stop = new Set(STOP_WORDS[language] ?? []);
+  // A locale with no table and no caller-supplied list cannot be judged for repetition: every
+  // function word would read as content. Decide it here, once, and report it in the result.
+  const table = STOP_WORDS[language];
+  const supplied = (opts.stopWords ?? []).map((w) => w.trim().toLowerCase()).filter(Boolean);
+  const canJudgeRepeats = table !== undefined || supplied.length > 0;
+  const stop = new Set([...(table ?? []), ...supplied]);
   // An ignored value is replaced by AS MANY filler words as it contained, not by a
   // space. Collapsing "Trail Runner 3" to nothing pulls the words on either side of it
   // three positions closer, and a pair that sat comfortably outside the window lands
@@ -177,14 +246,18 @@ export function lintOp(text: string, opts: LintOpOptions = {}): LintOpResult {
   stop.add(IGNORED);
 
   const findings: LintFinding[] = [];
-  findings.push(...repeatFindings(words, window, stop));
+  const skipped: LintCode[] = [];
+  if (canJudgeRepeats) findings.push(...repeatFindings(words, window, stop));
+  else skipped.push('repeat.word');
+  // Relative-pronoun agreement is Russian-only by construction, so its absence elsewhere is the
+  // rule's scope rather than a gap — it is not reported as skipped.
   if (language === 'ru') findings.push(...relativeAgreementFindings(words, stop));
   // Punctuation runs on the ORIGINAL text: blanking a value leaves the gap where it was,
   // and a document reading "Our  , designed by" would be reported for debris the render
   // never produced.
   findings.push(...punctuationFindings(text, language));
 
-  return { clean: findings.length === 0, findings: dedupe(findings), locale, window };
+  return { clean: findings.length === 0, findings: dedupe(findings), locale, window, skipped };
 }
 
 /** Two slots landing on the same word — or the same word in two forms nearby. */
@@ -316,6 +389,8 @@ export interface LintSampleResult {
   issues: LintIssueTally[];
   locale: string;
   window: number;
+  /** Rules that did not run on ANY of the drawn documents — see `LintOpResult.skipped`. */
+  skipped: LintCode[];
 }
 
 /**
@@ -340,6 +415,8 @@ export function lintSampleOp(template: string, opts: LintSampleOptions = {}): Li
   let cleanCount = 0;
   let locale = opts.locale ?? 'en';
   let window = LINT_DEFAULT_WINDOW;
+  // Every draw runs the same rules on the same locale, so the last answer is the answer.
+  let skipped: LintCode[] = [];
 
   for (let i = 0; i < checked; i++) {
     const rendered = renderOp(ast, {
@@ -351,6 +428,7 @@ export function lintSampleOp(template: string, opts: LintSampleOptions = {}): Li
     const result = lintOp(rendered, lintOptions);
     locale = result.locale;
     window = result.window;
+    skipped = result.skipped;
     if (result.clean) {
       cleanCount++;
       continue;
@@ -370,6 +448,7 @@ export function lintSampleOp(template: string, opts: LintSampleOptions = {}): Li
     issues: [...tally.values()].sort((a, b) => b.count - a.count),
     locale,
     window,
+    skipped,
   };
 }
 

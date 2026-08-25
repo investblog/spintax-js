@@ -196,3 +196,95 @@ describe('lintSampleOp', () => {
     expect(lintSampleOp('a', { count: 5000 }).checked).toBe(500);
   });
 });
+
+// ── #77: a locale with no stop-word table ────────────────────────────────────
+//
+// `repeat.word` used to run everywhere with `STOP_WORDS[language] ?? []`, so on any locale but
+// ru/en every function word was eligible content. The reporting pipeline measured the cost: one
+// Spanish `para` produced 2303 findings across a 1000-article pool. The examples below are theirs.
+
+describe('#77 — repeat.word only runs where the function words are known', () => {
+  it('no longer reports a Spanish function word as a repetition', () => {
+    const text = 'Herramientas para webmasters, pensadas para equipos que trabajan para clientes.';
+    const result = lintOp(text, { locale: 'es' });
+    expect(result.findings.filter((f) => f.code === 'repeat.word')).toEqual([]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('still catches a real Spanish repetition, so the table did not blunt the rule', () => {
+    const result = lintOp('La herramienta es una herramienta para todos.', { locale: 'es' });
+    expect(result.findings.some((f) => f.code === 'repeat.word')).toBe(true);
+  });
+
+  it('no longer reports the German function words the pipeline named', () => {
+    const text = 'Eine Sammlung, die sich an alle wendet und die keine Grenzen kennt.';
+    expect(lintOp(text, { locale: 'de' }).findings.filter((f) => f.code === 'repeat.word')).toEqual(
+      [],
+    );
+  });
+
+  it('still catches a real German repetition', () => {
+    const result = lintOp('Die Sammlung ist eine Sammlung für alle.', { locale: 'de' });
+    expect(result.findings.some((f) => f.code === 'repeat.word')).toBe(true);
+  });
+
+  it('reports the Portuguese function words as clean and a real repeat as a finding', () => {
+    expect(
+      lintOp('Isso não é nada, isso não muda nada aqui.', { locale: 'pt' }).findings.filter(
+        (f) => f.code === 'repeat.word',
+      ),
+    ).toEqual([]);
+    expect(
+      lintOp('A ferramenta é uma ferramenta para todos.', { locale: 'pt' }).findings.some(
+        (f) => f.code === 'repeat.word',
+      ),
+    ).toBe(true);
+  });
+
+  it('drops the region, so pt-BR uses the pt table', () => {
+    expect(lintOp('Isso não é nada, isso não muda nada.', { locale: 'pt-BR' }).skipped).toEqual([]);
+  });
+
+  it('SKIPS repeat.word on a locale it has no table for, and says so', () => {
+    // Turkish: no table. Silence here would be the defect — a rule that never ran reporting clean.
+    const result = lintOp('Bu araç bu araç için değil.', { locale: 'tr' });
+    expect(result.skipped).toEqual(['repeat.word']);
+    expect(result.findings.filter((f) => f.code === 'repeat.word')).toEqual([]);
+  });
+
+  it('runs again once the caller supplies the words, and then reports nothing skipped', () => {
+    const result = lintOp('Bu araç bu araç için değil.', {
+      locale: 'tr',
+      stopWords: ['bu', 'için', 'değil'],
+    });
+    expect(result.skipped).toEqual([]);
+    expect(result.findings.some((f) => f.code === 'repeat.word')).toBe(true);
+  });
+
+  it('merges a supplied list with the built-in table rather than replacing it', () => {
+    // `para` comes from the table, `webmasters` from the caller — both must be silenced.
+    const text = 'Webmasters para webmasters, para todos.';
+    expect(
+      lintOp(text, { locale: 'es', stopWords: ['webmasters'] }).findings.filter(
+        (f) => f.code === 'repeat.word',
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps the language-neutral rules running on an untabled locale', () => {
+    // Only repetition needs the vocabulary; punctuation debris does not.
+    const result = lintOp('Bir  metin , burada.', { locale: 'tr' });
+    expect(result.skipped).toEqual(['repeat.word']);
+    expect(result.findings.map((f) => f.code)).toContain('punctuation.double-space');
+    expect(result.findings.map((f) => f.code)).toContain('punctuation.space-before');
+  });
+
+  it('carries the skip through the sampler, where a clean ratio would otherwise mislead', () => {
+    const report = lintSampleOp('{Bu|Şu} araç {bu|şu} araç.', {
+      count: 5,
+      baseSeed: 'x',
+      locale: 'tr',
+    });
+    expect(report.skipped).toEqual(['repeat.word']);
+  });
+});

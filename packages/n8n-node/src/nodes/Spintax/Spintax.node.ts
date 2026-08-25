@@ -322,6 +322,16 @@ export class Spintax implements INodeType {
         displayOptions: { show: { operation: ['lint'] } },
       },
       {
+        displayName: 'Function Words',
+        name: 'lintStopWords',
+        type: 'string',
+        typeOptions: { rows: 3 },
+        default: '',
+        description:
+          "The language's own function words — prepositions, articles, conjunctions — ONE PER LINE. Repeat Word is skipped entirely for a locale we ship no table for (only ru and en today), because judging every function word as content buries the real findings: one Spanish word produced 2303 of them on a live pool. Fill this in and the check runs for your locale. Not the same as Ignored Strings, which blanks values a render substituted.",
+        displayOptions: { show: { operation: ['lint'] } },
+      },
+      {
         displayName: 'Repeat Window',
         name: 'lintWindow',
         type: 'number',
@@ -818,6 +828,7 @@ export class Spintax implements INodeType {
             const window = this.getNodeParameter('lintWindow', i, 6) as number;
             const locale = resolveLocale(this, i);
             const ignore = splitLines(this.getNodeParameter('lintIgnore', i, '') as string);
+            const stopWords = splitLines(this.getNodeParameter('lintStopWords', i, '') as string);
             if ((this.getNodeParameter('lintSource', i, 'text') as string) === 'template') {
               const cleaned = readTemplate(this, i);
               const baseSeed = this.getNodeParameter('baseSeed', i, '') as string;
@@ -826,6 +837,7 @@ export class Spintax implements INodeType {
                 count: this.getNodeParameter('sampleSize', i, 50) as number,
                 ...(baseSeed !== '' ? { baseSeed } : {}),
                 ...(ignore.length > 0 ? { ignore } : {}),
+                ...(stopWords.length > 0 ? { stopWords } : {}),
                 locale,
                 window,
               });
@@ -837,6 +849,7 @@ export class Spintax implements INodeType {
                 cleanRatio: report.cleanRatio,
                 issues: report.issues as unknown as IDataObject[],
                 locale: report.locale,
+                skipped: report.skipped,
               });
               // A sample is "clean" only when every drawn document was — one defect in
               // fifty is exactly the case the operation exists to surface.
@@ -846,6 +859,7 @@ export class Spintax implements INodeType {
                 locale,
                 window,
                 ...(ignore.length > 0 ? { ignore } : {}),
+                ...(stopWords.length > 0 ? { stopWords } : {}),
               });
               const item = out(i, {
                 ...items[i]!.json,
@@ -853,6 +867,7 @@ export class Spintax implements INodeType {
                 findings: result.findings as unknown as IDataObject[],
                 findingCount: result.findings.length,
                 locale: result.locale,
+                skipped: result.skipped,
               });
               (result.clean ? main : rejected).push(item);
             }
