@@ -770,6 +770,26 @@ Setup text references our node names, and our layout was canvas-verified while i
 those still hold. But the renaming was the part that was right, and it was the part that mattered.
 **Take the AI verdict apart and judge each change; do not accept or refuse the JSON whole.**
 
+**Resubmitted 2026-08-25, and the route matters.** 18308 is `in_review` again with the fixed JSON
+(22 nodes, five section stickies, no default names) and a description whose image now sits at the
+top. Two portal behaviours were measured on the way and both change the order of operations:
+
+- **"Upload new version" in the `…` menu is still broken.** `PUT api.n8n.io/api/workflows/18308`
+  answers **400** and the toast reads "Could not upload new version. Please try again." — the same
+  failure recorded on 2026-08-13, so treat that menu item as dead. The only working route is the
+  **Implement changes** modal reached by clicking the dashboard *card* (not the badge, which is a
+  plain `span`), and it uploads and submits in one action. There is no upload-without-submitting.
+- **"Edit description" works while a template is under review**, and saving it did **not** disturb
+  the review — status stayed `in_review`, only `updated_at` moved. That retires the 2026-08-13
+  worry that saving a description re-submits: it did then, from `pending`; it does not now, from
+  `in_review`. It also means the safe order is **JSON first, description second** — the reverse
+  risks submitting the old workflow if that old behaviour ever returns.
+
+The image lives in the **Quick overview** field, which renders first; `Additional info` renders
+last, which is where it used to be and why it was at the bottom. Quick overview is capped at
+10–50 words and the image markdown counts toward it — the current copy sits at 45, so there is
+little room. The portal renders that image at **858×252** from 1302×382.
+
 **One stylistic note, not a rule.** The exemplar numbers its sections — `## 1. Convert Separate
 Images to Base64 Strings`, `## 2. …`, `## 3. …`. Ours are unnumbered; the first (rejected) pool
 canvas was numbered and we dropped the numbers in the rebuild. Nothing anywhere requires either.

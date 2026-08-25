@@ -49,7 +49,7 @@ that distinguishes "twelve different documents" from "one skeleton wearing twelv
 on real pools: one template 0.962, six templates 0.017). The LLM runs once; every future run of
 the pool costs nothing. No credentials on the Spintax side.
 
-**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Gallery workflow 18308: submitted 2026-08-16, resubmitted 2026-08-20, **bounced again the same day** with a generic checklist. Fixed 2026-08-25 against §6.2 — two nodes carried n8n default names and `## Validate the draft` covered a single node. The canvas image the description needs is `product-copy-pool.png` beside this file; the portal renders it at 858px wide, so it has to stay legible there.
+**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Gallery workflow 18308: submitted 2026-08-16, resubmitted 2026-08-20, **bounced again the same day** with a generic checklist. Fixed and **resubmitted 2026-08-25** (under review) against §6.2 — two nodes carried n8n default names and `## Validate the draft` covered a single node. The canvas image the description needs is `product-copy-pool.png` beside this file; the portal renders it at 858px wide, so it has to stay legible there.
 
 ## ai-authoring-funnel.json
 
