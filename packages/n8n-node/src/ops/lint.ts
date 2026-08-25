@@ -200,14 +200,35 @@ export function sameRoot(a: string, b: string): boolean {
   return i >= Math.max(5, n - 3);
 }
 
-/** Tags out, punctuation to space, lowercase — hyphens survive as part of a word. */
+/**
+ * Tags out, entities out, punctuation to space, lowercase — hyphens survive as part of a word.
+ *
+ * The entity pass is not decoration. Stripping `&` and `;` as punctuation leaves the entity NAME
+ * standing as a word, and a name repeats wherever the character does: measured over 120 KB of our
+ * own French long-form, `nbsp` was the single most reported "repetition" on the page, ahead of
+ * every real word. `&mdash;` and `&rarr;` did the same. The rule was reporting typography.
+ *
+ * Numeric entities are decoded, because `&#160;` and `&#x2014;` stand for a definite character.
+ * A NAMED entity becomes a space instead of its character: resolving the whole HTML5 name table
+ * to catch `&eacute;` is an HTML parser's job, not a lint tokeniser's, and the cost of not doing
+ * it is that `caf&eacute;` is cut to `caf` — which can only HIDE a repetition, never invent one.
+ * That is the trade this module already makes everywhere else: silence beats a wrong complaint.
+ */
 export function lintWords(text: string): string[] {
   return text
     .replace(/<[^>]+>/g, ' ')
+    .replace(/&#(\d{1,7});/g, (_, d: string) => codePoint(Number(d)))
+    .replace(/&#x([0-9a-f]{1,6});/gi, (_, h: string) => codePoint(Number.parseInt(h, 16)))
+    .replace(/&[a-z][a-z0-9]{1,31};/gi, ' ')
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .toLowerCase()
     .split(/\s+/u)
     .filter(Boolean);
+}
+
+/** A malformed code point must not throw inside a lint pass; it is simply not a word. */
+function codePoint(n: number): string {
+  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : ' ';
 }
 
 function languageOf(locale: string): string {

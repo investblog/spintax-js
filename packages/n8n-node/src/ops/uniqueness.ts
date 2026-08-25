@@ -65,7 +65,20 @@ export function normalizeText(text: string, opts: NormalizeOptions = {}): string
 
   // 2. Tags with their attributes; the inner text stays. AFTER step 1 — otherwise we
   //    would strip markup from inside a macro and stop recognising its exact string.
-  if (bodyFormat === 'html') s = s.replace(/<[^>]+>/g, ' ');
+  //    Entities go with them: step 4 turns `&` and `;` into spaces, which would leave the
+  //    entity NAME standing as a word. Every document in an HTML pool carries the same few
+  //    entities, so those names are shared vocabulary by construction and push the footprint
+  //    up — measured on six variants of one skeleton, 0.4545 with them and 0.4 without. A
+  //    metric that exists to say "is this pool varied" must not count typography as sameness.
+  //    Numeric forms are decoded because they stand for a definite character; a named one
+  //    becomes a space, on the same reasoning as `lintWords`.
+  if (bodyFormat === 'html') {
+    s = s
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&#(\d{1,7});/g, (_, d: string) => entityChar(Number(d)))
+      .replace(/&#x([0-9a-f]{1,6});/gi, (_, h: string) => entityChar(Number.parseInt(h, 16)))
+      .replace(/&[a-z][a-z0-9]{1,31};/gi, ' ');
+  }
   else if (bodyFormat === 'bbcode') s = s.replace(/\[[^\]]+\]/g, ' ');
 
   // 3. NFC first, then the locale-aware lowercase.
@@ -217,6 +230,11 @@ export function footprintShare(
     sharedShingles: shared,
     totalShingles: df.size,
   };
+}
+
+/** Out-of-range code points must not throw inside a normalise pass; they are not text. */
+function entityChar(n: number): string {
+  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : ' ';
 }
 
 export interface UniquenessOptions extends NormalizeOptions {

@@ -3,6 +3,30 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.1
+
+**HTML entity names were being counted as words** — by Lint's `repeat.word` and by Uniqueness's
+footprint. Stripping `&` and `;` as ordinary punctuation left the NAME standing, so `&nbsp;`
+became the word `nbsp`. Found by measurement rather than by reading: run the lint over 120 KB of
+long-form French and `nbsp` is the most-reported "repetition" on the page, ahead of every real
+word, with `mdash` and `rarr` behind it. The rule was reporting typography.
+
+- **Lint.** Entity names no longer become tokens. Numeric forms (`&#160;`, `&#x2014;`) are decoded
+  to the character they stand for; a named one becomes a space, because resolving the HTML5 name
+  table is a parser's job and the cost of not doing it — `caf&eacute;` cut to `caf` — can only
+  hide a repetition, never invent one.
+- **Uniqueness.** Same strip inside the `html` body format. Every document in an HTML pool carries
+  the same handful of entities, so their names were shared vocabulary by construction and pushed
+  the footprint up: measured on six variants of one skeleton, **0.4545 with them and 0.4 without**.
+  A metric whose job is to say whether a pool is varied must not count typography as sameness.
+
+**Two numbers move, and both were wrong before.** A footprint on an HTML body comes out slightly
+lower — if you gate on Footprint Limit, a pool that used to fail may now pass, correctly. And Lint
+findings shift in *both* directions: the false entity repeats go, but an entity no longer pads the
+repeat window, so a genuine repetition it was holding apart can now land inside it and be reported.
+That is the same effect Ignored Strings already documents, for the same reason: a token that is not
+a word must not occupy the space of one.
+
 ## 0.3.0
 
 **Lint's `repeat.word` no longer runs on a locale whose function words it does not know**

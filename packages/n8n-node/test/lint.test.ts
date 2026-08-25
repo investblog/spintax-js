@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { guessGenderRu, lintOp, lintSampleOp, sameRoot } from '../src/ops/lint';
+import { guessGenderRu, lintOp, lintSampleOp, lintWords, sameRoot } from '../src/ops/lint';
 
 /** Codes only — messages are explicitly not a contract. */
 const codes = (text: string, opts?: Parameters<typeof lintOp>[1]): string[] =>
@@ -286,5 +286,52 @@ describe('#77 — repeat.word only runs where the function words are known', () 
       locale: 'tr',
     });
     expect(report.skipped).toEqual(['repeat.word']);
+  });
+});
+
+// ── HTML entities are not words ──────────────────────────────────────────────
+//
+// Found by measurement, not by reading: run repeat.word over 120 KB of our own French long-form
+// and `nbsp` is the most reported "repetition" on the page, ahead of every real word, with
+// `mdash` and `rarr` behind it. Stripping & and ; as punctuation left the entity NAME standing.
+
+describe('lintWords drops HTML entities before they can look like words', () => {
+  it('does not turn a named entity into a token', () => {
+    expect(lintWords('a&nbsp;b &mdash; c&nbsp;d')).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('no longer reports two non-breaking spaces as a repetition', () => {
+    const result = lintOp('Le texte&nbsp;ici et le mot&nbsp;suivant.', {
+      locale: 'fr',
+      stopWords: ['le', 'et'],
+    });
+    expect(result.findings.filter((f) => f.code === 'repeat.word')).toEqual([]);
+  });
+
+  it('decodes a numeric entity to the character it stands for', () => {
+    // &#160; is a non-breaking space, so it separates words rather than joining them.
+    expect(lintWords('one&#160;two')).toEqual(['one', 'two']);
+    // &#x2014; is an em dash: punctuation, dropped like any other.
+    expect(lintWords('alpha&#x2014;beta')).toEqual(['alpha', 'beta']);
+  });
+
+  it('survives an out-of-range code point instead of throwing inside the pass', () => {
+    // Reachable values only: the decimal form caps at 7 digits and the hex form at 6, and both
+    // of those still exceed U+10FFFF — `String.fromCodePoint` throws RangeError on either.
+    // (An earlier version of this test used 8 digits, which the regex never matches, so it
+    // proved nothing; a control mutation removing the guard kept it green.)
+    expect(() => lintWords('x&#9999999;y')).not.toThrow();
+    expect(() => lintWords('x&#xFFFFFF;y')).not.toThrow();
+    expect(lintWords('x&#9999999;y')).toEqual(['x', 'y']);
+  });
+
+  it('still finds a real repetition in text that also carries entities', () => {
+    const result = lintOp('The tool&nbsp;here is a tool for everyone.', { locale: 'en' });
+    expect(result.findings.some((f) => f.code === 'repeat.word')).toBe(true);
+  });
+
+  it('cuts a letter entity short rather than inventing a word from its name', () => {
+    // `caf&eacute;` becomes `caf`, which can only hide a repetition — never invent one.
+    expect(lintWords('caf&eacute; noir')).toEqual(['caf', 'noir']);
   });
 });

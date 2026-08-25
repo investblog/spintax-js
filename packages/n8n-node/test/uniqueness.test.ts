@@ -298,3 +298,44 @@ describe('uniquenessOp', () => {
     expect(UNIQUENESS_DEFAULTS.minPoolForFootprint).toBe(5);
   });
 });
+
+describe('HTML entities are typography, not shared vocabulary', () => {
+  const skeleton = (v: string) =>
+    `Our ${v} delivery service brings&nbsp;your order to the door within&nbsp;one working day.`;
+  const docs = ['fast', 'quick', 'rapid', 'swift', 'speedy', 'prompt'].map(skeleton);
+
+  it('scores an HTML pool the same as the pool with real spaces', () => {
+    const withEntities = uniquenessOp(docs, { bodyFormat: 'html' });
+    const withSpaces = uniquenessOp(
+      docs.map((t) => t.replace(/&nbsp;/g, ' ')),
+      { bodyFormat: 'html' },
+    );
+    // Before the fix these differed: 0.4545 against 0.4, because `nbsp` survived as a word
+    // and every document carried it — typography counted as sameness.
+    expect(withEntities.footprint.value).toBe(withSpaces.footprint.value);
+  });
+
+  it('does not let an entity name pad four shared words into a shared five-shingle', () => {
+    // The tail carries FOUR words every document shares — one short of a shingle, so nothing
+    // is shared. Left standing, `nbsp` becomes the fifth token and manufactures a match that
+    // the writing never contained.
+    const tails = [
+      'alpha bravo charlie delta echo',
+      'foxtrot golf hotel india juliet',
+      'kilo lima mike november oscar',
+      'papa quebec romeo sierra tango',
+      'uniform victor whiskey xray yankee',
+      'zulu anton berta caesar dora',
+    ];
+    const docs = tails.map((t) => `${t} shared words&nbsp;in common`);
+    expect(uniquenessOp(docs, { bodyFormat: 'html' }).footprint.value).toBe(0);
+  });
+
+  it('leaves plain bodies alone — there the ampersand is just text', () => {
+    expect(() => uniquenessOp(docs, { bodyFormat: 'plain' })).not.toThrow();
+  });
+
+  it('survives an out-of-range numeric entity', () => {
+    expect(() => uniquenessOp(docs.map((t) => `${t} &#9999999;`), { bodyFormat: 'html' })).not.toThrow();
+  });
+});
