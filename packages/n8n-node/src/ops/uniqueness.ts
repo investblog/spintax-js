@@ -39,10 +39,11 @@ export interface NormalizeOptions {
   /**
    * EXACT strings every document repeats and that are not the copy being judged
    * (step 1) — matched literally, never as a `%…%` pattern. Macros and merge tags are
-   * the obvious case; a fixed variable value is the one people miss. Measured on the
-   * gallery pool: leaving the product name, brand and feature phrase in scored 0.209,
-   * and excluding them scored 0.107 — the same twelve documents, the difference being
-   * whether the metric judged the writing or the product name.
+   * the obvious case; a fixed variable value is the one people miss. How much it moves the
+   * number depends on how much the copy leans on those values: on a thin template that named
+   * the product every sentence it was 0.209 against 0.107, and on the varied template the
+   * gallery demo ships now (2026-08-26) it is 0.223 against 0.204 — the option earns its place
+   * either way, but the first figure is not a general law.
    */
   macros?: readonly string[];
   bodyFormat?: BodyFormat;

@@ -44,12 +44,15 @@ turns it into 12 documents, and then two checks say whether they are any good. *
 each rendered document for the defects that live in the *combination of choices* and never in the
 template — two adjacent slots picking the same word, a noun and a pronoun disagreeing, punctuation
 debris from an unlucky join — and routes defective drafts away. **Uniqueness** reads the surviving
-pool as a whole: it drops near-duplicates and reports the shared-shingle footprint, the number
-that distinguishes "twelve different documents" from "one skeleton wearing twelve hats" (measured
-on real pools: one template 0.962, six templates 0.017). The LLM runs once; every future run of
-the pool costs nothing. No credentials on the Spintax side.
+pool as a whole: it drops near-duplicates and measures the shared-shingle footprint — the number
+that distinguishes "twelve different documents" from "one skeleton wearing twelve hats" — and in
+this template it GATES on it, so a pool that turns out to be one skeleton leaves on Dropped
+rather than reaching Ready to publish. A gate before it checks that the template could produce
+twelve distinct documents at all. The LLM runs once per template, not per document: re-rendering that
+template is free, while re-running the whole workflow calls the model again and writes a
+different one. No credentials on the Spintax side.
 
-**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Gallery workflow 18308: submitted 2026-08-16, resubmitted 2026-08-20, **bounced again the same day** with a generic checklist. Fixed and **resubmitted 2026-08-25** (under review) against §6.2 — two nodes carried n8n default names and `## Validate the draft` covered a single node. The canvas image the description needs is `product-copy-pool.png` beside this file; the portal renders it at 858px wide, so it has to stay legible there.
+**Requires:** `n8n-nodes-spintax` ≥ 0.2.1 (Lint, Uniqueness, and Lint's Ignored Strings). Gallery workflow 18308: submitted 2026-08-16, bounced 2026-08-20, resubmitted and **rejected a third time 2026-08-25 with a warning that the account may be banned** for "AI-generated workflows without proper quality checks". Rebuilt 2026-08-26 after the manual review that complaint asked for, which found five real defects — see `docs/spec-n8n-node.md` §6.2. **Not resubmitted**: the next move is a reply on the review thread, not another upload. The canvas image the description needs is `product-copy-pool.png` beside this file; the portal renders it at 858px wide, so it has to stay legible there.
 
 ## ai-authoring-funnel.json
 

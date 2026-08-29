@@ -683,8 +683,15 @@ first attempt → 12 variants → 11 clean, 1 genuine defect ("place" twice, one
 footprint 0.347. Two measurements from those runs shaped the template and the node:
 
 - a pool from ONE template about one product scores a footprint near **0.49**, so a 0.15 gate
-  condemns it wholesale — the demo therefore ships `Footprint Limit = 1` (report, not gate) and the
-  sticky says so;
+  condemns it wholesale — the demo therefore shipped `Footprint Limit = 1` (report, not gate).
+  **Superseded 2026-08-26.** That 0.49 was measured on a template the model wrote when nothing
+  had told it how many distinct documents to support; rewriting the brief to say so moved seventeen
+  live runs into 0.19-0.46 — sixteen of them producing the full twelve documents, one collapsing
+  to a single combination, which is why the gate exists. The brief, not the model, was the
+  bottleneck: a small model (haiku-4.5) went 5/5 on cardinality where a large one went 11/12. The demo now ships a real gate at **0.5** — plus an explicit
+  `produced === requested` check, because the footprint alone cannot do that job: below five
+  documents the metric is 1 by construction, and a pool of eight genuinely different documents
+  scores 0 and would sail through;
 - the same twelve documents score **0.209** with the product name, brand and feature phrase inside
   the measurement and **0.107** with them excluded — which is why Lint gained Ignored Strings and
   why both checks are fed the configured values from the one Set node.
@@ -696,7 +703,29 @@ repo's `docs/TODO.md`: the third template is not linked yet (the two that are ca
 against a live n8n" claim), and the template links still point at raw GitHub until gallery URLs
 exist.
 
-**Next, in order.** 18308 verdict → on publish, submit `ai-authoring-funnel` → a third template
+**The third template is ARTICLES, and it is a new workflow rather than a rewrite** (owner decision
+2026-08-26). Bulk articles for content marketplaces is the bigger market — bigger than product
+descriptions, and not a duplicate of anything: mailings are already the published `17930`, so
+repointing the pool at them would compete with our own listing.
+
+It cannot be built by editing an existing template, and the reason is a locked decision, not
+effort. `buildAuthoringPrompt` writes the prose of ONE block and never emits markup (§3, #76) — the
+constraint that made four template defect classes unreachable for the first external consumer. An
+article needs `<h2>` / paragraphs / lists, so the workflow has to call the prompt PER BLOCK and
+compose the structure itself: a loop over sections, not the current linear graph.
+`ai-authoring-funnel` is the closer starting point, being already about authoring.
+
+Two things to settle before it starts. Whether the existing channels serve per-block article
+generation, or whether this is the second real host that would justify a `longform` channel — which
+CLAUDE.md says is not planned until exactly that happens, so it is a deliberate contract change and
+not a passing tweak. And that Uniqueness matters MORE here than for product copy: a content
+marketplace lives on whether two hundred articles are genuinely different, which is the question
+the footprint answers.
+
+Sequencing is deliberate: **not now.** The account carries a ban warning, and sending a brand-new
+workflow through review while that stands is the wrong risk. 18308 is measurably good now; finish it.
+
+**Next, in order.** 18308 verdict → on publish, submit `ai-authoring-funnel` → the ARTICLES template
 (three approved = verified creator: batches of four, a badge, paid templates) → forum Show & Tell,
 which needs live gallery pages → node verification. The verification form is only an npm URL plus
 two checkboxes (no notes field, so a prepared cover letter has nowhere to go); `npx @n8n/node-cli
