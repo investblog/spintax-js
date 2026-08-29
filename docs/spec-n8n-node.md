@@ -734,6 +734,36 @@ there stay human-judged: the "exactly one third-party service" rule against a no
 none, and "n8n isn't accepting Logic or Flow control nodes at the moment" against our three
 two-output routing operations.
 
+### 6.3 Where 18308 stands — 2026-08-29, and what NOT to do
+
+**A reply was sent to the review thread on 2026-08-29 and we are waiting.** Do not upload anything
+to the portal until n8n answers. The template is `changes_needed`; the account carries a written
+warning that it may be banned for "AI-generated workflows without proper quality checks", and a
+fourth upload against that is the one move that could take the published 17930 down with it.
+
+The letter (kept in `temp/marketing/reply-to-miha-2026-08-26.md`) admits the AI involvement, names
+two of the defects the manual review found, and attaches both a screenshot of a green end-to-end
+run and the corrected JSON — the same channel that got 17930 published, where the reviewer applied
+an emailed file by hand.
+
+**The canvas image in the live listing is already current.** It is served from this repo's raw URL,
+so committing `templates/product-copy-pool.png` updated the gallery page without a resubmission.
+That is worth remembering: image fixes never need the portal.
+
+**Two arguments were deliberately withheld** and remain available if the reply is dismissive: n8n's
+own AI pre-review passed this exact revision (record `333808`, `aiDecision: true`, "meet the
+guidelines beautifully") minutes before the human rejection, and that rejection arrived five
+minutes after the last edit. Both are true and both read as arguing, which is why they are not in
+the letter.
+
+**The lesson that generalises, and it cost two rounds to learn.** Twice the answer was in the
+BRIEF and twice we first looked somewhere more expensive. Thin pools looked like a prompt-package
+weakness (`aggressive` is the only variation level with no numeric target) and were fixed by
+stating the requirement structurally in the brief. Generic "your unit / digital onboarding" copy
+looked like a small-model problem and survived an upgrade to `gpt-5` — the actual cause was that
+the brief never said what the product was. A small model writes well once told; a large one writes
+badly when not. Check what the brief says before changing what runs it.
+
 ### 6.2 The submission checklist — what n8n wrote down, and what we inferred
 
 Written 2026-08-25, after 18308 came back a second time with a checklist that named nothing. The
