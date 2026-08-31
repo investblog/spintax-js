@@ -734,9 +734,35 @@ there stay human-judged: the "exactly one third-party service" rule against a no
 none, and "n8n isn't accepting Logic or Flow control nodes at the moment" against our three
 two-output routing operations.
 
-### 6.3 Where 18308 stands — 2026-08-30: n8n asked for the resubmission
+### 6.3 Where 18308 stands — SUBMITTED 2026-08-31, at n8n's own request
 
-**n8n answered on 2026-08-30 and the answer is "submit it".** Elizabeth Babinski
+**It is uploaded and under review.** `templates/product-copy-pool.json` went up through the portal
+on 2026-08-31 17:14 UTC; the toast read *"Your template has been re-submitted. Reviews typically
+take 3–5 business days"* and the record is `status: in_review` / `reviewStatus: in_review`
+(`updatedAt` 2026-08-31T17:14:16Z). So the verdict is due around **2026-09-05**. Nothing to do
+until it lands — do not touch the portal in the meantime.
+
+Four things measured on the way in, all of which will matter next time:
+
+- **The session survives**; the dashboard flashes `/login` with the password manager's fields
+  filled and then redirects itself back. That flash is not a logged-out state — screenshot twice
+  before concluding anything about auth.
+- **The route held exactly as recorded**: click the card (not the badge), dropzone, then
+  `Submit for human review`, which stays greyed until a file is staged. `Upload new version` was
+  not touched, so its 400 is still unretested and should still be assumed broken.
+- **`Share new template` greys out once this is in review**, so `ai-authoring-funnel` cannot follow
+  until 18308 clears. That is the one-under-review limit doing what §6.1 describes.
+- **The dashboard record carries metadata only** — `workflowOriginal` has no `nodes`, so the
+  uploaded graph cannot be re-read from that page to confirm what the reviewer sees. Pre-flight
+  checks on the local file are therefore the only verification: 24 nodes, 6 stickies (one overview
+  colour 1 + five sections colour 7), zero n8n default names, no credentials in the file, working
+  tree clean at `84de550`, and `templates.test.ts` green 27/27.
+
+Also worth noting for the queue: the published 17930 stands at **0 views** a week after publishing,
+and the hub banner reads *"Publish 2 more workflows to become a verified creator"* — one of three
+counted.
+
+**Why it went up (2026-08-30).** Elizabeth Babinski
 (`elizabeth.babinski@n8n.io`, via `creators@n8n.io`) replied to the 08-29 letter: *"Please do submit
 it so our team can take a look at the workflow and provide any feedback, if necessary."* The hold
 below is therefore LIFTED — the portal upload is now the sanctioned route, requested in writing.
@@ -757,7 +783,7 @@ Three things that reply settles, and they are worth separating:
   also means the two withheld arguments below stay withheld: nothing needs re-litigating with
   someone who is not carrying the earlier verdict.
 
-The template that goes up is the one in `templates/product-copy-pool.json` (rebuilt 2026-08-26 in
+The template that went up is the one in `templates/product-copy-pool.json` (rebuilt 2026-08-26 in
 `84de550` after twenty live runs, seven fixes, six consecutive green end-to-end runs), and it is
 gated by `packages/n8n-node/test/templates.test.ts` on every `npm test`.
 
