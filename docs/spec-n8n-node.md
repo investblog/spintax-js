@@ -734,17 +734,42 @@ there stay human-judged: the "exactly one third-party service" rule against a no
 none, and "n8n isn't accepting Logic or Flow control nodes at the moment" against our three
 two-output routing operations.
 
-### 6.3 Where 18308 stands — 2026-08-29, and what NOT to do
+### 6.3 Where 18308 stands — 2026-08-30: n8n asked for the resubmission
 
-**A reply was sent to the review thread on 2026-08-29 and we are waiting.** Do not upload anything
-to the portal until n8n answers. The template is `changes_needed`; the account carries a written
-warning that it may be banned for "AI-generated workflows without proper quality checks", and a
-fourth upload against that is the one move that could take the published 17930 down with it.
+**n8n answered on 2026-08-30 and the answer is "submit it".** Elizabeth Babinski
+(`elizabeth.babinski@n8n.io`, via `creators@n8n.io`) replied to the 08-29 letter: *"Please do submit
+it so our team can take a look at the workflow and provide any feedback, if necessary."* The hold
+below is therefore LIFTED — the portal upload is now the sanctioned route, requested in writing.
 
-The letter (kept in `temp/marketing/reply-to-miha-2026-08-26.md`) admits the AI involvement, names
-two of the defects the manual review found, and attaches both a screenshot of a green end-to-end
-run and the corrected JSON — the same channel that got 17930 published, where the reviewer applied
-an emailed file by hand.
+Three things that reply settles, and they are worth separating:
+
+- **The ban risk on this upload is spent.** The warning was about uploading AI-generated work
+  without review; a fourth upload that n8n explicitly asked for is not that. Keep the mail — it is
+  the record that the upload was invited.
+- **The offer to send the JSON by mail was declined by omission.** The letter offered both routes
+  and the reply named only the portal, so go through **Implement changes**, opened by clicking the
+  18308 **card itself** (not the badge, which is a bare `span`; not `/edit`, which redirects to the
+  dashboard). That path uploads and submits in ONE action — there is no way to stage the JSON
+  without sending it — and `Upload new version` in the `…` menu is still the broken route
+  (`PUT api.n8n.io/api/workflows/18308` → 400). Do not mail the file instead.
+- **A different reviewer answered.** Miha bounced it twice; Liz is a fresh reader who has not seen
+  the workflow. "So our team can take a look" reads as a fresh look, not a fourth strike — which
+  also means the two withheld arguments below stay withheld: nothing needs re-litigating with
+  someone who is not carrying the earlier verdict.
+
+The template that goes up is the one in `templates/product-copy-pool.json` (rebuilt 2026-08-26 in
+`84de550` after twenty live runs, seven fixes, six consecutive green end-to-end runs), and it is
+gated by `packages/n8n-node/test/templates.test.ts` on every `npm test`.
+
+The letter that earned this (kept in `temp/marketing/reply-to-miha-2026-08-26.md`) admits the AI
+involvement, names two of the defects the manual review found, and attaches both a screenshot of a
+green end-to-end run and the corrected JSON.
+
+**Superseded hold, kept for the reasoning:** between 08-29 and 08-30 the standing instruction was
+*do not upload anything to the portal until n8n answers* — the template was `changes_needed`, the
+account carried the ban warning, and an uninvited fourth upload was the one move that could have
+taken the published 17930 down with it. That calculus was right and is simply no longer the
+situation.
 
 **The canvas image in the live listing is already current.** It is served from this repo's raw URL,
 so committing `templates/product-copy-pool.png` updated the gallery page without a resubmission.
