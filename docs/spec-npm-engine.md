@@ -732,12 +732,15 @@ rule), after the Worker proves the need — never speculatively.
    diagnostics in plain language, and a share URL carrying the whole state in base64.
 
    **The obligation this puts on THIS repo, which nothing here recorded:** the site's
-   `src/engine-contract.test.ts` maps every diagnostic code `/play/` can translate, and a code the
-   engine adds without a matching probe there renders as *"Unexpected engine error"* to a visitor.
-   That already happened once — four codes added between 0.1.3 and 0.3.0 (`def.malformed`,
-   `def.include-in-value`, `definition.duplicate-name`, `plural.count-macro`) were silently
-   unhandled. So **a new diagnostic code is a downstream task, not only a corpus task**: add the
-   code, mirror it in the engines, add the fixture — and tell the site. The same repo also pins
+   `src/engine-contract.test.ts` maps every diagnostic code `/play/` can translate, and an
+   **error-severity** code the engine adds without a matching probe there renders as *"Unexpected
+   engine error"* to a visitor. That already happened once — four codes added between 0.1.3 and
+   0.3.0 (`def.malformed`, `def.include-in-value`, `definition.duplicate-name`,
+   `plural.count-macro`), all four errors. **Warnings are exempt:** `/play/` selects with
+   `.find(d => d.severity === 'error')`, so a warning never reaches the banner — `plural.locale-missing`
+   is unmapped on purpose. Measured 2026-09-01: nothing is unmapped that should be. So **a new
+   error code is a downstream task, not only a corpus task**: add the code, mirror it in the
+   engines, add the fixture — and tell the site. The same repo also pins
    `PROMPT_VERSION` in a skill-drift test that reads this monorepo as a sibling checkout.
 
    How it stayed wrong is worth more than the correction: three documents agreed with each other,
