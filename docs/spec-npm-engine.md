@@ -3,7 +3,9 @@
 Status: IMPLEMENTED — `@spintax/core` **0.3.3** is published to npm (MIT, provenance via OIDC).
 M0–M5 are shipped: golden corpus, engine (parse / render / validate / extract / analyze /
 neutralize), the reference Cloudflare Worker, and the Telegram bot — both Workers live, see
-`DEPLOYING.md`. **M6** (browser playground on `spintax.net`) is the one open milestone. The spec
+`DEPLOYING.md`. **M6 is done too — every milestone in §11 is shipped** (see the note there: the
+`spintax.net/play/` playground has been live since 2026-05-08 and this spec called it open for
+nearly four months). The spec
 stays the source of truth for the parity contract (§3.1), the fixture schema (§7.1), and the
 public API surface (§9.2) — behavior changes are argued against it and the golden corpus, not
 against the current code.
@@ -689,8 +691,9 @@ rule), after the Worker proves the need — never speculatively.
 
 > **HISTORICAL — M0 → M5 are done and shipped.** Kept for the *rationale* (why things are sequenced
 > this way), not as a to-do. Its instructions are spent: "do NOT publish `0.1.0` yet" was satisfied
-> long ago, and the package is on **0.3.3**. The only open milestone is **M6** (browser playground);
-> the agreed next product step is the **n8n node** (`docs/spec-n8n-node.md`, #44).
+> long ago, and the package is on **0.3.3**. **M6 is shipped as well, and was already shipped when
+> this line was written** — see §11.7. The agreed next product step is the **n8n node**
+> (`docs/spec-n8n-node.md`, #44).
 
 1. **M0 — corpus extraction.** **First task: lock the §7.1 fixture schema** (incl. the `rng`
    selection-strategy discriminator). Then turn the ~276 parity-relevant PHPUnit cases (§3.1)
@@ -719,6 +722,27 @@ rule), after the Worker proves the need — never speculatively.
    draft-from-brief, validate-pasted, show-N-variants, plain-language error explanation,
    export WP-ready body. Second independent dogfood path (§8).
 7. **M6 — browser playground** on `spintax.net` running the package client-side (SEO/edu).
+   **SHIPPED 2026-05-08 — recorded here 2026-09-01, after this spec, CLAUDE.md and project memory
+   had all called it "the one open milestone" for almost four months.** It is `spintax.net/play/`
+   (repo `W:\projects\spintax.net`, `src/client/play.ts` + `src/templates/play.ts`): esbuild
+   bundles the **published** `@spintax/core` — 0.6.1 today, a devDependency, no vendored copy — and
+   the page runs `render()` and `validate()` entirely in the browser. It takes a pasted template,
+   a Variables panel that distinguishes `#set` from `#def` (inline definitions are lifted out of the
+   template into that panel on load), N variants at once, syntax highlighting over the input,
+   diagnostics in plain language, and a share URL carrying the whole state in base64.
+
+   **The obligation this puts on THIS repo, which nothing here recorded:** the site's
+   `src/engine-contract.test.ts` maps every diagnostic code `/play/` can translate, and a code the
+   engine adds without a matching probe there renders as *"Unexpected engine error"* to a visitor.
+   That already happened once — four codes added between 0.1.3 and 0.3.0 (`def.malformed`,
+   `def.include-in-value`, `definition.duplicate-name`, `plural.count-macro`) were silently
+   unhandled. So **a new diagnostic code is a downstream task, not only a corpus task**: add the
+   code, mirror it in the engines, add the fixture — and tell the site. The same repo also pins
+   `PROMPT_VERSION` in a skill-drift test that reads this monorepo as a sibling checkout.
+
+   How it stayed wrong is worth more than the correction: three documents agreed with each other,
+   and none of them was the site. A milestone owned by another repo cannot be closed from here —
+   check the artifact, not the note about the artifact.
 
    **Idea filed against M6, not scheduled: a provenance mode on `render()`.** Proposed
    2026-08-25 by the `content-gen` pipeline (nine campaigns, ~9000 articles). Today `render()`

@@ -4,9 +4,16 @@ Shared **golden corpus** for the Spintax parity contract — language-neutral JS
 consumed **identically** by every engine in the family: the TypeScript engine (`@spintax/core`,
 via vitest), **both** PHP engines (the `spintax/core` Composer package and the WordPress plugin,
 via the PHPUnit runner in `php/`), the Python engine (`spintax-core`, whose CI checks this repo
-out) and the Object Pascal engine (`spintax-win`, via its `check-corpus.sh` gate). This is what
-keeps five independent implementations honest without forcing byte-for-byte parity everywhere.
-See the governing spec §7 / §7.1.
+out), the Object Pascal engine (`spintax-win`, via its `check-corpus.sh` gate) and the .NET engine
+(`Spintax.Core`, whose CI and release workflows check this repo out into `.corpus` and point
+`SPINTAX_FIXTURES` at it). This is what keeps **six** independent implementations honest without
+forcing byte-for-byte parity everywhere. See the governing spec §7 / §7.1.
+
+**Six here, five on the website, and both are right — so say which set you mean.** This file counts
+everything that RUNS the corpus, which includes the WordPress plugin. `spintax.net/spintax-engines/`
+counts engines you can *install as a library*, which excludes the plugin and lands on five. A count
+with no criterion attached is how `.NET` went unlisted here for months after it started gating on
+these fixtures.
 
 > Status: **the live contract.** The M0 extraction is long done; fixtures grow whenever a
 > behaviour becomes contract — recognition rules (#55–#57), the permutation-config guard (#58),

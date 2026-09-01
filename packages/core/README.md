@@ -14,11 +14,12 @@ parse, render, validate, extract, analyze, and neutralize spintax templates.
 
 - **Zero runtime dependencies.** Runs unchanged on Cloudflare Workers, Node 18+, and in the browser.
 - **ESM-first, dual CJS.** Ships `.d.ts` types for both.
-- **One syntax contract, [five independent engines](https://spintax.net/spintax-engines/).**
+- **One syntax contract, [six independent engines](https://spintax.net/spintax-engines/).**
   This package, [`spintax/core`](https://packagist.org/packages/spintax/core) (PHP),
-  [`spintax-core`](https://pypi.org/project/spintax-core/) (Python), an Object Pascal engine, and
+  [`spintax-core`](https://pypi.org/project/spintax-core/) (Python), an Object Pascal engine,
+  [`Spintax.Core`](https://www.nuget.org/packages/Spintax.Core/) (.NET), and
   the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) are all held to the same
-  behavior contract by a **shared golden corpus of 234 fixtures** — deterministic verdicts, plural
+  behavior contract by a **shared golden corpus of 258 fixtures** — deterministic verdicts, plural
   buckets, conditionals, `#set`/`#def` semantics and post-processing agree everywhere, so a
   template is an asset you can move between runtimes, not a lock-in.
 - **MIT** licensed.

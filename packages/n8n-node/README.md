@@ -117,11 +117,13 @@ groups with permutations took one real five-line email from 59 049 combinations 
 
 ## Part of a maintained ecosystem
 
-One syntax contract, held by a shared 234-case conformance corpus across four
+One syntax contract, held by a shared 258-case conformance corpus across six
 independent engine implementations — JavaScript
 ([npm](https://www.npmjs.com/package/@spintax/core)), PHP
 ([Packagist](https://packagist.org/packages/spintax/core)), Python
-([PyPI](https://pypi.org/project/spintax-core/)) and Object Pascal — plus a
+([PyPI](https://pypi.org/project/spintax-core/)), Object Pascal, .NET
+([NuGet](https://www.nuget.org/packages/Spintax.Core/)) and the
+[WordPress plugin](https://wordpress.org/plugins/spintax/) — plus a
 [browser playground](https://spintax.net/play/), a
 [Telegram bot](https://t.me/spintaxnetbot),
 [Spintax Studio](https://apps.microsoft.com/detail/9mw3ch7b530p) (native Windows
