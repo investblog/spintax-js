@@ -734,13 +734,26 @@ there stay human-judged: the "exactly one third-party service" rule against a no
 none, and "n8n isn't accepting Logic or Flow control nodes at the moment" against our three
 two-output routing operations.
 
-### 6.3 Where 18308 stands — SUBMITTED 2026-08-31, at n8n's own request
+### 6.3 18308 is PUBLISHED — 2026-09-01. Both templates are live.
 
-**It is uploaded and under review.** `templates/product-copy-pool.json` went up through the portal
-on 2026-08-31 17:14 UTC; the toast read *"Your template has been re-submitted. Reviews typically
-take 3–5 business days"* and the record is `status: in_review` / `reviewStatus: in_review`
-(`updatedAt` 2026-08-31T17:14:16Z). So the verdict is due around **2026-09-05**. Nothing to do
-until it lands — do not touch the portal in the meantime.
+**It cleared on the first review after the letter, in under a day.** Submitted 2026-08-31 17:14 UTC
+(the toast promised 3–5 business days), published 2026-09-01 as
+[n8n.io/workflows/18308](https://n8n.io/workflows/18308). The live record is the file we sent —
+24 nodes — under a title n8n edited slightly, to *"…with OpenAI and **a** Spintax node"*. So the
+gallery now carries **both** listings: 17930 (9 nodes) and 18308 (24 nodes).
+
+That is the fourth attempt succeeding where three failed, and the difference was not the JSON
+alone: the third rebuild went up **with the invitation already in the thread**. Worth keeping as
+the pattern — when a reviewer has bounced you twice, the mail that gets a fair reading is worth
+more than another silent upload.
+
+**Both listings sit at 0 views** — 17930 a week after publishing, 18308 on day one. The gallery is
+therefore a credential, not a distribution channel; nothing downstream should be planned on the
+assumption that it sends traffic.
+
+**What unblocks now.** `Share new template` is free again, so `ai-authoring-funnel` can be
+submitted. And the forum Show & Tell post — which was always gated on live gallery pages — is
+unblocked, draft rewritten in `temp/marketing/forum-show-and-tell.md`.
 
 Four things measured on the way in, all of which will matter next time:
 
