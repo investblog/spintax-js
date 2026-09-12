@@ -81,7 +81,7 @@ dedupe in the host and cap the retries: a template may simply not have N combina
 | --- | --- | --- |
 | Enumeration | `{a\|b\|c}` | pick one (nestable: `{a\|{b\|c}}`) |
 | Permutation | `[a\|b\|c]` | pick N, shuffle, join — `[<minsize=1;maxsize=2;sep=", ">a\|b\|c]` |
-| Variable | `%var%` | substitute a context value |
+| Variable | `%var%` | substitute a context value — inside `{…}`/`[…]` the value is spliced as text first, so a `|` it carries separates options |
 | Local set | `#set %v% = value` | define a macro — re-picked at every use |
 | Local def | `#def %v% = value` | define a value — picked once per render, held at every use |
 | Conditional | `{?VAR?then\|else}` | `then` if `VAR` is truthy, else `else` |
@@ -153,6 +153,11 @@ on any value you inject via `context` that isn't author-controlled. It is **text
 render('%bio%', { context: { bio: neutralize('Save {50|60}% today') }, postProcess: false });
 // → "Save {50|60}% today"   (the braces stay literal, not a random pick)
 ```
+
+The pipe is deliberately **not** shielded: it means nothing outside a construct, and inside one it
+is the separator. A neutralized value an author places in `{…}`/`[…]` is still split on its `|`, in
+this engine as in every other in the family. Keep such a value out of a construct if it must stay
+one option.
 
 ## Using it without writing code
 
