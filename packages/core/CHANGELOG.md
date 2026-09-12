@@ -92,6 +92,14 @@ a branch trimmed at an element's edge — six fail on 0.7.0 — and the negative
 `splice/conditional-without-pipes-keeps-draws`, which pins that a conditional changing nothing
 structural draws exactly where 0.7.0 drew.
 
+**The corpus can pin how many** (#74). `validate` cases take an optional `diagnosticCount` — the exact
+number of diagnostics per code — where the subset match used to be the only assertion, and that
+subset match is what passed two million circular-reference diagnostics for eleven days (#59). Two
+cases carry it: `validate/cycle-diamond-terminates` (22, one per name) and the new
+`validate/plural-count-macro-per-reference`, which records #73's decision: `plural.count-macro` once
+per tainted reference in the count slot, as this engine, `spintax-core` and both PHP validators already
+emit it. No engine output changed for either.
+
 ### Notes
 
 **Cost.** The post-process is about 30% slower on shield-heavy text and unchanged on plain prose: V8

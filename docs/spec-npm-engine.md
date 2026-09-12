@@ -429,8 +429,10 @@ case:
   **exact in both engines**.
 - `op:'extract'` → `expect: { refs: [...], sets: [...], includes: [...] }`, asserted exact
   (order-normalized) in both engines. (`extract()` returns an object, never a string.)
-- `op:'validate'` → `expect: { verdict: 'valid' | 'invalid', diagnostics?: [{ code, line, column }] }`
-  (codes are parity-gated, wording is not — §3.1). Uses the case's `locale`/`knownIncludes`.
+- `op:'validate'` → `expect: { verdict: 'valid' | 'invalid', diagnostics?: [{ code, line, column }], diagnosticCount?: { [code]: n } }`
+  (codes are parity-gated, wording is not — §3.1). `diagnostics` is a subset match; the optional
+  `diagnosticCount` pins the exact number per code where multiplicity is the contract (#74). Uses the
+  case's `locale`/`knownIncludes`.
 - `kind:'rng'` (render only) → assert **within-engine reproducibility** + the §7.2 structural
   invariants only; **never** a cross-engine exact-output gate.
 

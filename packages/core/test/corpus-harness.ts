@@ -20,6 +20,8 @@ export type RngStrategy = 'first' | 'last' | { sequence: number[] };
 export interface ExpectValidate {
   verdict: 'valid' | 'invalid';
   diagnostics?: Array<{ code: string; severity?: 'error' | 'warning'; line?: number; column?: number }>;
+  /** Exact number of diagnostics per code (#74) — only where multiplicity is the contract. */
+  diagnosticCount?: Record<string, number>;
 }
 export interface ExpectExtract {
   refs?: string[];

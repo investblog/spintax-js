@@ -96,7 +96,8 @@ final class GoldenCorpusTest extends TestCase
 
         // Verdict is the parity gate. Diagnostic `code`s are a TS-side surface — the
         // plugin's diagnostics carry human messages, not machine codes (§3.1) — so
-        // the corpus's per-diagnostic codes are intentionally NOT asserted here.
+        // the corpus's per-diagnostic codes, and the exact per-code multiplicities of
+        // `diagnosticCount` (#74), are intentionally NOT asserted here.
         $this->assertSame($c['expect']['verdict'], $verdict, "verdict for {$c['id']}");
     }
 

@@ -142,7 +142,13 @@
       "required": ["verdict"],
       "properties": {
         "verdict": { "enum": ["valid", "invalid"] },
-        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/expectedDiagnostic" } }
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/expectedDiagnostic" } },
+        "diagnosticCount": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "integer", "minimum": 0 },
+          "description": "Optional EXACT number of diagnostics per code (spintax-js#74), for the cases where multiplicity IS the contract. Without it `diagnostics` is a subset match and says nothing about how many — which let a per-path emission reach two million diagnostics behind a green case (#59). Runners that assert codes must fail on any difference; the PHP runner asserts verdicts only."
+        }
       }
     },
 

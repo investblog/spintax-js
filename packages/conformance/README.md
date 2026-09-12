@@ -72,11 +72,16 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 - `extract` → `{ refs?, sets?, defs?, includes? }` — arrays order-normalized before comparison.
   `sets` and `defs` are separate buckets: the two directives differ in semantics (`#set` is a
   macro, `#def` rolls once), so a consumer that lints one must be able to tell them apart.
-- `validate` → `{ verdict: "valid"|"invalid", diagnostics?: [{ code, severity?, line?, column? }] }`.
+- `validate` → `{ verdict: "valid"|"invalid", diagnostics?: [{ code, severity?, line?, column? }], diagnosticCount?: { [code]: n } }`.
   **`verdict` is asserted exactly; `diagnostics` is a SUBSET assertion** — every listed
   `{code[, severity]}` must be present in the engine's output, but extras are allowed (a
   template can legitimately raise more than the salient diagnostic — e.g. a malformed `#set`
   also yields an `variable.undefined` warning). `code` is parity-gated; wording/position are not.
+  **`diagnosticCount` is exact** (spintax-js#74): where a case carries it, the engine must emit
+  exactly `n` diagnostics with that `code`, no more and no fewer. It is optional on purpose — most
+  cases do not care how many, and several engines legitimately report different extras (#70) — and
+  it belongs only where multiplicity IS the contract and somebody had to decide it. A runner that
+  asserts codes must fail on a difference; the PHP runner asserts verdicts only.
 
 ### Diagnostic codes (canonical, parity-gated)
 
@@ -166,14 +171,17 @@ cannot see what a bracket does to a value it never puts there.
 **Not a verdict:** circular `#include` is a render-time `maxDepth` guard, never a `validate()`
 error (the plugin's validator does not resolve includes).
 
-**Not parity-gated: how MANY identical diagnostics come back.** The engines emit one
-`variable.circular-reference` per NAME that takes part in, or leads to, a cycle (spintax-js#59,
+**How MANY identical diagnostics come back is gated only where it was decided.** The engines emit
+one `variable.circular-reference` per NAME that takes part in, or leads to, a cycle (spintax-js#59,
 decided 2026-08-18). They used to emit one per PATH, which is exponential on a converging diamond —
-507 bytes produced 2 097 152 diagnostics and 547 bytes took a live endpoint out with HTTP 503. The
-subset assertion is what made that invisible here, and it stays that way on purpose: a fixture
-pins that a code IS present, never how often. Each engine pins its own multiplicity in its own
-suite. The same goes for the route printed in the message — it is capped past a handful of names,
-and where it is capped is not gated either.
+507 bytes produced 2 097 152 diagnostics and 547 bytes took a live endpoint out with HTTP 503 — and
+the subset assertion is what made that invisible here for eleven days. So `diagnosticCount` exists
+now (#74), and two cases carry it: `validate/cycle-diamond-terminates` pins the 22 names, and
+`validate/plural-count-macro-per-reference` pins #73's decision — `plural.count-macro` once per
+tainted reference in the count slot, a repeated name counted each time, as this engine,
+`spintax-core` and both PHP validators emit it. Every other case still pins that a code IS present,
+not how often. The route printed in a circular-reference message is capped past a handful of names,
+and where it is capped is not gated.
 
 **Not parity-gated: what a truncated explosion looks like.** Every engine bounds how much
 text one render may produce by expanding `%variables%` (spintax-js#69) — `#set %a% = %b% %b%`

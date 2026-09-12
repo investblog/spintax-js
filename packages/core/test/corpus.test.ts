@@ -99,7 +99,11 @@ function runExtract(c: Case): void {
   }
 }
 
-/** verdict is asserted exactly; diagnostics is a SUBSET assertion by {code[,severity]}. */
+/**
+ * verdict is asserted exactly; diagnostics is a SUBSET assertion by {code[,severity]}; and where a
+ * case pins it, diagnosticCount is the EXACT number per code (#74) — a subset match alone passed an
+ * engine emitting two million circular-reference diagnostics (#59).
+ */
 function runValidate(c: Case): void {
   const opts: ValidateOptions = {};
   if (c.locale !== undefined) opts.locale = c.locale;
@@ -116,6 +120,11 @@ function runValidate(c: Case): void {
       (d) => d.code === ed.code && (ed.severity === undefined || d.severity === ed.severity),
     );
     expect(found, `${c.id}: expected diagnostic '${ed.code}' not produced`).toBe(true);
+  }
+
+  for (const [code, count] of Object.entries(expected.diagnosticCount ?? {})) {
+    const got = diags.filter((d) => d.code === code).length;
+    expect(got, `${c.id}: '${code}' emitted ${got} time(s), the fixture pins ${count}`).toBe(count);
   }
 }
 
