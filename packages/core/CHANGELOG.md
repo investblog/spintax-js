@@ -54,7 +54,9 @@ Minor rather than patch when it ships: rendered text changes for every template 
   the PARSED `sep` and `lastsep`, where a size reference never arrives (a size that is not digits
   parses to nothing) and neither does an unquoted separator (it parses to the default). The raw
   header is tested now, so `minsize=%n%`, `maxsize=%n%` and `sep=%S%` take their values from the
-  context, as they always have in PHP.
+  context, as they always have in PHP. So does a `{?…}` there or in a per-element separator —
+  `[<lastsep="{?en? and | и }">a|b|c]` printed the raw conditional unless a neighbour happened to
+  trigger the re-read (found in review).
 - **A `{?…}` conditional directly in `{…}`/`[…]` marks the construct** (#80), whatever its branches
   hold — 0.7.0 marked it only when a `%var%` sat in a branch. The plugin resolves conditionals at
   Stage 6a, before any bracket is read, so a taken branch's `|` separates options, an empty branch
@@ -72,6 +74,17 @@ Minor rather than patch when it ships: rendered text changes for every template 
 - **`AST_VERSION` 3 → 4.** The node shape is 3's, but an `Ast` cached by 0.7.0 lacks `raw` exactly
   where the wider key puts it and would render the old output; the guard turns that into
   `AstVersionError`. Nothing persists a handle across versions.
+- **Three patterns no longer scan a long run once per character** (found in review). Trimming each
+  assembled element with `/[…]+$/` retried from every position of a whitespace run inside the text —
+  the first cut of the element fix made `[a%v%y|z]` over 51 000 spaces take 3 s, and 13 s from a
+  362-byte macro template; the PHP trims are loops now, in the parser as well, where the same regex
+  already cost seconds on a re-read. And two post-process patterns that were quadratic IN 0.7.0 got
+  new triggers from the wider whitespace class: removing whitespace before punctuation rescanned a run
+  with no punctuation after it (100 000 form feeds: 10 s in 0.7.0; a macro of NBSP or U+3000: 10–31 s
+  on the first cut), and capitalizing after a line break rescanned a run of breaks and spaces with no
+  letter after it (20 000 of `\n` plus a space: 4 s in 0.7.0). Each now starts a match only where the
+  run starts — the same matches, checked over 500 000 generated strings — and all of these take
+  milliseconds.
 
 ### Changed, visibly
 
@@ -101,7 +114,10 @@ a branch trimmed at an element's edge — six fail on 0.7.0 — and the negative
 `splice/conditional-without-pipes-keeps-draws`, which pins that a conditional changing nothing
 structural draws exactly where 0.7.0 drew. Three `perm/*` fixtures for an element that renders empty or
 padded: `perm/nested-empty-option-drops-element`, `perm/nested-option-edge-whitespace-trimmed` and
-`perm/dropped-element-narrows-the-size-range`, all failing on 0.7.0.
+`perm/dropped-element-narrows-the-size-range`, all failing on 0.7.0. Four from the review, all failing on
+0.7.0: `splice/conditional-in-per-element-separator`, `splice/conditional-in-config-lastsep`, and the
+separator of a dropped element — `perm/dropped-element-takes-its-separator` (`[a<1>|{x|}|b]` is `a b`)
+and `perm/dropped-element-passes-on-its-trailing-separator` (`[a<1>|{x|}<2>|b]` is `a2b`).
 
 **The corpus can pin how many** (#74). `validate` cases take an optional `diagnosticCount` — the exact
 number of diagnostics per code — where the subset match used to be the only assertion, and that
@@ -115,8 +131,14 @@ emit it. No engine output changed for either.
 
 **Cost.** The post-process is about 30% slower on shield-heavy text and unchanged on plain prose: V8
 runs a Unicode-class lookbehind more slowly than its ASCII `\b`. On the scaling bench's 756 KB,
-106–118 → 139–145 ms (per pattern, `MULTI_ABBR_RE` 14 → 37 ms and `DOMAIN_RE` 56 → 71 ms); the
-scaling stays linear.
+106–118 → 139–145 ms (per pattern, `MULTI_ABBR_RE` 14 → 37 ms and `DOMAIN_RE` 56 → 71 ms).
+
+**What is still super-linear, and was in 0.7.0.** Measured, not fixed here, on 8 KB to 60 KB of
+adversarial text: the bare-domain shield on a long dotted run of one-character labels (`a.a.a.…`, 8 KB:
+~0.16 s in 0.7.0 and now, 0.14 s in PHP) — and, new with the classes, the same run in any other script
+reaches it, where 0.7.0 never shielded one (`а.а.а.…`, 8 KB: 0.02 → 0.9 s, where PHP still takes 0.14 s); capitalization after a long run of block tags with no letter after it (`<p>` × 20 000: 1.4 s);
+and a lead holding an unclosed `<` repeated (`\n<` × 20 000: 0.7 s). Each needs its own linear rewrite
+of a parity-gated pattern and gets one on its own, with a differential of its own.
 
 **Two PHP builds differ at the margin.** PCRE2 10.43 made non-spacing marks and connector punctuation
 word characters, so PHP 8.3 sees a boundary between `x` and U+0301 that PHP 8.4 does not. The corpus
@@ -128,7 +150,9 @@ before the change, 500 seeds over five shapes (a permutation with separators, on
 an enumeration, a nested permutation in a branch, an else branch): identical renders. What changes is
 the three kinds of text the plugin always produced here — a pipe in a branch, an empty element, a
 trimmed edge — and only in the renders where one occurs: a permutation whose elements all render
-non-empty and unpadded picks and shuffles exactly as before.
+non-empty and unpadded picks and shuffles exactly as before. `validate()` still reports `minsize=%n%`
+as `permutation.minsize-not-integer`, as both PHP validators do: a verdict about the template as
+written, unchanged.
 
 **Verified against PHP, not only against 0.7.0.** A generator of construct-heavy templates —
 conditionals with empty, piped and padded branches, references in configs and elements, macros
@@ -152,12 +176,16 @@ mutations first.
 
 **Render cost.** A construct re-read because it holds a conditional is parsed again on every render:
 1 000 renders of that payment FAQ take 165 ms against 92 ms, about 0.17 ms a render. A template 0.7.0
-already re-read (a reference in a branch) moves 7%, plain prose not at all. `validate()` still reports `minsize=%n%` as `permutation.minsize-not-integer`, as both
-PHP validators do: a verdict about the template as written, unchanged.
+already re-read (a reference in a branch) moves 7%, plain prose not at all.
 
-**Recorded, not closed.** A value carrying an unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`)
-re-cuts the enclosing construct in PHP and only its own here; reproducing it takes a whole-text
-engine. In the conformance README, under the known divergences.
+**Recorded, not closed** — in the conformance README, under the known divergences. A value carrying an
+unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`) re-cuts the enclosing construct in PHP and only its
+own here. Three shapes of the same family, where a nested pick leaves markup the permutation's reader
+sees in PHP and a tree parsed before the pick: a leading element that renders empty exposes its
+`<…>` as the permutation's config, a pick ending in `<…>` becomes a per-element separator, and a
+construct inside the config is resolved first. A generated differential aimed at exactly these meets
+the first twice in 3 000 renders. And the Unicode tables: Node 22's are 17.0, PCRE2 10.44's are 15.0,
+so a character assigned since then can sit on the other side of a boundary.
 
 ## 0.7.0 — 2026-09-12
 

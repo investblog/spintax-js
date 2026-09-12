@@ -255,6 +255,27 @@ mirroring #78 and measured on both PHP engines 2026-09-12. `neutralize()` shield
 data, so only an author-written value reaches it; what would move it into work is a host whose own
 values legitimately carry unbalanced brackets.
 
+**Three more shapes of that family: markup that only exists once a nested construct has picked.** PHP
+resolves every enumeration before it reads any permutation, so the TEXT a pick leaves behind is what
+the permutation's reader sees; a tree parsed the permutation before anything was picked. Measured on
+both PHP engines 2026-09-12, `rng:last`:
+
+| template | both PHP engines | here |
+|---|---|---|
+| `[{b\|} <, >\|c\|y]` — a leading element renders empty, and its trailing `<, >` now opens the body | `c, y` — read as the permutation's config | `c y` — still `c`'s own separator |
+| `[{x<, >\|x<, >}\|y]` — a pick that ends in `<…>` | `x, y` — a per-element separator | `x<, > y` |
+| `[<sep="{, \| and }">a\|b]` — a construct inside the config | `a and b` | `a{, \| and }b` |
+
+A generated differential that aims per-element separators and conditional configs at empty elements
+(3 000 renders, 2026-09-12) meets the first shape twice and nothing else. What would move these into
+work is a template that builds its separators out of a nested pick.
+
+**Unicode versions drift at the margin too.** The UCP classes are PCRE2 10.44's, and PCRE2 10.44 ships
+Unicode 15.0; a JavaScript runtime carries its own tables. On Node 22 (Unicode 17.0), `\p{L}\p{N}\p{Mn}\p{Pc}`
+takes 9 736 code points PCRE2's `\w` does not (newer scripts and CJK Extension I, e.g. U+088F) and misses
+one it takes (U+1171E); `\p{Nd}` takes 90 more (e.g. U+10D40). Only a character assigned after Unicode 15.0
+standing next to a shielded domain, email, abbreviation or spacing rule reaches it.
+
 **The final trim of post-process differs at the edges.** `render("x" + ch)` — is the trailing
 character kept?
 

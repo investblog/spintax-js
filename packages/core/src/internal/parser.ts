@@ -270,6 +270,9 @@ export function needsTextualReread(lists: readonly (readonly Node[])[]): boolean
 
 /** A `%var%` reference written inside a separator string — config or per-element. */
 const REFERENCE_RE = /%\w+%/u;
+/** A `{?…}` opener in the same places — Stage 6a resolves it there too, before any bracket is read. */
+const CONDITIONAL_OPEN_RE = /\{\?/u;
+const holdsTextForReread = (text: string): boolean => REFERENCE_RE.test(text) || CONDITIONAL_OPEN_RE.test(text);
 
 /**
  * `[<config>a|b|c]` — the config and the per-element separators resolve here; the
@@ -278,19 +281,20 @@ const REFERENCE_RE = /%\w+%/u;
 function planPermutation(rawInner: string): Planned {
   const { config, content } = extractPermutationConfig(rawInner);
   const { texts, separators } = permutationElements(splitTopLevel(content));
-  // The reference engines expand the config and the per-element separators too — to them it is
-  // all text — so a reference ANYWHERE in the `<…>` header is as direct as one in an element: a
-  // size (`minsize=%n%`), an unquoted separator (`sep=%S%`), a quoted one. The header is exactly
-  // what precedes `content`, which is always a suffix of the input. (0.7.0 tested the PARSED `sep`
-  // and `lastsep` instead, where `%n%` never arrives — a size that is not digits parses to nothing,
-  // an unquoted separator to the default — so neither was ever spliced: #80.)
+  // The reference engines resolve conditionals in and expand the config and the per-element
+  // separators too — to them it is all text — so a reference or a `{?…}` ANYWHERE in the `<…>`
+  // header or a separator is as direct as one in an element: a size (`minsize=%n%`), an unquoted
+  // separator (`sep=%S%`), `lastsep="{?en? and | и }"`. The header is exactly what precedes
+  // `content`, which is always a suffix of the input. (0.7.0 tested the PARSED `sep` and `lastsep`
+  // for references only, where `%n%` never arrives — a size that is not digits parses to nothing,
+  // an unquoted separator to the default — so none of these was ever read as text: #80.)
   const header = rawInner.slice(0, rawInner.length - content.length);
-  const textHasRef = REFERENCE_RE.test(header) || separators.some((sep) => sep !== null && REFERENCE_RE.test(sep));
+  const textNeedsReread = holdsTextForReread(header) || separators.some((sep) => sep !== null && holdsTextForReread(sep));
   return {
     texts,
     build: (children) => {
       const options = children.map((nodes, i) => ({ nodes, separator: separators[i] ?? null }));
-      return textHasRef || needsTextualReread(children)
+      return textNeedsReread || needsTextualReread(children)
         ? { type: 'permutation', config, options, raw: rawInner }
         : { type: 'permutation', config, options };
     },
@@ -516,16 +520,25 @@ function escapeRegExp(s: string): string {
 // PHP trim strips only [ \t\n\r\0\x0B] — NOT the full JS Unicode whitespace set —
 // so use these for byte-exact parity wherever the plugin trims (permutation
 // config / element text / separators, plural forms).
-const PHP_LTRIM_RE = /^[ \t\n\r\0\x0B]+/u;
-const PHP_RTRIM_RE = /[ \t\n\r\0\x0B]+$/u;
-function phpTrim(s: string): string {
-  return s.replace(PHP_LTRIM_RE, '').replace(PHP_RTRIM_RE, '');
+//
+// Loops, not `/[…]+$/`: an end-anchored run class is retried from every position of a whitespace
+// run INSIDE the text and goes quadratic. 80 000 spaces cost seconds per call, and what gets trimmed
+// can be a megabyte of expanded text — the renderer trims every permutation element it assembles.
+function isPhpTrimChar(code: number): boolean {
+  return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d || code === 0x00 || code === 0x0b;
+}
+export function phpTrim(s: string): string {
+  return phpRtrim(phpLtrim(s));
 }
 function phpLtrim(s: string): string {
-  return s.replace(PHP_LTRIM_RE, '');
+  let start = 0;
+  while (start < s.length && isPhpTrimChar(s.charCodeAt(start))) start += 1;
+  return start === 0 ? s : s.slice(start);
 }
 function phpRtrim(s: string): string {
-  return s.replace(PHP_RTRIM_RE, '');
+  let end = s.length;
+  while (end > 0 && isPhpTrimChar(s.charCodeAt(end - 1))) end -= 1;
+  return end === s.length ? s : s.slice(0, end);
 }
 
 /**

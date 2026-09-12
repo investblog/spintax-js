@@ -93,6 +93,19 @@ describe('postProcess — character classes are PHP’s /u classes (UCP)', () =>
     expect(postProcess(`a,${ARABIC_INDIC_THREE} b`)).toBe(`A,${ARABIC_INDIC_THREE} b`);
   });
 
+  // Found in review of the class change: with more characters counting as whitespace, two old
+  // quadratics got new triggers — and they were live in 0.7.0 already, for form feeds and `\n `.
+  test('a long whitespace run is scanned once, not once per character', () => {
+    const within = (fn: () => void): void => {
+      const started = Date.now();
+      fn();
+      expect(Date.now() - started).toBeLessThan(2_000);
+    };
+    within(() => postProcess(`x${NBSP.repeat(200_000)}y`)); // no punctuation after the run: 10 s at half this
+    within(() => postProcess(`x${'\f'.repeat(200_000)}y`));
+    within(() => postProcess(`x${`\n${NBSP}`.repeat(100_000)}1`)); // breaks, no letter: 4 s at a fifth of this
+  });
+
   test('a word character is a letter of any script — so a glued sentence stays glued (#79)', () => {
     expect(postProcess('конец.Начало')).toBe('конец.Начало');
     expect(postProcess('end.Начало')).toBe('end.Начало');

@@ -441,6 +441,20 @@ describe('render — the re-read covers a whole <config> and every conditional i
     expect(render('[{ a |b}|c]', 'first')).toBe('c a');
   });
 
+  test('a padded element is trimmed in linear time — whitespace from a value is not seconds (review)', () => {
+    // Trimming every assembled element with an end-anchored regex went quadratic on a long run inside
+    // the text: 51 000 spaces took 3 s, and the expansion budget allows a megabyte.
+    const started = Date.now();
+    publicRender('[a%v%y|z]', { context: { v: ' '.repeat(400_000) }, seed: 1 });
+    publicRender('[a{%v%}y|z]', { context: { v: ' '.repeat(400_000) }, seed: 1 });
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  test('a conditional in a separator or in the config is text before the split, like one in an element', () => {
+    expect(render('[x|a<{?g?, |; }>|b]', 'last')).toBe('x a; b');
+    expect(render('[<lastsep="{?en? and | и }">a|b|c]', 'last')).toBe('a b и c');
+  });
+
   test('a conditional that changes nothing structural draws exactly as the tree did in 0.7.0', () => {
     // Re-read now, a tree walk then: the nested draws and the shuffle must land in the same places,
     // or content a host has already published re-rolls on upgrade.

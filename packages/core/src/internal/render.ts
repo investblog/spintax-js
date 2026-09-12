@@ -28,7 +28,7 @@
 import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { UCP_SPACE } from './charclass';
 import { IncludeResolverError } from './errors';
-import { parseSequence, parseTemplate, recognizeConditional } from './parser';
+import { parseSequence, parseTemplate, phpTrim, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 
@@ -797,8 +797,3 @@ function padSeparator(sep: string): string {
   return sep;
 }
 
-const PHP_LTRIM_RE = /^[ \t\n\r\0\x0B]+/u;
-const PHP_RTRIM_RE = /[ \t\n\r\0\x0B]+$/u;
-function phpTrim(s: string): string {
-  return s.replace(PHP_LTRIM_RE, '').replace(PHP_RTRIM_RE, '');
-}

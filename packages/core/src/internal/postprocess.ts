@@ -101,7 +101,12 @@ const SENTENCE_OPENERS = '¿¡';
 const LEAD = `(?:<[^>]+>|[${SENTENCE_OPENERS}]|${S})*`;
 
 // Spacing + capitalization. PHP's `\s` and `\d` here are UCP: `\d` is any decimal digit (\p{Nd}).
-const SPACE_BEFORE_PUNCT_RE = new RegExp(`${S}+([,;:!?.])`, 'gu');
+//
+// A match may start only where a whitespace run starts (`(?<!${S})`). Same matches — every start
+// inside a run reaches the same end, so the run's first character is the leftmost match or there is
+// none — but a run NOT followed by punctuation is scanned once instead of once per character: 100 000
+// form feeds took 10 s without the guard, and the UCP class made NBSP and U+3000 runs do the same.
+const SPACE_BEFORE_PUNCT_RE = new RegExp(`(?<!${S})${S}+([,;:!?.])`, 'gu');
 const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
 // A run of sentence punctuation is ONE sentence end, not several: "..." and "?!" have to survive
 // intact, so the space goes after the whole run. `(?![.!?])` is what completes the run — a greedy
@@ -117,7 +122,15 @@ const CAP_AFTER_BLOCK_RE = new RegExp(
   `(<\\/?(?:p|h[1-6]|li|blockquote|div|td|th)[^>]*>${LEAD})(\\p{Ll})`,
   'giu',
 );
-const CAP_AFTER_BREAK_RE = new RegExp(`(\\n${LEAD})(\\p{Ll})`, 'gu');
+/**
+ * A break that follows another break across nothing but whitespace is not a match start
+ * (`(?<!\n${S}*?\n)`): the earlier break's attempt reads the same continuation, with no letter in
+ * between to end sooner, so it either matches past this one or this one fails too. A run of breaks and
+ * spaces with no letter after it was rescanned from every break — 20 000 of `\n` plus a space took 4 s.
+ * The lead itself is untouched: leaving bare `\n` out of it instead looked equivalent and is not — a tag
+ * holding a newline (`\n<b\nя>\nя`) then let the break INSIDE the tag capitalize.
+ */
+const CAP_AFTER_BREAK_RE = new RegExp(`(\\n(?<!\\n${S}*?\\n)${LEAD})(\\p{Ll})`, 'gu');
 
 const up = (ch: string): string => ch.toUpperCase();
 

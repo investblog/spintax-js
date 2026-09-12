@@ -1434,5 +1434,53 @@
     "expect": {
       "output": "a c"
     }
+  },
+  {
+    "id": "splice/conditional-in-per-element-separator",
+    "note": "A {?…} inside a per-element separator is text to Stage 6a like one in an element, so '<{?g?, |; }>' is '<; >' before the split. The first cut of #80 marked a construct only for a conditional IN AN ELEMENT, and printed the raw conditional here unless a neighbour happened to trigger the re-read (found in review).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[x|a<{?g?, |; }>|b]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "x a; b"
+    }
+  },
+  {
+    "id": "splice/conditional-in-config-lastsep",
+    "note": "The same in the <config>: lastsep=\"{?en? and | и }\" with en unset is lastsep=\" и \" by the time the plugin reads the config.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"{?en? and | и }\">a|b|c]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a b и c"
+    }
+  },
+  {
+    "id": "perm/dropped-element-takes-its-separator",
+    "note": "An element dropped because it renders empty takes the per-element separator it carried with it: the plugin drops the part AND the separator pending for it, so 'a<1>|{x|}|b' joins as 'a b'. Keeping the separator, or handing it to the next element, prints 'a1 b'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a<1>|{x|}|b]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a b"
+    }
+  },
+  {
+    "id": "perm/dropped-element-passes-on-its-trailing-separator",
+    "note": "The separator written AFTER a dropped element still belongs to the next one: in 'a<1>|{x|}<2>|b' the empty part drops with the '1' it was given, and 'b' keeps the '2' — 'a2b'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a<1>|{x|}<2>|b]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a2b"
+    }
   }
 ]
