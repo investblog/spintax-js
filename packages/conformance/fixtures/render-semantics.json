@@ -1398,5 +1398,41 @@
     "expect": {
       "output": "x q r t"
     }
+  },
+  {
+    "id": "perm/nested-empty-option-drops-element",
+    "note": "The plugin resolves enumerations (Stage 7) before permutations (Stage 8), so when {live casino|} picks its empty option the permutation splits 'slots||poker' and drops the empty part. A tree walk renders the elements first: 0.7.0 kept the blank one and printed 'slots, , poker' (#80, found by differential against both PHP engines).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\", \">slots|{live casino|}|poker]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "slots, poker"
+    }
+  },
+  {
+    "id": "perm/nested-option-edge-whitespace-trimmed",
+    "note": "The same order trims: { a |b} picks ' a ', and the plugin trims each part it splits, so the element is 'a'. 0.7.0 joined the padded text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[{ a |b}|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "c a"
+    }
+  },
+  {
+    "id": "perm/dropped-element-narrows-the-size-range",
+    "note": "The size pick counts the elements that remain: with {b|} empty there are two, so minsize=3;maxsize=3 clamps to 2 and the render is two elements with one separator. 0.7.0 counted three and joined an empty one — 'a  c'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=3;maxsize=3>a|{b|}|c]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a c"
+    }
   }
 ]

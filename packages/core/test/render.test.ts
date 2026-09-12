@@ -433,6 +433,14 @@ describe('render — the re-read covers a whole <config> and every conditional i
     expect([...seen].sort()).toEqual(['Есть покер и слоты.', 'Есть слоты и покер.']);
   });
 
+  test('an element that renders empty is no element — an optional item written {x|}, as much as a branch', () => {
+    // Found by the differential against both PHP engines, after the conditional half was fixed: the
+    // plugin splits text in which every nested enumeration is already resolved.
+    expect(render('[<sep=", ">slots|{live casino|}|poker]', 'last')).toBe('slots, poker');
+    expect(render('[<minsize=3;maxsize=3>a|{b|}|c]', 'last')).toBe('a c');
+    expect(render('[{ a |b}|c]', 'first')).toBe('c a');
+  });
+
   test('a conditional that changes nothing structural draws exactly as the tree did in 0.7.0', () => {
     // Re-read now, a tree walk then: the nested draws and the shuffle must land in the same places,
     // or content a host has already published re-rolls on upgrade.

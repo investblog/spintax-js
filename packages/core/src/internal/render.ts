@@ -721,9 +721,21 @@ function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): 
 }
 
 /** Shuffle and join, once every element has been rendered — the RNG for the size pick
- *  and the shuffle is consumed here, AFTER the children, exactly as it always was. */
+ *  and the shuffle is consumed here, AFTER the children, exactly as it always was.
+ *
+ *  An element is its RENDERED text, trimmed, and one that renders empty is no element. The plugin
+ *  resolves every nested enumeration and permutation before it splits this one, so the parts it
+ *  splits are already that text — each trimmed, the empty ones dropped along with the separator
+ *  they carried. The parse does the same to the raw parts, but `[slots|{live casino|}|poker]` is
+ *  three parts there and only two elements once `{live casino|}` picks its empty option; kept, it
+ *  printed `slots, , poker` (#80). The size pick and the shuffle count what remains, as PHP's do;
+ *  an element whose text is neither empty nor padded changes nothing, draws included. */
 function assemblePermutation(node: PermutationNode, rendered: string[], opts: RenderInternalOptions): string {
-  const elements: Element[] = node.options.map((o, i) => ({ text: rendered[i] ?? '', sep: o.separator }));
+  const elements: Element[] = [];
+  node.options.forEach((o, i) => {
+    const text = phpTrim(rendered[i] ?? '');
+    if (text !== '') elements.push({ text, sep: o.separator });
+  });
   const total = elements.length;
   if (total === 0) return '';
 

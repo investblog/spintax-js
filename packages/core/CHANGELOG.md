@@ -33,6 +33,7 @@ than its own rule:
 | `[<sep=%S%>a\|b]`, `S=", "` | `b a` | `b, a` |
 | `[{?f?a\|b\|x}\|c]` | `c b\|x` — a raw pipe | three elements |
 | `[<sep=", ";lastsep=" and ">{?f?live casino}\|slots\|poker]` | `slots, poker and ` | `poker and slots` |
+| `[<sep=", ">slots\|{live casino\|}\|poker]`, the empty option picked | `slots, , poker` | `slots, poker` |
 
 Minor rather than patch when it ships: rendered text changes for every template of these shapes, and
 `AST_VERSION` moves to 4.
@@ -60,6 +61,14 @@ Minor rather than patch when it ships: rendered text changes for every template 
   leaves an empty permutation element that is dropped, and whitespace at a branch's edge is the
   element's edge. 0.7.0's notes kept the empty element on purpose as a pathological divergence; a
   list item gated by a flag is an ordinary template, and in one it rendered `Есть покер, слоты и.`.
+- **A permutation element is its rendered text, trimmed, and one that renders empty is dropped** (#80).
+  The plugin resolves every nested enumeration before it splits a permutation, so an optional item
+  written `{live casino|}` that picks its empty option leaves `slots||poker` there — two elements —
+  while this engine kept a blank third and printed `slots, , poker`; `[<minsize=3;maxsize=3>a|{b|}|c]`
+  counted three and printed `a  c`. The conditional fix above did not reach it: the re-read drops a
+  part that is empty as TEXT, and `{b|}` is not empty until it is rendered. Found by the differential
+  below after the conditional half was in; the size pick and the shuffle count the elements that
+  remain, and an element that is neither empty nor padded draws as before.
 - **`AST_VERSION` 3 → 4.** The node shape is 3's, but an `Ast` cached by 0.7.0 lacks `raw` exactly
   where the wider key puts it and would render the old output; the guard turns that into
   `AstVersionError`. Nothing persists a handle across versions.
@@ -90,7 +99,9 @@ Seven more `splice/*` fixtures for #80, again from both PHP engines: a size and 
 taken from a variable, a taken branch carrying a pipe in `[…]` and in `{…}`, a flag-gated list item,
 a branch trimmed at an element's edge — six fail on 0.7.0 — and the negative
 `splice/conditional-without-pipes-keeps-draws`, which pins that a conditional changing nothing
-structural draws exactly where 0.7.0 drew.
+structural draws exactly where 0.7.0 drew. Three `perm/*` fixtures for an element that renders empty or
+padded: `perm/nested-empty-option-drops-element`, `perm/nested-option-edge-whitespace-trimmed` and
+`perm/dropped-element-narrows-the-size-range`, all failing on 0.7.0.
 
 **The corpus can pin how many** (#74). `validate` cases take an optional `diagnosticCount` — the exact
 number of diagnostics per code — where the subset match used to be the only assertion, and that
@@ -116,7 +127,18 @@ exactly as the tree did whenever the taken branch changes nothing structural —
 before the change, 500 seeds over five shapes (a permutation with separators, one with a size range,
 an enumeration, a nested permutation in a branch, an else branch): identical renders. What changes is
 the three kinds of text the plugin always produced here — a pipe in a branch, an empty element, a
-trimmed edge. `validate()` still reports `minsize=%n%` as `permutation.minsize-not-integer`, as both
+trimmed edge — and only in the renders where one occurs: a permutation whose elements all render
+non-empty and unpadded picks and shuffles exactly as before.
+
+**Verified against PHP, not only against 0.7.0.** A generator of construct-heavy templates —
+conditionals with empty, piped and padded branches, references in configs and elements, macros
+carrying conditionals, per-element separators — 3 000 renders with `rng: first` and `last` through
+both PHP engines: 0.7.0 differed on 416, this engine on 0. The first cut of #80 still differed on
+147, every one an element that rendered empty through a nested construct; that is how the trim-and-drop
+above was found. And 20 000 generated post-process inputs (Latin, Cyrillic, marks, every space the two
+dialects disagree on, shield triggers): 0.7.0 differed on 6 229, this engine on none but the recorded
+final `trim`, which accounts for all 3 689 of its edge-only differences. A zero holds for what those
+generators can build, and is stated here as that. `validate()` still reports `minsize=%n%` as `permutation.minsize-not-integer`, as both
 PHP validators do: a verdict about the template as written, unchanged.
 
 **Recorded, not closed.** A value carrying an unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`)

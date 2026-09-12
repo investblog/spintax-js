@@ -142,6 +142,14 @@ rendered a pipe, a blank element or a default in four engines. A conditional tha
 structural must re-read to the tree it already was, drawing in the same order —
 `splice/conditional-without-pipes-keeps-draws`.
 
+The same stage order reaches past conditionals: the plugin resolves every nested enumeration (Stage 7)
+before any permutation (Stage 8), so a permutation splits text in which `{live casino|}` has already
+picked. **A permutation element is its rendered text, trimmed, and an element that renders empty is
+dropped** — with the separator it carried, before the size pick and the shuffle count what remains
+(`perm/nested-empty-option-drops-element`, `perm/nested-option-edge-whitespace-trimmed`,
+`perm/dropped-element-narrows-the-size-range`). A tree walk that trims and drops only the RAW parts at
+parse time gets `slots, , poker`. Enumerations are not affected: an empty option stays an option.
+
 What does NOT split, pinned as negatives: a reference at top level (no construct around it), an
 undefined name (one literal element), and a list inside a nested construct (that construct's to
 split). The defect shipped for months because no fixture had a variable inside a bracket: a corpus
@@ -247,16 +255,19 @@ mirroring #78 and measured on both PHP engines 2026-09-12. `neutralize()` shield
 data, so only an author-written value reaches it; what would move it into work is a host whose own
 values legitimately carry unbalanced brackets.
 
-**Four characters trim differently in post-process.** `render("x" + ch)` — is the trailing
+**The final trim of post-process differs at the edges.** `render("x" + ch)` — is the trailing
 character kept?
 
 | character | `@spintax/core` | `spintax-core` | `spintax/core` (PHP) |
 |---|---|---|---|
-| form feed `U+000C`, NBSP `U+00A0`, line separator `U+2028` | trimmed | trimmed | **kept** |
+| form feed `U+000C` and every non-ASCII space JavaScript's `trim()` takes — NBSP `U+00A0`, `U+2028`, `U+2009`, `U+202F`, `U+3000`, … — and `U+FEFF` | trimmed | trimmed | **kept** |
 | NUL `U+0000` | **kept** | **kept** | trimmed |
 
 PHP's `trim()` charlist is `" \t\n\r\0\x0B"`; JavaScript's takes the Unicode whitespace set and
-never NUL. Post-process *is* parity-gated, so this one is a genuine unresolved divergence rather
+never NUL. This entry first said "four characters": the probe that measured it held six. A 20 000-input
+differential (2026-09-12, after the character classes were aligned) found this trim to be the ONLY
+place post-process output still differs from PHP's, on 3 689 inputs, and every one of them explained by
+applying JavaScript's `trim()` to PHP's output. Post-process *is* parity-gated, so this one is a genuine unresolved divergence rather
 than a non-goal — it is here because a template that ends in an invisible is not something anyone
 writes on purpose, and because NUL is the shielding sentinel, so changing the trim needs the
 `neutralize()` round-trip checked first (spintax-js#52–#54 were all paid for in that area).

@@ -193,7 +193,10 @@ the line explicitly:
   resolves conditionals (Stage 6a) and expands variables over the whole text before any bracket is
   read, so a pipe-joined value inside a construct is a list of options/elements, a conditional's
   taken branch lands in the body first — its `|` separates, an empty one leaves an empty
-  permutation element that is dropped, its edge whitespace is trimmed with the element — and every
+  permutation element that is dropped, its edge whitespace is trimmed with the element — every
+  nested enumeration has picked before a permutation splits (so a permutation element is its
+  RENDERED text, trimmed, and one that renders empty, like `{x|}` on its empty option, is dropped
+  before the size pick) — and every
   reference in a permutation's `<config>` takes its value: `<sep="%S%">`, `<sep=%S%>`,
   `<minsize=%n%>`. A tree-walk engine must re-read such a construct from its resolved text
   (`@spintax/core` 0.7.0; the conditional and config half since #80); a value at top level, with
