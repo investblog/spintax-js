@@ -138,7 +138,21 @@ both PHP engines: 0.7.0 differed on 416, this engine on 0. The first cut of #80 
 above was found. And 20 000 generated post-process inputs (Latin, Cyrillic, marks, every space the two
 dialects disagree on, shield triggers): 0.7.0 differed on 6 229, this engine on none but the recorded
 final `trim`, which accounts for all 3 689 of its edge-only differences. A zero holds for what those
-generators can build, and is stated here as that. `validate()` still reports `minsize=%n%` as `permutation.minsize-not-integer`, as both
+generators can build, and is stated here as that.
+
+**On a production host's templates.** 2 522 template-and-flag combinations taken from a live
+deployment's migrations, 15 132 renders against 0.7.0: 30 change, and `validate`/`analyze`/`extract`
+change on none. They are the two defects, in real copy: Russian brand articles stop printing
+`Т. Е. Каждый перевод…` and `…х5, х7 и т. Д.`, and a payment FAQ whose list gates one item behind
+`{?CasinoHasCrypto?…|}` stops printing `…are offered.. Traditional methods…` for a casino without
+crypto — the blank element and its `. ` separator, which post-process had turned into a double stop.
+The same generated documents without any of the changed shapes — 600 of them, 3 600 renders plus
+`validate`/`analyze`/`extract` — are byte-identical, and the harness caught all three deliberate control
+mutations first.
+
+**Render cost.** A construct re-read because it holds a conditional is parsed again on every render:
+1 000 renders of that payment FAQ take 165 ms against 92 ms, about 0.17 ms a render. A template 0.7.0
+already re-read (a reference in a branch) moves 7%, plain prose not at all. `validate()` still reports `minsize=%n%` as `permutation.minsize-not-integer`, as both
 PHP validators do: a verdict about the template as written, unchanged.
 
 **Recorded, not closed.** A value carrying an unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`)
