@@ -54,9 +54,11 @@ Minor rather than patch when it ships: rendered text changes for every template 
   the PARSED `sep` and `lastsep`, where a size reference never arrives (a size that is not digits
   parses to nothing) and neither does an unquoted separator (it parses to the default). The raw
   header is tested now, so `minsize=%n%`, `maxsize=%n%` and `sep=%S%` take their values from the
-  context, as they always have in PHP. So does a `{?…}` there or in a per-element separator —
+  context, as they always have in PHP. So does a whole `{?…}` there or in a per-element separator —
   `[<lastsep="{?en? and | и }">a|b|c]` printed the raw conditional unless a neighbour happened to
-  trigger the re-read (found in review).
+  trigger the re-read (found in review). A bare `{?` does not mark: the first cut of that check made
+  every level of `[<{?}>a|[<{?}>a|…]]` rescan its body for a conditional that was not there, twice
+  0.7.0's time on deep nesting (found by the Codex gate).
 - **A `{?…}` conditional directly in `{…}`/`[…]` marks the construct** (#80), whatever its branches
   hold — 0.7.0 marked it only when a `%var%` sat in a branch. The plugin resolves conditionals at
   Stage 6a, before any bracket is read, so a taken branch's `|` separates options, an empty branch
@@ -180,10 +182,11 @@ already re-read (a reference in a branch) moves 7%, plain prose not at all.
 
 **Recorded, not closed** — in the conformance README, under the known divergences. A value carrying an
 unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`) re-cuts the enclosing construct in PHP and only its
-own here. Three shapes of the same family, where a nested pick leaves markup the permutation's reader
+own here. Four shapes of the same family, where a nested pick leaves markup the permutation's reader
 sees in PHP and a tree parsed before the pick: a leading element that renders empty exposes its
-`<…>` as the permutation's config, a pick ending in `<…>` becomes a per-element separator, and a
-construct inside the config is resolved first. A generated differential aimed at exactly these meets
+`<…>` as the permutation's config, a pick ending in `<…>` becomes a per-element separator, a
+construct inside the config is resolved first, and a nested permutation joined by `|` re-splits the
+outer one (`[[<|>a|b]|c]`). All four were already so in 0.7.0. A generated differential aimed at exactly these meets
 the first twice in 3 000 renders. And the Unicode tables: Node 22's are 17.0, PCRE2 10.44's are 15.0,
 so a character assigned since then can sit on the other side of a boundary.
 

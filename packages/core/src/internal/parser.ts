@@ -270,9 +270,29 @@ export function needsTextualReread(lists: readonly (readonly Node[])[]): boolean
 
 /** A `%var%` reference written inside a separator string — config or per-element. */
 const REFERENCE_RE = /%\w+%/u;
-/** A `{?…}` opener in the same places — Stage 6a resolves it there too, before any bracket is read. */
-const CONDITIONAL_OPEN_RE = /\{\?/u;
-const holdsTextForReread = (text: string): boolean => REFERENCE_RE.test(text) || CONDITIONAL_OPEN_RE.test(text);
+/**
+ * A whole `{?…}` the renderer's conditional pass would resolve, written in the same places — Stage 6a
+ * resolves it there too, before any bracket is read. A bare `{?` is not enough: `<{?}>` is a literal
+ * separator, and marking it made every level of `[<{?}>a|[<{?}>a|…]]` rescan the nested body for a
+ * conditional that is not there (found in review).
+ */
+function holdsConditional(text: string): boolean {
+  if (!text.includes('{?')) return false;
+  const opens: number[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charAt(i);
+    if (ch === '{') {
+      opens.push(i);
+    } else if (ch === '}') {
+      const open = opens.pop();
+      if (open !== undefined && text.charAt(open + 1) === '?' && recognizeConditional(text, open + 1, i) !== null) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+const holdsTextForReread = (text: string): boolean => REFERENCE_RE.test(text) || holdsConditional(text);
 
 /**
  * `[<config>a|b|c]` — the config and the per-element separators resolve here; the

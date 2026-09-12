@@ -255,7 +255,7 @@ mirroring #78 and measured on both PHP engines 2026-09-12. `neutralize()` shield
 data, so only an author-written value reaches it; what would move it into work is a host whose own
 values legitimately carry unbalanced brackets.
 
-**Three more shapes of that family: markup that only exists once a nested construct has picked.** PHP
+**Four more shapes of that family: markup that only exists once a nested construct has picked.** PHP
 resolves every enumeration before it reads any permutation, so the TEXT a pick leaves behind is what
 the permutation's reader sees; a tree parsed the permutation before anything was picked. Measured on
 both PHP engines 2026-09-12, `rng:last`:
@@ -265,6 +265,12 @@ both PHP engines 2026-09-12, `rng:last`:
 | `[{b\|} <, >\|c\|y]` — a leading element renders empty, and its trailing `<, >` now opens the body | `c, y` — read as the permutation's config | `c y` — still `c`'s own separator |
 | `[{x<, >\|x<, >}\|y]` — a pick that ends in `<…>` | `x, y` — a per-element separator | `x<, > y` |
 | `[<sep="{, \| and }">a\|b]` — a construct inside the config | `a and b` | `a{, \| and }b` |
+| `[[<\|>a\|b]\|c]` — a nested permutation joined by `\|` | `a b c` — its output re-splits the outer one | `a\|b c` |
+
+All four were already this way in 0.7.0; the last was found by the Codex gate on this branch. What
+closes the first, second and fourth together is re-reading a permutation's body as TEXT at assembly —
+rendered elements joined back with their separators, then split, extracted and trimmed the way the
+plugin does — which is a change to every permutation and gets its own differential, not a line here.
 
 A generated differential that aims per-element separators and conditional configs at empty elements
 (3 000 renders, 2026-09-12) meets the first shape twice and nothing else. What would move these into
