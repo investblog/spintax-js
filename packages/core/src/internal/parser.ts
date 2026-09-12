@@ -242,9 +242,37 @@ function planBraceConstruct(content: string): Planned {
   }
   return {
     texts: splitTopLevel(content),
-    build: (children) => ({ type: 'enumeration', options: children }),
+    build: (children) =>
+      hasDirectReference(children)
+        ? { type: 'enumeration', options: children, raw: content }
+        : { type: 'enumeration', options: children },
   };
 }
+
+/**
+ * Does a construct body hold a `%var%` that expansion would splice at THIS construct's own
+ * level? One at the top level of an option counts, and so does one inside a conditional's
+ * branches: the reference engines resolve `{?…}` before they expand, so a branch's text lands
+ * in the body ahead of the split. Nested enumerations / permutations / plurals are not entered —
+ * a value inside them is spliced when THEY render, and a `|` it carries belongs to them.
+ *
+ * Iterative, like every walk here (#68): a deep chain of conditionals is content, and the
+ * parser must not throw on content.
+ */
+export function hasDirectReference(lists: readonly (readonly Node[])[]): boolean {
+  const stack: (readonly Node[])[] = [...lists];
+  while (stack.length > 0) {
+    const list = stack.pop() as readonly Node[];
+    for (const node of list) {
+      if (node.type === 'variable') return true;
+      if (node.type === 'conditional') stack.push(node.then, node.else);
+    }
+  }
+  return false;
+}
+
+/** A `%var%` reference written inside a separator string — config or per-element. */
+const REFERENCE_RE = /%\w+%/u;
 
 /**
  * `[<config>a|b|c]` — the config and the per-element separators resolve here; the
@@ -253,13 +281,20 @@ function planBraceConstruct(content: string): Planned {
 function planPermutation(rawInner: string): Planned {
   const { config, content } = extractPermutationConfig(rawInner);
   const { texts, separators } = permutationElements(splitTopLevel(content));
+  // The reference engines expand the config and the per-element separators too — to them it is
+  // all text — so a reference written there is as direct as one written in an element.
+  const separatorHasRef =
+    REFERENCE_RE.test(config.sep) ||
+    (config.lastsep !== null && REFERENCE_RE.test(config.lastsep)) ||
+    separators.some((sep) => sep !== null && REFERENCE_RE.test(sep));
   return {
     texts,
-    build: (children) => ({
-      type: 'permutation',
-      config,
-      options: children.map((nodes, i) => ({ nodes, separator: separators[i] ?? null })),
-    }),
+    build: (children) => {
+      const options = children.map((nodes, i) => ({ nodes, separator: separators[i] ?? null }));
+      return separatorHasRef || hasDirectReference(children)
+        ? { type: 'permutation', config, options, raw: rawInner }
+        : { type: 'permutation', config, options };
+    },
   };
 }
 

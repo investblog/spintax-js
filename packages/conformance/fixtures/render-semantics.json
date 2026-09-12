@@ -971,5 +971,289 @@
     "expect": {
       "output": "\n\n｛plural 2: one|two|three｝"
     }
+  },
+  {
+    "id": "splice/permutation-list-variable-first",
+    "note": "The casino-platform report (0.7.0): a runtime %L% = a|b|c|d inside [<…>%L%] is FOUR elements, not one. The plugin expands variables before it reads a bracket, so a | inside a value separates elements; a tree-walk engine has to splice the value as text and re-read the construct. pick = random_int(3,3) short-circuits (no draw); Fisher-Yates with j=0 every step: [a,b,c,d] → i=3 ⇒ [d,b,c,a] → i=2 ⇒ [c,b,d,a] → i=1 ⇒ [b,c,d,a]; take 3.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=3;maxsize=3;sep=\", \">%L%]",
+    "context": {
+      "L": "a|b|c|d"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b, c, d"
+    }
+  },
+  {
+    "id": "splice/permutation-list-variable-last",
+    "note": "Same body; j=i every step ⇒ no swap ⇒ the first three in source order.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=3;maxsize=3;sep=\", \">%L%]",
+    "context": {
+      "L": "a|b|c|d"
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a, b, c"
+    }
+  },
+  {
+    "id": "splice/permutation-set-wrapper-over-runtime-list",
+    "note": "The production shape: a #set macro wraps the permutation and the list arrives at render time. The macro is re-parsed at its reference, and the construct it holds splices the list like any other. The stripped directive line leaves a leading newline.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %TP% = [<minsize=2;maxsize=2;sep=\", \">%L%]\n%TP%",
+    "context": {
+      "L": "a|b|c"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "\nb, c"
+    }
+  },
+  {
+    "id": "splice/permutation-literals-around-the-variable",
+    "note": "[a|%L%|b] with L = x|y is four elements in source order; last ⇒ no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a|%L%|b]",
+    "context": {
+      "L": "x|y"
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a x y b"
+    }
+  },
+  {
+    "id": "splice/enumeration-list-variable",
+    "note": "{%L%} with L = x|y|z is a three-way pick, not the literal list; last ⇒ z.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{%L%}",
+    "context": {
+      "L": "x|y|z"
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "z"
+    }
+  },
+  {
+    "id": "splice/enumeration-literal-and-variable",
+    "note": "{a|%L%} with L = x|y is three options and index 1 is the first spliced one. One construct, one draw — order-independent by construction.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|%L%}",
+    "context": {
+      "L": "x|y"
+    },
+    "rng": {
+      "sequence": [
+        1
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "x"
+    }
+  },
+  {
+    "id": "splice/conditional-branch-carries-the-list",
+    "note": "Plugin Stage 6a resolves {?…} BEFORE expansion, so the taken branch lands in the body ahead of the split: [{?flag?%L%|none}|c] ⇒ [%L%|c] ⇒ [x|y|c]. Both PHP corpus runners run the full Pipeline order (bare Parser::process() has no conditional stage and would give \"none c\"). last ⇒ no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %flag% = 1\n[{?flag?%L%|none}|c]",
+    "context": {
+      "L": "x|y"
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "\nx y c"
+    }
+  },
+  {
+    "id": "splice/def-wrapper-rolls-once-then-splices",
+    "note": "A #def holding the permutation is rolled ONCE — the only two draws happen during the roll — and the held text is reused at both references; the list inside it is spliced like anywhere else.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %pair% = [<minsize=2;maxsize=2;sep=\"+\">%L%]\n%pair%/%pair%",
+    "context": {
+      "L": "a|b|c"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "\nb+c/b+c"
+    }
+  },
+  {
+    "id": "splice/config-separator-from-variable",
+    "note": "The <config> is text to the plugin too: sep=\"%S%\" takes its value before the permutation is read, so the re-read has to start from the config again. last ⇒ no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\"%S%\">a|b]",
+    "context": {
+      "S": ", "
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a, b"
+    }
+  },
+  {
+    "id": "splice/per-element-separator-from-variable",
+    "note": "A per-element separator is text to the plugin as much as the config is: `a <%S%> | b` takes the separator from the value before the elements are read. last ⇒ no swap; a non-alphabetic separator is not padded.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a <%S%> | b]",
+    "context": {
+      "S": ", "
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a, b"
+    }
+  },
+  {
+    "id": "splice/config-lastsep-from-variable",
+    "note": "lastsep=\"%S%\" takes its value like sep does; an alphabetic separator is space-padded on join. last ⇒ no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\"-\";lastsep=\"%S%\">a|b|c]",
+    "context": {
+      "S": "and"
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a-b and c"
+    }
+  },
+  {
+    "id": "splice/chain-into-a-list-is-split-on-the-51st-hop",
+    "note": "The hop budget is the reference's 51 inside a bracket as at top level (render/circular-set-accumulates-then-stops is the top-level pin). Fifty aliases and a terminal list: the 51st pass puts `x|y` INTO the body before the enumeration is read, so it is two options (last ⇒ y). An engine that hands the last hop back as finished text renders `x|y`; one that spends a 52nd hop differs on the next case.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a1% = %a2%\n#set %a2% = %a3%\n#set %a3% = %a4%\n#set %a4% = %a5%\n#set %a5% = %a6%\n#set %a6% = %a7%\n#set %a7% = %a8%\n#set %a8% = %a9%\n#set %a9% = %a10%\n#set %a10% = %a11%\n#set %a11% = %a12%\n#set %a12% = %a13%\n#set %a13% = %a14%\n#set %a14% = %a15%\n#set %a15% = %a16%\n#set %a16% = %a17%\n#set %a17% = %a18%\n#set %a18% = %a19%\n#set %a19% = %a20%\n#set %a20% = %a21%\n#set %a21% = %a22%\n#set %a22% = %a23%\n#set %a23% = %a24%\n#set %a24% = %a25%\n#set %a25% = %a26%\n#set %a26% = %a27%\n#set %a27% = %a28%\n#set %a28% = %a29%\n#set %a29% = %a30%\n#set %a30% = %a31%\n#set %a31% = %a32%\n#set %a32% = %a33%\n#set %a33% = %a34%\n#set %a34% = %a35%\n#set %a35% = %a36%\n#set %a36% = %a37%\n#set %a37% = %a38%\n#set %a38% = %a39%\n#set %a39% = %a40%\n#set %a40% = %a41%\n#set %a41% = %a42%\n#set %a42% = %a43%\n#set %a43% = %a44%\n#set %a44% = %a45%\n#set %a45% = %a46%\n#set %a46% = %a47%\n#set %a47% = %a48%\n#set %a48% = %a49%\n#set %a49% = %a50%\n#set %a50% = %a51%\n#set %a51% = x|y\n{%a1%}",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\ny"
+    }
+  },
+  {
+    "id": "splice/plural-count-chain-reaches-its-number-on-the-51st-hop",
+    "note": "The plural slots run the same fixpoint: fifty aliases into `1` reach the number on the 51st pass and the block renders. A slot that stops at 50 sees `%a51%`, non-numeric, and erases the block (spintax-js 0.7.0, found in review).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a1% = %a2%\n#set %a2% = %a3%\n#set %a3% = %a4%\n#set %a4% = %a5%\n#set %a5% = %a6%\n#set %a6% = %a7%\n#set %a7% = %a8%\n#set %a8% = %a9%\n#set %a9% = %a10%\n#set %a10% = %a11%\n#set %a11% = %a12%\n#set %a12% = %a13%\n#set %a13% = %a14%\n#set %a14% = %a15%\n#set %a15% = %a16%\n#set %a16% = %a17%\n#set %a17% = %a18%\n#set %a18% = %a19%\n#set %a19% = %a20%\n#set %a20% = %a21%\n#set %a21% = %a22%\n#set %a22% = %a23%\n#set %a23% = %a24%\n#set %a24% = %a25%\n#set %a25% = %a26%\n#set %a26% = %a27%\n#set %a27% = %a28%\n#set %a28% = %a29%\n#set %a29% = %a30%\n#set %a30% = %a31%\n#set %a31% = %a32%\n#set %a32% = %a33%\n#set %a33% = %a34%\n#set %a34% = %a35%\n#set %a35% = %a36%\n#set %a36% = %a37%\n#set %a37% = %a38%\n#set %a38% = %a39%\n#set %a39% = %a40%\n#set %a40% = %a41%\n#set %a41% = %a42%\n#set %a42% = %a43%\n#set %a43% = %a44%\n#set %a44% = %a45%\n#set %a45% = %a46%\n#set %a46% = %a47%\n#set %a47% = %a48%\n#set %a48% = %a49%\n#set %a49% = %a50%\n#set %a50% = %a51%\n#set %a51% = 1\n{plural %a1%: one|many}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\none"
+    }
+  },
+  {
+    "id": "splice/plural-form-chain-past-the-budget-stays-literal",
+    "note": "Fifty-one aliases into END: the 51 passes leave `%a52%` in the form list, and the reference never expands again — the picked form is that literal. An engine that re-expands the picked form after its slot pass renders END (spintax-js 0.7.0, found in review).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %a1% = %a2%\n#set %a2% = %a3%\n#set %a3% = %a4%\n#set %a4% = %a5%\n#set %a5% = %a6%\n#set %a6% = %a7%\n#set %a7% = %a8%\n#set %a8% = %a9%\n#set %a9% = %a10%\n#set %a10% = %a11%\n#set %a11% = %a12%\n#set %a12% = %a13%\n#set %a13% = %a14%\n#set %a14% = %a15%\n#set %a15% = %a16%\n#set %a16% = %a17%\n#set %a17% = %a18%\n#set %a18% = %a19%\n#set %a19% = %a20%\n#set %a20% = %a21%\n#set %a21% = %a22%\n#set %a22% = %a23%\n#set %a23% = %a24%\n#set %a24% = %a25%\n#set %a25% = %a26%\n#set %a26% = %a27%\n#set %a27% = %a28%\n#set %a28% = %a29%\n#set %a29% = %a30%\n#set %a30% = %a31%\n#set %a31% = %a32%\n#set %a32% = %a33%\n#set %a33% = %a34%\n#set %a34% = %a35%\n#set %a35% = %a36%\n#set %a36% = %a37%\n#set %a37% = %a38%\n#set %a38% = %a39%\n#set %a39% = %a40%\n#set %a40% = %a41%\n#set %a41% = %a42%\n#set %a42% = %a43%\n#set %a43% = %a44%\n#set %a44% = %a45%\n#set %a45% = %a46%\n#set %a46% = %a47%\n#set %a47% = %a48%\n#set %a48% = %a49%\n#set %a49% = %a50%\n#set %a50% = %a51%\n#set %a51% = %a52%\n#set %a52% = END\n{plural 1: %a1%|two}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\n%a52%"
+    }
+  },
+  {
+    "id": "splice/top-level-reference-is-not-split",
+    "note": "NEGATIVE — the guard on the rule: with no construct around it, a | in a value is text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "%L%",
+    "context": {
+      "L": "x|y"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "x|y"
+    }
+  },
+  {
+    "id": "splice/undefined-reference-stays-one-literal-element",
+    "note": "NEGATIVE — an undefined name is left literal and is ONE element, exactly as before.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[%nope%|b]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "%nope% b"
+    }
+  },
+  {
+    "id": "splice/nested-construct-splits-at-its-own-level",
+    "note": "NEGATIVE for the outer construct: the list inside {%L%} belongs to that enumeration (last ⇒ y); the permutation around it still has two elements. Order-independent under last.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[a|{%L%}]",
+    "context": {
+      "L": "x|y"
+    },
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "a y"
+    }
+  },
+  {
+    "id": "splice/macro-value-with-brackets-and-a-pipe",
+    "note": "#set %x% = {p|q}|r is spliced as text: the enumeration resolves in place (last ⇒ q) and r becomes its own element ⇒ three elements, no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = {p|q}|r\n[%x%|c]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "\nq r c"
+    }
+  },
+  {
+    "id": "splice/production-preset-size-range-and-lastsep",
+    "note": "The reported preset (minsize=5;maxsize=7, sep \", \", lastsep \" and \") over an eight-name runtime list. The size pick is the FIRST draw — random_int(5,7) ⇒ 6 — then Fisher-Yates i=7..1 with j=0 each rotates left by one ⇒ [B,C,D,E,F,G,H,A]; take 6.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=5;maxsize=7;sep=\", \";lastsep=\" and \">%L%]",
+    "context": {
+      "L": "A|B|C|D|E|F|G|H"
+    },
+    "rng": {
+      "sequence": [
+        6,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "B, C, D, E, F and G"
+    }
   }
 ]

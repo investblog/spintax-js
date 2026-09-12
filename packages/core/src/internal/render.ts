@@ -12,6 +12,10 @@
  *   - conditionals test truthiness against the raw var map; plurals resolve the
  *     count (vars already expanded) then pick the bucket, lenient fullwidth
  *     fallback (Stage 6d, after vars).
+ *   - a `%var%` that sits DIRECTLY in an enumeration/permutation body is spliced as
+ *     TEXT and the construct re-read (spliceConstruct, 0.7.0): a `|` inside such a
+ *     value separates options, exactly as in the plugin, whose expansion runs before
+ *     any bracket is read. Every other construct keeps the tree it was parsed into.
  *   - #include (post-tree string pass) and post-process are later PRs.
  *
  * RNG note: cross-engine RNG-sequence parity is a non-goal (§3.2). Enumerations
@@ -20,7 +24,7 @@
  * cases use order-independent sequences. Permutation matches the plugin's exact
  * pick→Fisher-Yates, so its rng-strategy cases are exact.
  */
-import type { Node, ParsedAst, PermutationNode, PluralNode, ConditionalNode } from './ast';
+import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { IncludeResolverError } from './errors';
 import { parseSequence, parseTemplate, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
@@ -166,6 +170,14 @@ export interface RenderInternalOptions {
   readonly budget: { left: number };
   /** Optional observer for unresolvable plural blocks; never affects output. */
   readonly onPluralError: ((issue: PluralIssue) => void) | undefined;
+  /**
+   * Every reference is literal from here down ({@link spliceConstruct}). Set for the subtree
+   * of a construct whose textual fixpoint ran out of passes: the plugin runs ONE fixpoint of
+   * 51 passes and then reads text, so whatever it left unexpanded stays unexpanded — in the
+   * body, in a nested construct, in a plural slot. Without this a leftover would earn a fresh
+   * allowance from every walker that met it.
+   */
+  readonly frozen?: boolean;
 }
 
 /**
@@ -349,7 +361,7 @@ function renderNode(node: Node, opts: RenderInternalOptions): RenderStep {
     case 'variable':
       return resolveVariable(node.name, opts);
     case 'enumeration':
-      return renderEnumeration(node.options, opts);
+      return renderEnumeration(node, opts);
     case 'permutation':
       return renderPermutation(node, opts);
     case 'conditional':
@@ -371,23 +383,52 @@ function randomInt(rng: Rng, min: number, max: number): number {
  */
 function resolveVariable(name: string, opts: RenderInternalOptions): string {
   const value = opts.vars[name.toLowerCase()];
-  if (value === undefined) return `%${name}%`;
+  if (value === undefined || opts.frozen === true) return `%${name}%`;
+  // Out of budget ⇒ the reference stays literal, exactly as an undefined name does. No
+  // new output shape, and the promise that render never throws on content survives.
+  //
+  // Checked BEFORE the plain-value shortcut below, so every substitution is charged, as it
+  // is in the plugin. Until 0.7.0 a plain value was free — harmless while a plain value
+  // could only ever be a leaf, and the one door left open once a re-read construct
+  // (spliceConstruct) could hand this function references its fixpoint had cut off: 2^k of
+  // them, each to a 64 KB value, expanded here for nothing (found in review).
+  if (opts.budget.left <= 0) return `%${name}%`;
+  opts.budget.left -= value.length;
   // At the cap, stop expanding (lenient: partial output, never throws — unlike the
   // plugin which throws→'' on runaway; §9.2 render never throws on content).
   if (opts.depth >= MAX_VARIABLE_DEPTH || !/[{[%]/u.test(value)) return value;
-  // Out of budget ⇒ the reference stays literal, exactly as an undefined name does. No
-  // new output shape, and the promise that render never throws on content survives.
-  if (opts.budget.left <= 0) return `%${name}%`;
-  opts.budget.left -= value.length;
   // parseSequence, NOT parseTemplate: a value must not be re-comment-stripped or
   // re-#set-extracted (those are one-time body passes in the plugin).
   return renderNodes(parseSequence(value), { ...opts, depth: opts.depth + 1 });
 }
 
-/** Variable-expansion ONLY (plugin `expand_variables` fixpoint) — leaves enums/perms literal. */
-function expandVarsOnly(text: string, opts: RenderInternalOptions): string {
+/**
+ * The passes a textual fixpoint may run from this point of the walk: the plugin's loop is
+ * `<= MAX_VARIABLE_DEPTH` — 51 passes, once, over the whole text — and a construct or slot
+ * reached through a macro re-parse has already spent `depth` of those hops in
+ * `resolveVariable`. Never below one.
+ */
+function passesLeft(opts: RenderInternalOptions): number {
+  return Math.max(1, MAX_VARIABLE_DEPTH - opts.depth + 1);
+}
+
+/**
+ * Variable-expansion ONLY (plugin `expand_variables` fixpoint) — leaves enums/perms literal —
+ * with the two facts a caller may need: whether anything was substituted at all, and whether a
+ * pass came back unchanged before the pass budget ran out. Not converged means the text was
+ * still changing on the last allowed pass — a cycle or a chain deeper than the budget — and
+ * the caller must then keep every leftover reference literal (`frozen`), because the plugin
+ * never expands again after its one fixpoint.
+ */
+function expandVarsFixpoint(
+  text: string,
+  opts: RenderInternalOptions,
+  passes: number,
+): { text: string; changed: boolean; converged: boolean } {
+  if (opts.frozen === true) return { text, changed: false, converged: true };
   let out = text;
-  for (let i = 0; i < MAX_VARIABLE_DEPTH; i += 1) {
+  let changedAny = false;
+  for (let i = 0; i < passes; i += 1) {
     let changed = false;
     out = out.replace(/%(\w+)%/gu, (m, name: string): string => {
       const value = opts.vars[name.toLowerCase()];
@@ -398,9 +439,10 @@ function expandVarsOnly(text: string, opts: RenderInternalOptions): string {
       changed = true;
       return value;
     });
-    if (!changed) break;
+    if (!changed) return { text: out, changed: changedAny, converged: true };
+    changedAny = true;
   }
-  return out;
+  return { text: out, changed: changedAny, converged: false };
 }
 
 /** Truthy = the raw var value is set and has a non-whitespace char (plugin is_truthy). */
@@ -416,8 +458,11 @@ function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): 
 }
 
 /**
- * Resolve conditionals in the plural COUNT slot, textually — the branch is
- * substituted, never rendered (spintax-js#67).
+ * Resolve conditionals in a piece of text, textually — the branch is substituted,
+ * never rendered. Two callers: the plural COUNT slot (spintax-js#67, where this
+ * was born) and the body of a construct being re-read after a direct `%var%` splice
+ * ({@link spliceConstruct}, 0.7.0), which needs the plugin's Stage 6a/6c around its
+ * expansion for the same reason.
  *
  * Why this exists: the plugin runs its conditional stage over the whole text
  * before plurals, so `#set %n% = {?flag?1|2}` reaches the count slot as a plain
@@ -443,7 +488,7 @@ function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): 
  * {@link matchBraces}). Both are reachable from template text through the live
  * public Worker.
  */
-function resolveCountConditionals(text: string, opts: RenderInternalOptions): string {
+function resolveConditionalsInText(text: string, opts: RenderInternalOptions): string {
   if (!text.includes('{?')) return text;
 
   const close = matchBraces(text);
@@ -529,8 +574,15 @@ function matchBraces(text: string): Int32Array {
  * error paths emit the (var-expanded) construct verbatim with fullwidth braces.
  */
 function renderPlural(node: PluralNode, opts: RenderInternalOptions): RenderStep {
-  const countRaw = resolveCountConditionals(expandVarsOnly(node.countRaw, opts), opts);
-  const formsRaw = expandVarsOnly(node.formsRaw, opts);
+  // Both slots get the same pass arithmetic as a re-read construct (51 hops in every shape),
+  // and a form list whose passes ran out renders its pick FROZEN: until 0.7.0 the slots ran a
+  // flat 50 and the picked form re-entered the walk unfrozen, so a 52-deep chain in a form
+  // resolved to its end where the plugin leaves `%a52%` (found in review).
+  const passes = passesLeft(opts);
+  const countPass = expandVarsFixpoint(node.countRaw, opts, passes);
+  const formsPass = expandVarsFixpoint(node.formsRaw, opts, passes);
+  const countRaw = resolveConditionalsInText(countPass.text, opts);
+  const formsRaw = formsPass.text;
   const base = normalizeBaseLang(opts.locale);
   const report = (issue: PluralIssue): void => opts.onPluralError?.(issue);
 
@@ -575,6 +627,7 @@ function renderPlural(node: PluralNode, opts: RenderInternalOptions): RenderStep
   // The picked form re-enters the pipeline (its enums/perms resolve after plurals) —
   // as a child list, so a deeply nested form does not cost a stack frame.
   const picked = pluralFor(base, Number.parseInt(count, 10), forms);
+  if (!formsPass.converged) return renderNodes(parseSequence(picked), { ...opts, frozen: true });
   return { lists: [parseSequence(picked)], done: [], assemble: (parts) => parts[0] ?? '' };
 }
 
@@ -590,11 +643,53 @@ function fullwidthVerbatim(countRaw: string, formsRaw: string): string {
 
 /** Pick one option (outer-first) and render it. The pick happens BEFORE the descent,
  *  so an unpicked branch never consumes RNG — that ordering is pinned by fixtures. */
-function renderEnumeration(options: readonly (readonly Node[])[], opts: RenderInternalOptions): RenderStep {
+function renderEnumeration(node: EnumerationNode, opts: RenderInternalOptions): RenderStep {
+  const spliced = node.raw === undefined ? null : spliceConstruct(node.raw, '{', '}', opts);
+  if (spliced !== null) return spliced;
+  const { options } = node;
   if (options.length === 0) return '';
   const picked = options[randomInt(opts.rng, 0, options.length - 1)];
   if (!picked) return '';
   return { lists: [picked], done: [], assemble: (parts) => parts[0] ?? '' };
+}
+
+/**
+ * Splice the direct `%var%` references of a construct into its body as TEXT and re-read the
+ * construct — the plugin's own order (Stage 6a conditionals → 6b expansion → 6c conditionals)
+ * run over this one body, then the brackets go back on and the parser reads the result. Only
+ * constructs the parser marked (`raw`) get here; every other one keeps the tree it was parsed
+ * into, and with it the exact RNG order the corpus pins.
+ *
+ * Why textual: `[<…>%list%]` with `%list% = a|b|c` is ONE option to the parser, because the tree
+ * is built before any value exists, and `resolveVariable` hands a construct-free value back as
+ * finished text — so the `|` that separates elements in every PHP engine was never seen here,
+ * and a 57-name list rendered as one element (0.7.0). Same for `{%list%}`.
+ *
+ * Returns null when the body would not change — an undefined name, a reference the budget cut
+ * off — so the caller renders the nodes it already has. That is also what terminates the
+ * re-read: after a converged fixpoint every reference left is one expansion cannot touch, so a
+ * re-read construct changes nothing and falls through.
+ *
+ * Hop budget: the plugin's fixpoint is `<= MAX_VARIABLE_DEPTH` — 51 passes — and it runs once,
+ * over text; a construct reached through a macro re-parse has already spent `depth` of those
+ * hops in `resolveVariable`, so it gets `51 - depth` passes here and the total is 51 in every
+ * shape. When the passes run out still changing, whatever is left is FROZEN for the whole
+ * subtree (`frozen`): the mutual cycle leaves `%b%`, `#set %b% = x%b%y` leaves 51 pairs, a
+ * 51-deep chain into `x|y` reaches the body as text and IS split — inside a bracket exactly
+ * as outside one — and nothing below earns a fresh allowance. (The first cut rendered that
+ * subtree at the depth cap instead, which spliced a leftover once more as finished text: a
+ * 52nd hop, and one that hid a structural value from the split — found in review.)
+ */
+function spliceConstruct(raw: string, open: string, close: string, opts: RenderInternalOptions): RenderStep | null {
+  if (opts.frozen === true) return null;
+  const expanded = expandVarsFixpoint(resolveConditionalsInText(raw, opts), opts, passesLeft(opts));
+  const body = resolveConditionalsInText(expanded.text, opts);
+  if (body === raw) return null;
+  // The brackets go back on so an unbalanced value degrades exactly as the plugin's innermost
+  // regex does: `{a}b}` is `a` followed by the literal `b}`, in both engines.
+  const nodes = parseSequence(open + body + close);
+  if (!expanded.converged) return renderNodes(nodes, { ...opts, frozen: true });
+  return { lists: [nodes], done: [], assemble: (parts) => parts[0] ?? '' };
 }
 
 interface Element {
@@ -603,6 +698,8 @@ interface Element {
 }
 
 function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): RenderStep {
+  const spliced = node.raw === undefined ? null : spliceConstruct(node.raw, '[', ']', opts);
+  if (spliced !== null) return spliced;
   if (node.options.length === 0) return '';
   return {
     lists: node.options.map((o) => o.nodes),

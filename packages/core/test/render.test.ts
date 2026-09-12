@@ -4,7 +4,7 @@ import { buildVars, renderNodes, rollDefinitions, type PluralIssue } from '../sr
 import { rngFromStrategy, type RngStrategy } from './corpus-harness';
 // The public API, next to the white-box helper below: the count-slot cases are
 // about what a caller gets, not about an injected RNG.
-import { analyze, render as publicRender, validate } from '../src/index';
+import { analyze, neutralize, render as publicRender, validate } from '../src/index';
 
 /** White-box render with an injected RNG strategy (like the corpus harness). */
 function render(
@@ -330,5 +330,132 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
     const started = Date.now();
     expect(publicRender(unbalanced, { locale: 'en' })).toContain('｛plural');
     expect(Date.now() - started).toBeLessThan(10_000);
+  });
+});
+
+describe('render — a direct %var% is spliced as TEXT before the construct is split (0.7.0)', () => {
+  const list = '3 Oaks|Amigo|Amusnet|Apollo|Apparat|Barbara Bang|Belatra|BTG';
+
+  test('the reported shape: a pipe-joined runtime list inside a permutation is N elements, not one', () => {
+    // first: pick = random_int(3,3) short-circuits; j = 0 at every step rotates left by one; take 3.
+    expect(render('[<minsize=3;maxsize=3;sep=", ">%L%]', 'first', { L: 'a|b|c|d' })).toBe('b, c, d');
+    expect(render('[<minsize=3;maxsize=3;sep=", ">%L%]', 'last', { L: 'a|b|c|d' })).toBe('a, b, c');
+  });
+
+  test('the production preset: a size range, sep and lastsep, over eight names, seeded', () => {
+    const template = '[<minsize=5;maxsize=7;sep=", ";lastsep=" and ">%L%]';
+    const out = publicRender(template, { context: { L: list }, seed: 7, postProcess: false });
+    const names = out.split(/, | and /u);
+    expect(names.length).toBeGreaterThanOrEqual(5);
+    expect(names.length).toBeLessThanOrEqual(7);
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) expect(list.split('|')).toContain(name);
+    expect(out).toMatch(/ and [^,]+$/u);
+    expect(publicRender(template, { context: { L: list }, seed: 7, postProcess: false })).toBe(out);
+  });
+
+  test('a #set macro wrapping the permutation splices the list at its reference', () => {
+    expect(render('#set %TP% = [<minsize=2;maxsize=2;sep=", ">%L%]\n%TP%', 'first', { L: 'a|b|c' })).toBe('\nb, c');
+  });
+
+  test('enumerations too, and literals around the variable stay their own elements', () => {
+    expect(render('{%L%}', 'last', { L: 'x|y|z' })).toBe('z');
+    expect(render('{a|%L%}', { sequence: [1] }, { L: 'x|y' })).toBe('x');
+    expect(render('[a|%L%|b]', 'last', { L: 'x|y' })).toBe('a x y b');
+  });
+
+  test('a reference inside a conditional branch is direct too — plugin Stage 6a runs before expansion', () => {
+    expect(render('#set %flag% = 1\n[{?flag?%L%|none}|c]', 'last', { L: 'x|y' })).toBe('\nx y c');
+    expect(render('[{?flag?%L%|none}|c]', 'last', { L: 'x|y' })).toBe('none c');
+  });
+
+  test('the config and a per-element separator are text to the plugin, so a reference there is spliced', () => {
+    expect(render('[<sep="%S%">a|b]', 'last', { S: ', ' })).toBe('a, b');
+    expect(render('[a <%S%> | b]', 'last', { S: ', ' })).toBe('a, b');
+  });
+
+  test('what does NOT split: a top-level reference, an undefined name, a nested construct’s own list', () => {
+    expect(render('%L%', 'first', { L: 'x|y' })).toBe('x|y');
+    expect(render('[%nope%|b]', 'last')).toBe('%nope% b');
+    expect(render('[a|{%L%}]', 'last', { L: 'x|y' })).toBe('a y');
+  });
+
+  test('a value without structural characters renders exactly as it did before the splice existed', () => {
+    // Same element count, same draws, same order: the re-read tree IS the parsed tree.
+    expect(render('[%a%|%b%|c]', 'first', { a: 'x', b: 'y' })).toBe('y c x');
+    expect(render('{%a%|%b%}', { sequence: [1] }, { a: 'x', b: 'y' })).toBe('y');
+  });
+
+  test('the hop budget is 51 inside a bracket exactly as outside one', () => {
+    // The corpus knot pin (render/circular-set-accumulates-then-stops), moved inside braces.
+    expect(render('#set %b% = x%b%y\n{%b%}')).toBe(`\n${'x'.repeat(51)}%b%${'y'.repeat(51)}`);
+    expect(render('#set %a% = %b%\n#set %b% = %a%\n{%a%}')).toBe('\n\n%b%');
+    // Reached through a macro re-parse, the construct has already spent one hop: the fixpoint
+    // gets 50 passes — the 51st hop overall — and what is left is frozen. A flat 51 would
+    // leave %a52% here.
+    const chain = Array.from({ length: 59 }, (_, i) => `#set %a${i + 1}% = %a${i + 2}%`).join('\n');
+    expect(render(`#set %v% = {%a1%|x}\n${chain}\n#set %a60% = END\n%v%`)).toBe('\n\n%a51%');
+  });
+
+  test('a bomb inside a construct dies at the budget and never throws (#69)', () => {
+    const out = publicRender('#set %a% = %b% %b%\n#set %b% = %a% %a%\n{%a%}', { postProcess: false });
+    expect(out.length).toBeLessThan(4 * 1024 * 1024);
+    expect(out).toContain('%');
+  });
+
+  test('deep nesting with references renders instead of throwing (#68)', () => {
+    const deep = '{%x%|'.repeat(5000) + 'z' + '}'.repeat(5000);
+    expect(() => publicRender(deep, { context: { x: 'a' }, seed: 1 })).not.toThrow();
+  });
+
+  test('neutralize() shields the brackets of a value but not its pipe — inside an author’s construct it still splits', () => {
+    const out = publicRender('[<sep=", ">%v%]', { context: { v: neutralize('[a|b]') }, seed: 1, postProcess: false });
+    expect(out).toMatch(/^(\[a, b\]|b\], \[a)$/u);
+  });
+});
+
+describe('render — the splice under review (0.7.0, findings from the Codex gate)', () => {
+  test('the 51st hop reaches the body as TEXT: a chain into a list is split, not spliced whole', () => {
+    // 50 aliases and a terminal list: the plugin's 51 passes end with `{x|y}`, an enumeration.
+    // The first cut rendered that last hop at the depth cap as finished text and gave `x|y`.
+    const chain = Array.from({ length: 50 }, (_, i) => `#set %a${i + 1}% = %a${i + 2}%`).join('\n');
+    expect(render(`${chain}\n#set %a51% = x|y\n{%a1%}`, 'last')).toBe('\n\ny');
+    // One deeper, the reference is what is left — frozen, not spliced a 52nd time.
+    const longer = Array.from({ length: 51 }, (_, i) => `#set %a${i + 1}% = %a${i + 2}%`).join('\n');
+    expect(render(`${longer}\n#set %a52% = x|y\n{%a1%}`, 'last')).toBe('\n\n%a52%');
+  });
+
+  test('a reference the budget cut off stays literal in the re-read subtree — no free splice', () => {
+    // 2^12 references to a 1 KiB plain value, reached through a doubling chain: the fixpoint
+    // charges the first ~1 MiB and leaves the rest literal; the first cut then handed those
+    // leftovers to resolveVariable, whose plain-value shortcut spliced them for nothing — 4 MiB
+    // out of a 1 MiB allowance, and the same door with 2^20 references is an OOM.
+    const chain = Array.from({ length: 12 }, (_, i) => `#set %d${i}% = ${i === 0 ? '%x% %x%' : `%d${i - 1}% %d${i - 1}%`}`).join('\n');
+    const out = publicRender(`${chain}\n{%d11%}`, { context: { x: 'a'.repeat(1024) }, postProcess: false });
+    expect(out.length).toBeLessThan(1024 * 1024 + 64 * 1024);
+    expect(out).toContain('%x%');
+  });
+
+  test('every substitution is charged, so a plain value is not a free leaf at top level either', () => {
+    // The same 2^12 references outside any construct: the old shortcut never charged a plain
+    // value, so nothing bounded this; PHP charges every substitution.
+    const chain = Array.from({ length: 12 }, (_, i) => `#set %d${i}% = ${i === 0 ? '%x% %x%' : `%d${i - 1}% %d${i - 1}%`}`).join('\n');
+    const out = publicRender(`${chain}\n%d11%`, { context: { x: 'a'.repeat(1024) }, postProcess: false });
+    expect(out.length).toBeLessThan(1024 * 1024 + 64 * 1024);
+  });
+});
+
+describe('render — plural slots share the 51-hop arithmetic and the freeze (0.7.0, review)', () => {
+  test('a 51-deep alias chain in the count slot reaches its number, as it does in the plugin', () => {
+    // The slots used to run a flat 50 passes: the count stopped at %a51%, non-numeric, erased.
+    const chain = Array.from({ length: 50 }, (_, i) => `#set %a${i + 1}% = %a${i + 2}%`).join('\n');
+    expect(render(`${chain}\n#set %a51% = 1\n{plural %a1%: one|many}`, 'first', {}, 'en')).toBe('\n\none');
+  });
+
+  test('a picked form whose passes ran out stays frozen instead of expanding again', () => {
+    // 52 deep: the plugin's 51 passes leave %a52% literal in the form; the old path picked the
+    // form and rendered it unfrozen, so it went on to END.
+    const chain = Array.from({ length: 51 }, (_, i) => `#set %a${i + 1}% = %a${i + 2}%`).join('\n');
+    expect(render(`${chain}\n#set %a52% = END\n{plural 1: %a1%|two}`, 'first', {}, 'en')).toBe('\n\n%a52%');
   });
 });

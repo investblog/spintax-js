@@ -230,8 +230,10 @@ describe('parseTemplate — #set global extraction / #include literal', () => {
   test('#set on its OWN line inside a group is still globally extracted (the blocking case)', () => {
     const ast = parseTemplate('{\n#set %x% = A\n|%x%}');
     expect(ast.setDefs).toEqual({ x: 'A' });
+    // `raw` is here because an option holds a direct reference — the render-time splice
+    // re-reads this body (the stripped directive line included, as `\n\n`).
     expect(ast.nodes).toEqual([
-      { type: 'enumeration', options: [[lit('\n\n')], [v('x')]] },
+      { type: 'enumeration', options: [[lit('\n\n')], [v('x')]], raw: '\n\n|%x%' },
     ]);
   });
 
@@ -239,7 +241,11 @@ describe('parseTemplate — #set global extraction / #include literal', () => {
     const ast = parseTemplate('{a|#set %x% = b}');
     expect(ast.setDefs).toEqual({});
     expect(ast.nodes).toEqual([
-      { type: 'enumeration', options: [[lit('a')], [lit('#set '), v('x'), lit(' = b')]] },
+      {
+        type: 'enumeration',
+        options: [[lit('a')], [lit('#set '), v('x'), lit(' = b')]],
+        raw: 'a|#set %x% = b',
+      },
     ]);
   });
 

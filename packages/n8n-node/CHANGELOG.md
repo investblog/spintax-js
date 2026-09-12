@@ -3,6 +3,18 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.2
+
+Bundles `@spintax/core` **0.7.0**: a `%variable%` written directly inside `{…}` or `[…]` is spliced
+as text before the construct is split, so a pipe-joined value — a runtime list handed to a Render node
+as `a|b|c` and used as `[<minsize=2;maxsize=3;sep=", ">%list%]` — renders as a sized, shuffled,
+separated selection instead of the raw list. Reported from production; the PHP engines always did
+this, and the node now agrees with them. Also inherited from the engine: every substitution is charged
+against its expansion budget (a plain value used to be free), the truncated render of an expansion bomb
+is half the size it was, and the plural slots follow the 51-hop rule exactly (a 51-deep alias chain in
+a count slot renders instead of erasing; a form past the budget stays literal). Nothing else changes for
+an ordinary template.
+
 ## 0.3.1
 
 **HTML entity names were being counted as words** — by Lint's `repeat.word` and by Uniqueness's

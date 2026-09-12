@@ -3,6 +3,108 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.7.0 — 2026-09-12
+
+**A `%variable%` written directly inside `{…}` or `[…]` is now spliced as TEXT before the construct
+is split** — so a pipe-joined value is a list of options or elements, as it has always been in the
+PHP engines. Reported from production: a brand preset
+`[<minsize=5;maxsize=7;sep=", ";lastsep=" and ">%CasinoProvidersList%]` over a 57-name runtime
+list rendered all 57 names joined with `|` — no size pick, no shuffle, no separators — in 131
+published rows across 15 tenants. Minor rather than patch: rendered text changes for every template
+of that shape, and `AST_VERSION` moves.
+
+### Fixed
+
+- **The defect.** The tree is built before any value exists, so `[<…>%list%]` was ONE element
+  holding a variable node; `resolveVariable` handed a construct-free value back as finished text,
+  and the `|` that separates elements in every PHP engine — whose `expand_variables` runs over the
+  whole text before any bracket is read — was never seen. Same for `{%list%}`, for `[a|%list%|b]`,
+  and for a `#set` or `#def` wrapping the construct.
+- **The rule, restated for a tree walk.** The parser keeps a construct's raw body when it holds a
+  *direct* reference — at the top level of an option, inside a conditional's branches (the plugin
+  resolves `{?…}` before it expands, Stage 6a), or in a separator string (`<sep="%S%">`,
+  `a <%S%> |`). At render time such a construct is re-read from its expanded text in the plugin's
+  own order: conditionals → expansion → conditionals → parse. Every other construct keeps the tree
+  it was parsed into, and with it the RNG order the corpus pins; a spliced value with no structural
+  characters re-reads to the same tree, so those renders are unchanged too.
+- **The hop budget inside a bracket equals the one outside.** The textual fixpoint runs the
+  plugin's own `<= MAX_VARIABLE_DEPTH` — 51 passes, minus the hops a macro re-parse already spent —
+  and whatever it leaves is frozen for the whole subtree, so the plugin's 51 hops hold in every
+  shape: the mutual cycle leaves `%b%`, `#set %b% = x%b%y` leaves 51 pairs, a 51-deep chain into
+  `x|y` reaches the body as text and is split — inside `{…}` as at top level (#57's pins, moved
+  inside). **The plural slots now use the same arithmetic.** They ran a flat 50 passes and rendered
+  the picked form unfrozen, so a 51-deep alias chain in the count slot erased a block the plugin
+  renders, and a 52-deep chain in a form resolved to its end where the plugin leaves `%a52%`.
+  Pre-existing, found by the review gate, closed here.
+
+### Changed
+
+- `AST_VERSION` 2 → 3: `EnumerationNode` and `PermutationNode` gained `raw`. A handle from an
+  older parser would render the old, wrong output, so the version guard turns it into
+  `AstVersionError` — the same reason `#def` bumped it. Nothing persists a handle across versions.
+- **Every substitution now charges the expansion budget (#69), as it does in PHP.**
+  `resolveVariable` used to charge only construct-bearing values — harmless while a plain value
+  could only be a leaf, and the one door left open once a re-read construct could hand it
+  references its own fixpoint had cut off: 2^12 references to a 1 KiB value produced 4 MiB out of
+  a 1 MiB allowance, and 2^20 is an out-of-memory abort. Found by the review gate before release.
+  A template referencing a 65 KB plain list sixteen times now reaches the budget, as it already
+  did in PHP; the references past it stay literal.
+- **The truncated shape of an expansion bomb is half what it was.** The substitution at the depth
+  cap is charged like every other now (it was free), so the 62-character bomb renders 0.57 MB where it
+  rendered 1.14 MB. Not parity-gated — the conformance README says what a truncated explosion looks
+  like is engine-specific — and the contract holds unchanged: terminates, never throws, bounded output,
+  unaffordable references left literal. The hosted MCP server's output cap now stops that bomb at
+  variant 4 rather than 2 (its test moved with it).
+- `neutralize()` docs: the pipe is deliberately not shielded. A neutralized value the author places
+  inside `{…}`/`[…]` is split on its `|` in every engine — this one was immune only by the defect.
+
+### Corpus
+
+Nineteen `splice/*` fixtures in `render-semantics.json`, expected outputs taken from BOTH PHP
+engines (docker, real code): the inline permutation, the `#set` wrapper over a runtime list,
+literals around the variable, `{%L%}`, a conditional branch carrying the list, a `#def` wrapper
+(rolled once, then spliced), `<sep="%S%">`, `lastsep="%S%"` and a per-element `<%S%>`, a macro
+value with brackets AND a pipe, three hop-budget pins (a 50-alias chain into `x|y` split on the 51st
+hop inside `{…}`, the same chain reaching its number in a plural count slot, a 51-alias chain left
+literal in a form), the production
+preset shape — and three negatives: a top-level reference is NOT split, an undefined name stays one
+literal element, a nested construct splits at its own level only. No prior fixture had a variable
+inside a construct, which is how this hid in four tree-walk engines (TS, Python, Object Pascal,
+.NET) while the PHP engines were right all along. The siblings fail the new cases until they mirror
+the rule.
+
+### Notes
+
+**What stays as it was, on purpose.** Two pre-existing tree-walk divergences in the *non-triggered*
+path are unchanged: an element that renders to empty (a nested conditional yielding `''`) is kept
+here and dropped by PHP, and PHP's top-level scan splits the fullwidth plural fallback on its pipes.
+Both pathological, neither reported. A *triggered* construct drops the empty element as PHP does,
+because the text is what PHP sees — and trims a conditional's taken branch at an element's edge,
+as the plugin trims after Stage 6a. The fullwidth fallback is the exception in BOTH paths: the plugin
+resolves plurals before it reads a bracket, so a fallback's ASCII pipes reach the enclosing construct
+there, while here the re-read makes the plural a node again and it renders whole. Only a template
+`validate()` already rejects (`plural.arity`, `plural.nested-brackets`) can reach it; recorded in the
+conformance README under the known divergences rather than closed (review finding, kept open on
+purpose).
+
+**The hop budget, corrected in review.** The first cut gave the fixpoint 50 passes and rendered the
+leftover at the depth cap, which spliced it once more as finished text: a 52nd hop when reached through
+a macro, and one that hid a structural terminal value from the split (a 51-deep chain into `x|y`
+inside `{…}` rendered `x|y`, where the plugin's 51st pass yields `{x|y}` and picks). Now the fixpoint
+runs the plugin's own `<= MAX_VARIABLE_DEPTH` — 51 passes, minus the hops a macro re-parse already
+spent — and whatever is left is frozen for the whole subtree.
+
+**Verified.** The 0.6.1 build against this one over generated documents (seeded LCG, every
+construct, `render` in both post-process modes, `analyze`, `extract`) — the harness first shown to
+catch two deliberate control mutations. Documents with no direct reference anywhere: byte-identical,
+and `analyze`/`extract` identical on every document. Documents whose constructs DO carry a direct
+reference, with plain values and no conditional: byte-identical over 1 788 renders and three seeds —
+that is the claim that a spliced value with no structural characters re-reads to the same tree. With
+conditionals and construct-bearing definition values allowed, 159 of 922 triggered renders differ, in
+exactly the three ways the PHP text has always differed from the old tree: whitespace only (a taken
+branch trimmed at an element's edge), an element that became empty dropped before the shuffle (so
+every later draw shifts), or a `|` carried in by a rolled `#def`.
+
 ## 0.6.1 — 2026-08-19
 
 **The engine no longer throws on deeply nested content** (issue #68). `parse()`, `render()` and

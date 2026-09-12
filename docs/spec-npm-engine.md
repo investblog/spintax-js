@@ -187,6 +187,12 @@ the line explicitly:
   `MAX_VARIABLE_DEPTH=50`); **conditional name grammar differs from `%var%`** — conditionals
   require `[A-Za-z_][A-Za-z0-9_]*` (no leading digit; malformed ⇒ left literal) while `%var%`
   allows `\w+` (leading digit OK). A port that shares one regex across both will diverge.
+- **A `%var%` directly inside `{…}`/`[…]` is spliced as text before the split.** The plugin
+  expands variables over the whole text before any bracket is read, so a pipe-joined value inside a
+  construct is a list of options/elements, a conditional's taken branch lands in the body first
+  (Stage 6a), and `<sep="%S%">` takes its value. A tree-walk engine must re-read the construct from
+  its expanded text (`@spintax/core` 0.7.0); a value at top level, with no construct around it, is
+  not split. Pinned by the `splice/*` fixtures — four engines shipped without them.
 
 ### 3.2 Deliberately allowed to diverge
 

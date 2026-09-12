@@ -203,9 +203,12 @@ describe('the output cap', () => {
   it('refuses when the variants would exceed it, naming the variant it stopped at', () => {
     const out = callTool('render_spintax', { template: BOMB, locale: 'en', count: 20 }, HOSTED);
     expect(out).toMatchObject({ kind: 'error' });
-    // Variant 2, not 1: one bomb render is 1.14 MB and the cap is 2 MB. The number is
-    // what makes the message actionable, so it is asserted rather than the phrasing.
-    expect(out.kind === 'error' && out.message).toContain('at variant 2');
+    // Variant 4, not 1: one bomb render is 0.57 MB and the cap is 2 MB. (It was 1.14 MB
+    // and variant 2 until @spintax/core 0.7.0, which charges the substitution at the depth
+    // cap like every other — the truncated shape of a bomb is engine-specific and not
+    // parity-gated.) The number is what makes the message actionable, so it is asserted
+    // rather than the phrasing.
+    expect(out.kind === 'error' && out.message).toContain('at variant 4');
     expect(out.kind === 'error' && out.message).toContain('2097152-character limit');
   });
 

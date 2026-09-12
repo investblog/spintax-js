@@ -22,8 +22,12 @@
  * 2 — `ParsedAst` gained `defDefs`. An `Ast` cached by an older version carries no `#def` map, so
  * rendering it would silently drop every definition; the version guard turns that into an
  * `AstVersionError` instead.
+ *
+ * 3 — `EnumerationNode` and `PermutationNode` gained `raw`, the body a direct `%var%` reference
+ * is spliced into at render time. An `Ast` cached by version 2 carries no `raw`, so rendering it
+ * would silently keep a pipe-joined value as ONE option — the defect 0.7.0 fixed.
  */
-export const AST_VERSION = 2;
+export const AST_VERSION = 3;
 
 /** Opaque public handle (re-exported as `Ast` from the package index). */
 export interface Ast {
@@ -65,10 +69,19 @@ export interface VariableNode {
   readonly name: string;
 }
 
-/** `{a|b|c}` — pick one option. Each option is a node sequence. */
+/**
+ * `{a|b|c}` — pick one option. Each option is a node sequence.
+ *
+ * `raw` is the content between the braces, kept ONLY when an option holds a direct `%var%`
+ * reference (the parser's `hasDirectReference`). The renderer splices such a value into the
+ * body as TEXT and re-reads the construct, because a `|` inside a substituted value separates
+ * options in the reference engines — their expansion runs before any bracket is read. Absent on
+ * every other construct, so nothing else pays for it, and the parsed tree stays the one rendered.
+ */
 export interface EnumerationNode {
   readonly type: 'enumeration';
   readonly options: readonly (readonly Node[])[];
+  readonly raw?: string;
 }
 
 /**
@@ -96,6 +109,13 @@ export interface PermutationNode {
   readonly type: 'permutation';
   readonly config: PermConfig;
   readonly options: readonly PermOption[];
+  /**
+   * The FULL inner text, `<config>` included, kept only when the construct holds a direct
+   * `%var%` reference — in an element, in a conditional's branch, in the config's separators or
+   * in a per-element one. The re-read starts from the config again, so `[<sep="%S%">a|b]` takes
+   * its separator from the value, as it does in the reference engines.
+   */
+  readonly raw?: string;
 }
 
 /**

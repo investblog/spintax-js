@@ -3,6 +3,20 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.1 — 2026-09-12
+
+Depends on `@spintax/core` **^0.7.0**: a `%variable%` written directly inside `{…}` or `[…]` is
+spliced as text before the construct is split, so a pipe-joined value renders as a list of options or
+elements — as it always has in the PHP engines. Reported from production, where a brand preset over a
+57-name list rendered the raw list, pipes and all, into 131 published rows. `render_spintax` and
+`render_variants` return the same text the WordPress plugin would. One visible side effect of the
+engine's own change: the truncated render of an expansion bomb is half the size it was (the engine now
+charges the substitution at its depth cap too, as PHP does), so the output-cap refusal for the
+62-character bomb at `count: 20` names variant 4 where it named variant 2. Inherited with the engine
+as well: every substitution is charged against the expansion budget now (a plain value used to be free),
+and the plural slots follow the engine's 51-hop rule exactly (a 51-deep alias chain in a count slot
+renders instead of erasing; a form past the budget stays literal). Nothing else moves.
+
 ## 0.3.0 — 2026-08-23
 
 A fourth tool, `spintax_authoring_guide`, and `@spintax/authoring-prompt` as a second real

@@ -11,6 +11,11 @@
  * HTML/JS sink — neutralize does not touch `< > &`, so it is not XSS mitigation
  * (an HTML-entity variant is a host concern, §6).
  *
+ * The pipe is deliberately not in the set: `|` means nothing outside a construct. Inside one it
+ * does — a neutralized value the author places in `{…}` or `[…]` is still split on its `|`, in
+ * every engine: the reference expands before it reads a bracket, and this engine splices a
+ * direct reference the same way (0.7.0). Shielding it would be a family-wide contract change.
+ *
  * RESERVED RANGE: U+E000–U+E005 are engine sentinels. `parseTemplate` strips them
  * from author markup (template source + #include results) via {@link stripSentinels}
  * — every door from author source into a tree, so `parse()`/`analyze()`/`render()`

@@ -17,7 +17,8 @@ these fixtures.
 
 > Status: **the live contract.** The M0 extraction is long done; fixtures grow whenever a
 > behaviour becomes contract — recognition rules (#55–#57), the permutation-config guard (#58),
-> `/# … #/` comments, the neutralize-vs-cosmetics answer, the definition-graph emission shapes.
+> `/# … #/` comments, the neutralize-vs-cosmetics answer, the definition-graph emission shapes,
+> the text-splice of a variable inside a construct (`splice/*`, 0.7.0).
 > The npm publication deferred by spec §10 Q3 was never needed: every consumer reads the files
 > from a checkout of this repository.
 
@@ -118,6 +119,18 @@ One prediction is not a prediction: a `#set` named **directly** in the form slot
 verbatim and is still spintax when the plural is decided, so its brackets earn
 `plural.nested-brackets`. Reached through a `#def` it is rolled first and earns nothing.
 
+**A `%var%` written directly inside `{…}` or `[…]` is spliced as TEXT before the construct is split**
+(`splice/*`, spintax-js 0.7.0 — four tree-walk engines got this wrong the same way; the two textual
+PHP engines never could). PHP expands variables over the whole text before any bracket is read, so a
+value `a|b|c` inside `[<…>%list%]` is three elements and inside `{%list%}` three options, and a
+`#set` or `#def` wrapping the construct changes nothing. A tree-walk engine has to re-read the
+construct from its expanded text — in the plugin's order, conditionals BEFORE expansion (Stage 6a),
+so `[{?flag?%list%|none}|c]` is `[%list%|c]` before the split — and the config and per-element
+separators are text too (`<sep="%S%">`). What does NOT split, pinned as negatives: a reference at
+top level (no construct around it), an undefined name (one literal element), and a list inside a
+nested construct (that construct's to split). The defect shipped for months because no fixture had a
+variable inside a bracket: a corpus cannot see what a bracket does to a value it never puts there.
+
 | code | severity | condition |
 |---|---|---|
 | `bracket.unclosed` | error | an opening `{`/`[` never closed |
@@ -193,6 +206,16 @@ resolves to a working render where the others do not. The **validators deliberat
 rather than pick a side: a form list whose macro path reaches a conditional gets no count verdict in
 any engine, so no verdict is wrong anywhere. Picking a side would change two or three renderers,
 which is a breaking change to finished text, for a shape no user has reported hitting.
+
+**The fullwidth plural fallback inside `{…}`/`[…]` is split by PHP and rendered whole by every
+tree walk.** `{a|{plural 1: x|y|z}}` under a two-form locale: PHP resolves plurals (Stage 6d) before it
+reads a bracket, so the fallback `｛plural 1: x|y|z｝` exposes its ASCII pipes to the enclosing `{…}`,
+which then has four options (`rng:last` picks `z｝`); `@spintax/core`, `spintax-core` and the other
+tree walks make the plural a node and render the fallback as one option — in the plain path and in
+the 0.7.0 re-read path alike, since the re-read parses before it renders. Only a template
+`validate()` already rejects (`plural.arity`, `plural.nested-brackets`) reaches this. Measured
+2026-09-12 in review; what would move it into work is a host that renders rejected templates and
+needs the fallback text to agree.
 
 **Four characters trim differently in post-process.** `render("x" + ch)` — is the trailing
 character kept?
