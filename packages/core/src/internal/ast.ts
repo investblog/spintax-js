@@ -26,8 +26,12 @@
  * 3 — `EnumerationNode` and `PermutationNode` gained `raw`, the body a direct `%var%` reference
  * is spliced into at render time. An `Ast` cached by version 2 carries no `raw`, so rendering it
  * would silently keep a pipe-joined value as ONE option — the defect 0.7.0 fixed.
+ *
+ * 4 — `raw` is kept on more constructs: one holding a `{?…}` conditional, and a permutation with a
+ * reference anywhere in its `<config>` (#80). The shape is 3's, but an `Ast` cached by version 3
+ * lacks `raw` exactly where the new rule needs it, and would render `[{?f?a|b|x}|c]` with a raw `|`.
  */
-export const AST_VERSION = 3;
+export const AST_VERSION = 4;
 
 /** Opaque public handle (re-exported as `Ast` from the package index). */
 export interface Ast {
@@ -73,10 +77,11 @@ export interface VariableNode {
  * `{a|b|c}` — pick one option. Each option is a node sequence.
  *
  * `raw` is the content between the braces, kept ONLY when an option holds a direct `%var%`
- * reference (the parser's `hasDirectReference`). The renderer splices such a value into the
- * body as TEXT and re-reads the construct, because a `|` inside a substituted value separates
- * options in the reference engines — their expansion runs before any bracket is read. Absent on
- * every other construct, so nothing else pays for it, and the parsed tree stays the one rendered.
+ * reference or a `{?…}` conditional (the parser's `needsTextualReread`). The renderer resolves and
+ * splices those into the body as TEXT and re-reads the construct, because a `|` inside a
+ * substituted value or a taken branch separates options in the reference engines — their
+ * conditionals and expansion run before any bracket is read. Absent on every other construct, so
+ * nothing else pays for it, and the parsed tree stays the one rendered.
  */
 export interface EnumerationNode {
   readonly type: 'enumeration';
@@ -111,9 +116,10 @@ export interface PermutationNode {
   readonly options: readonly PermOption[];
   /**
    * The FULL inner text, `<config>` included, kept only when the construct holds a direct
-   * `%var%` reference — in an element, in a conditional's branch, in the config's separators or
-   * in a per-element one. The re-read starts from the config again, so `[<sep="%S%">a|b]` takes
-   * its separator from the value, as it does in the reference engines.
+   * `%var%` reference — in an element, anywhere in the `<config>` (a size, a quoted or unquoted
+   * separator) or in a per-element separator — or a `{?…}` conditional in an element. The re-read
+   * starts from the config again, so `[<sep="%S%">a|b]` takes its separator and
+   * `[<minsize=%n%>a|b|c]` its size from the value, as they do in the reference engines.
    */
   readonly raw?: string;
 }

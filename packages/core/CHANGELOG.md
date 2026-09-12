@@ -5,6 +5,11 @@ All notable changes to `@spintax/core` are documented here. This project adheres
 
 ## Unreleased
 
+Two defects found by the ports while they mirrored 0.7.0, both places where this engine read a
+template differently from the PHP engines — and both measured on those engines before anything
+changed: the character classes of the post-process, and the key that decides which constructs are
+re-read as text (#80).
+
 **The post-process reads characters the way PHP does.** PHP compiles every pattern of the cosmetic
 stage with `/u`, and `/u` turns on PCRE2_UCP: `\s`, `\d`, `\w` and `\b` are Unicode classes there.
 This engine took them for ASCII — the belief was written into its own comments ("no PCRE_UCP") — and
@@ -18,7 +23,19 @@ the three ports that copied the classes did the same. Measured on both PHP engin
 | `end.<NBSP>next` | `End. <NBSP>next` | `End.<NBSP>Next` |
 | `в 5<NBSP>тыс.<NBSP>руб.` | `В 5<NBSP>тыс. <NBSP>руб.` | `В 5<NBSP>тыс.<NBSP>руб.` |
 
-Minor rather than patch when it ships: rendered text changes for every template of these shapes.
+**A conditional or a config reference inside `{…}`/`[…]` is text before the split, too (#80).** 0.7.0
+re-read a construct as text when a `%var%` sat directly in it, and decided that from a key narrower
+than its own rule:
+
+| template | 0.7.0 | both PHP engines, and now this one |
+|---|---|---|
+| `[<minsize=%n%;maxsize=%n%>a\|b\|c]`, `n=1` | all three elements | one element |
+| `[<sep=%S%>a\|b]`, `S=", "` | `b a` | `b, a` |
+| `[{?f?a\|b\|x}\|c]` | `c b\|x` — a raw pipe | three elements |
+| `[<sep=", ";lastsep=" and ">{?f?live casino}\|slots\|poker]` | `slots, poker and ` | `poker and slots` |
+
+Minor rather than patch when it ships: rendered text changes for every template of these shapes, and
+`AST_VERSION` moves to 4.
 
 ### Fixed
 
@@ -32,6 +49,20 @@ Minor rather than patch when it ships: rendered text changes for every template 
   ASCII, while JavaScript's `\s` is Unicode on any flags. A no-break space around `=` is no longer
   config whitespace — `[<minsize<NBSP>=<NBSP>1>a|b|c]` is one separator, as in PHP — and the validator
   agrees: `[<foo<NBSP>=1>a|b]` is valid, `[<minsize=2<NBSP>>a|b]` is `permutation.minsize-not-integer`.
+- **A reference anywhere in a permutation's `<config>` marks it for the re-read** (#80). 0.7.0 tested
+  the PARSED `sep` and `lastsep`, where a size reference never arrives (a size that is not digits
+  parses to nothing) and neither does an unquoted separator (it parses to the default). The raw
+  header is tested now, so `minsize=%n%`, `maxsize=%n%` and `sep=%S%` take their values from the
+  context, as they always have in PHP.
+- **A `{?…}` conditional directly in `{…}`/`[…]` marks the construct** (#80), whatever its branches
+  hold — 0.7.0 marked it only when a `%var%` sat in a branch. The plugin resolves conditionals at
+  Stage 6a, before any bracket is read, so a taken branch's `|` separates options, an empty branch
+  leaves an empty permutation element that is dropped, and whitespace at a branch's edge is the
+  element's edge. 0.7.0's notes kept the empty element on purpose as a pathological divergence; a
+  list item gated by a flag is an ordinary template, and in one it rendered `Есть покер, слоты и.`.
+- **`AST_VERSION` 3 → 4.** The node shape is 3's, but an `Ast` cached by 0.7.0 lacks `raw` exactly
+  where the wider key puts it and would render the old output; the guard turns that into
+  `AstVersionError`. Nothing persists a handle across versions.
 
 ### Changed, visibly
 
@@ -55,6 +86,12 @@ whitespace class — every domain, email and multi-dot case was Latin — which 
 a comment stayed green for two months. `postprocess.test.ts` had pinned the mangled `т.д.` "in both
 engines", with an assertion that passed on the capital letter alone.
 
+Seven more `splice/*` fixtures for #80, again from both PHP engines: a size and an unquoted separator
+taken from a variable, a taken branch carrying a pipe in `[…]` and in `{…}`, a flag-gated list item,
+a branch trimmed at an element's edge — six fail on 0.7.0 — and the negative
+`splice/conditional-without-pipes-keeps-draws`, which pins that a conditional changing nothing
+structural draws exactly where 0.7.0 drew.
+
 ### Notes
 
 **Cost.** The post-process is about 30% slower on shield-heavy text and unchanged on plain prose: V8
@@ -65,6 +102,18 @@ scaling stays linear.
 **Two PHP builds differ at the margin.** PCRE2 10.43 made non-spacing marks and connector punctuation
 word characters, so PHP 8.3 sees a boundary between `x` and U+0301 that PHP 8.4 does not. The corpus
 runs PHP 8.4 and this engine follows it; recorded in the conformance README.
+
+**What the wider re-read does not move.** A construct re-read because it holds a conditional draws
+exactly as the tree did whenever the taken branch changes nothing structural — measured on 0.7.0
+before the change, 500 seeds over five shapes (a permutation with separators, one with a size range,
+an enumeration, a nested permutation in a branch, an else branch): identical renders. What changes is
+the three kinds of text the plugin always produced here — a pipe in a branch, an empty element, a
+trimmed edge. `validate()` still reports `minsize=%n%` as `permutation.minsize-not-integer`, as both
+PHP validators do: a verdict about the template as written, unchanged.
+
+**Recorded, not closed.** A value carrying an unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`)
+re-cuts the enclosing construct in PHP and only its own here; reproducing it takes a whole-text
+engine. In the conformance README, under the known divergences.
 
 ## 0.7.0 — 2026-09-12
 

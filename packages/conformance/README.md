@@ -125,11 +125,22 @@ PHP engines never could). PHP expands variables over the whole text before any b
 value `a|b|c` inside `[<…>%list%]` is three elements and inside `{%list%}` three options, and a
 `#set` or `#def` wrapping the construct changes nothing. A tree-walk engine has to re-read the
 construct from its expanded text — in the plugin's order, conditionals BEFORE expansion (Stage 6a),
-so `[{?flag?%list%|none}|c]` is `[%list%|c]` before the split — and the config and per-element
-separators are text too (`<sep="%S%">`). What does NOT split, pinned as negatives: a reference at
-top level (no construct around it), an undefined name (one literal element), and a list inside a
-nested construct (that construct's to split). The defect shipped for months because no fixture had a
-variable inside a bracket: a corpus cannot see what a bracket does to a value it never puts there.
+so `[{?flag?%list%|none}|c]` is `[%list%|c]` before the split — and the whole `<config>` and the
+per-element separators are text too (`<sep="%S%">`, `<sep=%S%>`, `<minsize=%n%>`).
+
+The conditional half does not need a variable at all (#80): `[{?f?a|b|x}|c]` is `[b|x|c]` before the
+split, so a taken branch's `|` separates elements, an empty branch leaves an empty element that the
+permutation drops (`[<sep=", ";lastsep=" and ">{?f?live casino}|slots|poker]` is `poker and slots`,
+never `slots, poker and `), and a branch's edge whitespace is trimmed with its element. 0.7.0 marked a
+construct for the re-read only on a `%var%` and on its parsed separators, so every one of those shapes
+rendered a pipe, a blank element or a default in four engines. A conditional that changes nothing
+structural must re-read to the tree it already was, drawing in the same order —
+`splice/conditional-without-pipes-keeps-draws`.
+
+What does NOT split, pinned as negatives: a reference at top level (no construct around it), an
+undefined name (one literal element), and a list inside a nested construct (that construct's to
+split). The defect shipped for months because no fixture had a variable inside a bracket: a corpus
+cannot see what a bracket does to a value it never puts there.
 
 | code | severity | condition |
 |---|---|---|
@@ -216,6 +227,17 @@ the 0.7.0 re-read path alike, since the re-read parses before it renders. Only a
 `validate()` already rejects (`plural.arity`, `plural.nested-brackets`) reaches this. Measured
 2026-09-12 in review; what would move it into work is a host that renders rejected templates and
 needs the fallback text to agree.
+
+**A value carrying an unbalanced bracket re-cuts the ENCLOSING construct in PHP, and only its own
+here.** `[a|{%L%}]` with `L = "x}|y"`: the PHP engines expand over the whole text first, so the stray
+`}` closes the inner `{…}` early and `|y}` falls to the outer permutation — three elements, `rng:last`
+gives `a x y}`. A tree walk splices the value into the inner enumeration only, because the parser
+never enters a nested construct: two elements, `a x|y}`, pipe printed. A balanced value agrees
+everywhere (`L = "x|y"` → `a y`). Reproducing this would mean re-reading every enclosing construct as
+text, which is the whole-text engine a tree walk exists not to be. Reported by `spintax-core` while
+mirroring #78 and measured on both PHP engines 2026-09-12. `neutralize()` shields brackets in host
+data, so only an author-written value reaches it; what would move it into work is a host whose own
+values legitimately carry unbalanced brackets.
 
 **Four characters trim differently in post-process.** `render("x" + ch)` — is the trailing
 character kept?

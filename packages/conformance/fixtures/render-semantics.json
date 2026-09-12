@@ -1295,5 +1295,108 @@
     "expect": {
       "output": "bminsize\u00a0=\u00a01cminsize\u00a0=\u00a01a"
     }
+  },
+  {
+    "id": "splice/size-from-variable",
+    "note": "A reference in a size key is text to the reference engines — expansion runs over the whole text before the config is read — so minsize=%n% IS a size: one element of three. 0.7.0 marked a permutation only on its PARSED separators, where %n% never arrives (a size that is not digits parses to nothing), and rendered all three (#80).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=%n%;maxsize=%n%>a|b|c]",
+    "context": {
+      "n": "1"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b"
+    }
+  },
+  {
+    "id": "splice/unquoted-separator-from-variable",
+    "note": "An UNQUOTED sep=%S% whose value carries the quotes: after expansion the config reads sep=\", \", so the separator is ', '. 0.7.0 parsed the unquoted form to the default separator before any value existed and never marked the construct (#80). The quoted form is splice/config-separator-from-variable.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=%S%>a|b]",
+    "context": {
+      "S": "\", \""
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b, a"
+    }
+  },
+  {
+    "id": "splice/conditional-branch-pipes-in-permutation",
+    "note": "Stage 6a resolves {?…} before any bracket is read, so the taken branch 'b|x' lands in the body and its pipe separates elements: three elements, no '|' in the output. 0.7.0 marked a conditional only when a %var% sat in its branches, rendered 'b|x' as ONE element and printed the pipe (#80).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[{?f?a|b|x}|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "x c b"
+    }
+  },
+  {
+    "id": "splice/conditional-branch-pipes-in-enumeration",
+    "note": "The same for {…}: the taken branch 'b|x' becomes two options, so the enumeration has three and 'last' picks 'x'. 0.7.0 had two options and printed 'b|x'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{c|{?f?a|b|x}}",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "x"
+    }
+  },
+  {
+    "id": "splice/conditional-empty-branch-drops-element",
+    "note": "The ordinary authoring shape: a list item gated by a flag. With the flag unset the branch is empty, the plugin's element split drops the empty part, and the list is two items. 0.7.0 kept the blank element, so the separators around it survived — 'Есть покер, слоты и.' in a real template (#80).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\", \";lastsep=\" and \">{?f?live casino}|slots|poker]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "poker and slots"
+    }
+  },
+  {
+    "id": "splice/conditional-branch-trimmed-at-element-edge",
+    "note": "The plugin trims each element after Stage 6a, so whitespace at the edge of a taken branch is the element's edge and goes. 0.7.0 rendered the branch as it was written, spaces and all.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[{?f? a }|b]",
+    "context": {
+      "f": "1"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "b a"
+    }
+  },
+  {
+    "id": "splice/conditional-without-pipes-keeps-draws",
+    "note": "NEGATIVE, guarding what #80 must not move: a conditional whose taken branch has no '|', no blank and no edge whitespace re-reads to the tree it already was, and every draw — both nested enumerations, then the shuffle — lands exactly where 0.7.0 put it. A re-read that shifted RNG order would re-roll content hosts have already published.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[{?f?x {p|q}|y}|{r|s}|t]",
+    "context": {
+      "f": "1"
+    },
+    "rng": {
+      "sequence": [
+        1,
+        0,
+        2,
+        1
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "x q r t"
+    }
   }
 ]

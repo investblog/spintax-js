@@ -266,6 +266,34 @@ describe('parseTemplate — #set global extraction / #include literal', () => {
   });
 });
 
+describe('parseTemplate — which constructs keep `raw` for the textual re-read (#78, #80)', () => {
+  const rawOf = (src: string): string | undefined => (nodes(src)[0] as { raw?: string }).raw;
+
+  test('a reference anywhere in the <config> marks a permutation — size, unquoted or quoted separator', () => {
+    expect(rawOf('[<minsize=%n%;maxsize=%n%>a|b|c]')).toBe('<minsize=%n%;maxsize=%n%>a|b|c');
+    expect(rawOf('[<sep=%S%>a|b]')).toBe('<sep=%S%>a|b');
+    expect(rawOf('[<sep="%S%">a|b]')).toBe('<sep="%S%">a|b');
+    expect(rawOf('[<%S%>a|b]')).toBe('<%S%>a|b');
+    expect(rawOf('[a <%S%>|b]')).toBe('a <%S%>|b');
+  });
+
+  test('a conditional in an option marks the construct, whatever its branches hold', () => {
+    expect(rawOf('[{?f?a|b|x}|c]')).toBe('{?f?a|b|x}|c');
+    expect(rawOf('[{?f?live}|slots|poker]')).toBe('{?f?live}|slots|poker');
+    expect(rawOf('{c|{?f?a|b|x}}')).toBe('c|{?f?a|b|x}');
+  });
+
+  test('nothing to re-read keeps a construct unmarked', () => {
+    expect(rawOf('[<minsize=2;sep=", ">a|b|c]')).toBeUndefined();
+    expect(rawOf('{a|b}')).toBeUndefined();
+    // A nested construct is not entered: the inner enumeration marks itself.
+    expect(rawOf('[a|{b|%x%}]')).toBeUndefined();
+    // A percent sign is not a reference, and an HTML head is element text rather than config.
+    expect(rawOf('[<sep="50%">a|b]')).toBeUndefined();
+    expect(rawOf('[<li class="x">a</li>|b]')).toBeUndefined();
+  });
+});
+
 describe('parseTemplate — lenient on malformed markup', () => {
   test('unmatched opener is literal', () => {
     expect(nodes('{a|b')).toEqual([lit('{a|b')]);

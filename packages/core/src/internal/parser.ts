@@ -243,32 +243,29 @@ function planBraceConstruct(content: string): Planned {
   return {
     texts: splitTopLevel(content),
     build: (children) =>
-      hasDirectReference(children)
+      needsTextualReread(children)
         ? { type: 'enumeration', options: children, raw: content }
         : { type: 'enumeration', options: children },
   };
 }
 
 /**
- * Does a construct body hold a `%var%` that expansion would splice at THIS construct's own
- * level? One at the top level of an option counts, and so does one inside a conditional's
- * branches: the reference engines resolve `{?…}` before they expand, so a branch's text lands
- * in the body ahead of the split. Nested enumerations / permutations / plurals are not entered —
- * a value inside them is spliced when THEY render, and a `|` it carries belongs to them.
+ * Does a construct body hold something the reference engines see as TEXT before they split it?
  *
- * Iterative, like every walk here (#68): a deep chain of conditionals is content, and the
- * parser must not throw on content.
+ * - A `%var%` at the top level of an option: expansion runs over the whole text before any bracket
+ *   is read, so a `|` in the value separates options there (#78).
+ * - A `{?…}` conditional at the top level of an option: the plugin resolves it at Stage 6a, so the
+ *   taken branch lands in the body ahead of the split — a `|` it carries separates options, and an
+ *   empty branch leaves an empty element for the permutation to drop. 0.7.0 marked a conditional
+ *   only when a `%var%` sat in its branches, so `[{?f?a|b|x}|c]` rendered a raw `|` and
+ *   `[{?f?live}|slots|poker]` kept a blank element (#80).
+ *
+ * Nested enumerations / permutations / plurals are not entered: a value inside them is spliced when
+ * THEY render, and a `|` it carries belongs to them. A conditional marks on sight, so there is no
+ * branch left to descend into — the scan is flat.
  */
-export function hasDirectReference(lists: readonly (readonly Node[])[]): boolean {
-  const stack: (readonly Node[])[] = [...lists];
-  while (stack.length > 0) {
-    const list = stack.pop() as readonly Node[];
-    for (const node of list) {
-      if (node.type === 'variable') return true;
-      if (node.type === 'conditional') stack.push(node.then, node.else);
-    }
-  }
-  return false;
+export function needsTextualReread(lists: readonly (readonly Node[])[]): boolean {
+  return lists.some((list) => list.some((node) => node.type === 'variable' || node.type === 'conditional'));
 }
 
 /** A `%var%` reference written inside a separator string — config or per-element. */
@@ -282,16 +279,18 @@ function planPermutation(rawInner: string): Planned {
   const { config, content } = extractPermutationConfig(rawInner);
   const { texts, separators } = permutationElements(splitTopLevel(content));
   // The reference engines expand the config and the per-element separators too — to them it is
-  // all text — so a reference written there is as direct as one written in an element.
-  const separatorHasRef =
-    REFERENCE_RE.test(config.sep) ||
-    (config.lastsep !== null && REFERENCE_RE.test(config.lastsep)) ||
-    separators.some((sep) => sep !== null && REFERENCE_RE.test(sep));
+  // all text — so a reference ANYWHERE in the `<…>` header is as direct as one in an element: a
+  // size (`minsize=%n%`), an unquoted separator (`sep=%S%`), a quoted one. The header is exactly
+  // what precedes `content`, which is always a suffix of the input. (0.7.0 tested the PARSED `sep`
+  // and `lastsep` instead, where `%n%` never arrives — a size that is not digits parses to nothing,
+  // an unquoted separator to the default — so neither was ever spliced: #80.)
+  const header = rawInner.slice(0, rawInner.length - content.length);
+  const textHasRef = REFERENCE_RE.test(header) || separators.some((sep) => sep !== null && REFERENCE_RE.test(sep));
   return {
     texts,
     build: (children) => {
       const options = children.map((nodes, i) => ({ nodes, separator: separators[i] ?? null }));
-      return separatorHasRef || hasDirectReference(children)
+      return textHasRef || needsTextualReread(children)
         ? { type: 'permutation', config, options, raw: rawInner }
         : { type: 'permutation', config, options };
     },

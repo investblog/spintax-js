@@ -414,6 +414,32 @@ describe('render — a direct %var% is spliced as TEXT before the construct is s
   });
 });
 
+describe('render — the re-read covers a whole <config> and every conditional in a construct (#80)', () => {
+  test('a size, or an unquoted separator, taken from a variable', () => {
+    expect(render('[<minsize=%n%;maxsize=%n%>a|b|c]', 'first', { n: '1' })).toBe('b');
+    expect(render('[<sep=%S%>a|b]', 'first', { S: '", "' })).toBe('b, a');
+  });
+
+  test('a taken branch that carries a pipe is split with its construct, in [] and in {}', () => {
+    expect(render('[{?f?a|b|x}|c]', 'first')).toBe('x c b');
+    expect(render('{c|{?f?a|b|x}}', 'last')).toBe('x');
+  });
+
+  test('a list item gated by an unset flag leaves no separator behind', () => {
+    // The shape of a real template: 'Есть покер, слоты и.' was a possible render until #80.
+    const src = 'Есть [<sep=", ";lastsep=" и ">{?HasLive?лайв-казино}|слоты|покер].';
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 40; seed += 1) seen.add(publicRender(src, { seed }));
+    expect([...seen].sort()).toEqual(['Есть покер и слоты.', 'Есть слоты и покер.']);
+  });
+
+  test('a conditional that changes nothing structural draws exactly as the tree did in 0.7.0', () => {
+    // Re-read now, a tree walk then: the nested draws and the shuffle must land in the same places,
+    // or content a host has already published re-rolls on upgrade.
+    expect(render('[{?f?x {p|q}|y}|{r|s}|t]', { sequence: [1, 0, 2, 1] }, { f: '1' })).toBe('x q r t');
+  });
+});
+
 describe('render — the splice under review (0.7.0, findings from the Codex gate)', () => {
   test('the 51st hop reaches the body as TEXT: a chain into a list is split, not spliced whole', () => {
     // 50 aliases and a terminal list: the plugin's 51 passes end with `{x|y}`, an enumeration.

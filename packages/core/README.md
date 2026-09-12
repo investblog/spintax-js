@@ -84,7 +84,7 @@ dedupe in the host and cap the retries: a template may simply not have N combina
 | Variable | `%var%` | substitute a context value — inside `{…}`/`[…]` the value is spliced as text first, so a `|` it carries separates options |
 | Local set | `#set %v% = value` | define a macro — re-picked at every use |
 | Local def | `#def %v% = value` | define a value — picked once per render, held at every use |
-| Conditional | `{?VAR?then\|else}` | `then` if `VAR` is truthy, else `else` |
+| Conditional | `{?VAR?then\|else}` | `then` if `VAR` is truthy, else `else` — inside `{…}`/`[…]` it resolves first, so a `\|` in the taken branch separates options and an empty one drops its element |
 | Plural | `{plural %n%: one\|few\|many}` | grammatical agreement by locale |
 | Include | `#include "slug-or-id"` | embed another template (host-resolved) |
 | Comment | `/# … #/` | stripped before rendering |

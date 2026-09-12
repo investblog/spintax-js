@@ -12,10 +12,11 @@
  *   - conditionals test truthiness against the raw var map; plurals resolve the
  *     count (vars already expanded) then pick the bucket, lenient fullwidth
  *     fallback (Stage 6d, after vars).
- *   - a `%var%` that sits DIRECTLY in an enumeration/permutation body is spliced as
- *     TEXT and the construct re-read (spliceConstruct, 0.7.0): a `|` inside such a
- *     value separates options, exactly as in the plugin, whose expansion runs before
- *     any bracket is read. Every other construct keeps the tree it was parsed into.
+ *   - a `%var%` or a `{?…}` that sits DIRECTLY in an enumeration/permutation body, or a
+ *     reference anywhere in a permutation's `<config>`, makes the construct re-read as
+ *     TEXT (spliceConstruct; 0.7.0, widened for #80): a `|` inside such a value or taken
+ *     branch separates options, exactly as in the plugin, whose conditionals and expansion
+ *     run before any bracket is read. Every other construct keeps the tree it was parsed into.
  *   - #include (post-tree string pass) and post-process are later PRs.
  *
  * RNG note: cross-engine RNG-sequence parity is a non-goal (§3.2). Enumerations
@@ -662,16 +663,19 @@ function renderEnumeration(node: EnumerationNode, opts: RenderInternalOptions): 
 }
 
 /**
- * Splice the direct `%var%` references of a construct into its body as TEXT and re-read the
- * construct — the plugin's own order (Stage 6a conditionals → 6b expansion → 6c conditionals)
- * run over this one body, then the brackets go back on and the parser reads the result. Only
- * constructs the parser marked (`raw`) get here; every other one keeps the tree it was parsed
- * into, and with it the exact RNG order the corpus pins.
+ * Splice the direct `%var%` references and `{?…}` conditionals of a construct into its body as
+ * TEXT and re-read the construct — the plugin's own order (Stage 6a conditionals → 6b expansion →
+ * 6c conditionals) run over this one body, then the brackets go back on and the parser reads the
+ * result. Only constructs the parser marked (`raw`) get here; every other one keeps the tree it
+ * was parsed into, and with it the exact RNG order the corpus pins.
  *
  * Why textual: `[<…>%list%]` with `%list% = a|b|c` is ONE option to the parser, because the tree
  * is built before any value exists, and `resolveVariable` hands a construct-free value back as
  * finished text — so the `|` that separates elements in every PHP engine was never seen here,
- * and a 57-name list rendered as one element (0.7.0). Same for `{%list%}`.
+ * and a 57-name list rendered as one element (0.7.0). Same for `{%list%}`, for a size or separator
+ * taken from a variable, and for a conditional whose taken branch carries a `|` or is empty (#80):
+ * the plugin resolves it before the split, so the branch's pipes separate elements and an empty
+ * element is dropped. A re-read that changes nothing structural draws exactly as the tree would.
  *
  * Returns null when the body would not change — an undefined name, a reference the budget cut
  * off — so the caller renders the nodes it already has. That is also what terminates the
