@@ -25,6 +25,7 @@
  * pick→Fisher-Yates, so its rng-strategy cases are exact.
  */
 import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, ConditionalNode } from './ast';
+import { UCP_SPACE } from './charclass';
 import { IncludeResolverError } from './errors';
 import { parseSequence, parseTemplate, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
@@ -445,10 +446,17 @@ function expandVarsFixpoint(
   return { text: out, changed: changedAny, converged: false };
 }
 
+/**
+ * A character outside PHP's `\s` — the plugin's `is_truthy` tests `/\S/u`, and /u is UCP there. JS's
+ * own `\S` disagrees on exactly two kinds of value: U+FEFF alone is truthy to PHP and blank to JS,
+ * U+0085 or U+180E alone the other way round.
+ */
+const NON_SPACE_RE = new RegExp(`[^${UCP_SPACE}]`, 'u');
+
 /** Truthy = the raw var value is set and has a non-whitespace char (plugin is_truthy). */
 function conditionalTakesThen(name: string, inverted: boolean, opts: RenderInternalOptions): boolean {
   const value = opts.vars[name.toLowerCase()];
-  const baseTruthy = value !== undefined && /\S/u.test(value);
+  const baseTruthy = value !== undefined && NON_SPACE_RE.test(value);
   return inverted ? !baseTruthy : baseTruthy;
 }
 

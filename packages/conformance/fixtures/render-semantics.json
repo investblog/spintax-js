@@ -1255,5 +1255,45 @@
     "expect": {
       "output": "B, C, D, E, F and G"
     }
+  },
+  {
+    "id": "conditional/bom-only-is-truthy",
+    "note": "Truthy is /\\S/u in the plugin, and /u is PCRE2_UCP: U+FEFF is not whitespace there, so a value of U+FEFF alone is set and non-blank. JavaScript's \\s counts U+FEFF as whitespace.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes|no}",
+    "context": {
+      "flag": "\ufeff"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "yes"
+    }
+  },
+  {
+    "id": "conditional/nel-only-is-falsy",
+    "note": "The mirror of conditional/bom-only-is-truthy: U+0085 (NEL) is \\s under UCP and not in JavaScript's \\s, so a value of NEL alone is blank.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?flag?yes|no}",
+    "context": {
+      "flag": "\u0085"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "no"
+    }
+  },
+  {
+    "id": "perm/config-nbsp-is-not-config-whitespace",
+    "note": "The config patterns carry NO /u in PHP — byte mode, ASCII \\s — so a no-break space around '=' is not config whitespace: no key matches and the whole string is a single separator. The ASCII twin is perm/config-ascii-ws-around-equals. JavaScript's \\s is Unicode on any flags, which made this a minsize of 1.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize\u00a0=\u00a01>a|b|c]",
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "bminsize\u00a0=\u00a01cminsize\u00a0=\u00a01a"
+    }
   }
 ]

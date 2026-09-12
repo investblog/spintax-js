@@ -51,11 +51,53 @@ describe('postProcess — shielding', () => {
     // Single-token whitelist uses a \p{L} lookbehind (Unicode-aware), so Cyrillic works.
     expect(postProcess('Текст соц. сети тут')).toBe('Текст соц. сети тут');
     expect(postProcess('call Mr. smith now')).toBe('Call Mr. smith now');
-    // Multi-dot uses \b which — like PHP PCRE without UCP — is ASCII, so it shields
-    // ASCII abbreviations (e.g.) but NOT a Cyrillic one (т.д.). Parity holds either way.
+    // Multi-dot: PHP's leading \b is UCP (/u), so a Cyrillic abbreviation is shielded like an ASCII
+    // one. This test used to lock the opposite — 'т.д.' mangled "in both engines" — on the belief
+    // that PHP's \b is ASCII; both PHP engines had rendered it intact all along. (The old assertion
+    // was also vacuous: `.not.toBe('и т.д. далее')` passes on the capital 'И' alone.)
     expect(postProcess('See e.g. this')).toBe('See e.g. this');
-    // Lock the divergence: a Cyrillic multi-dot is NOT shielded ⇒ mangled (both engines).
-    expect(postProcess('и т.д. далее')).not.toBe('и т.д. далее');
+    expect(postProcess('и т.д. далее')).toBe('И т.д. далее');
+    expect(postProcess('то есть т. е. так')).toBe('То есть т. е. так');
+  });
+});
+
+// Every pattern of the cosmetic stage carries /u in PHP — the decimal shield alone does not — and /u
+// is PCRE2_UCP. The expectations are the PHP engines' output (docker, both engines), not this one's.
+describe('postProcess — character classes are PHP’s /u classes (UCP)', () => {
+  const NBSP = String.fromCodePoint(0xa0);
+  const THIN = String.fromCodePoint(0x2009);
+  const NEL = String.fromCodePoint(0x85);
+  const BOM = String.fromCodePoint(0xfeff);
+  const ZWSP = String.fromCodePoint(0x200b);
+
+  test('an IDN domain and an IDN email are shielded', () => {
+    expect(postProcess('открой пример.рф сегодня')).toBe('Открой пример.рф сегодня');
+    expect(postProcess('пишите на info@сайт.рф сегодня')).toBe('Пишите на info@сайт.рф сегодня');
+    expect(postProcess('visit example.рф now')).toBe('Visit example.рф now');
+  });
+
+  test('NBSP, a thin space and NEL are whitespace; U+FEFF and U+200B are not', () => {
+    expect(postProcess(`word${NBSP}, next`)).toBe('Word, next');
+    expect(postProcess(`a,${NBSP}b`)).toBe(`A,${NBSP}b`);
+    expect(postProcess(`end.${NBSP}next`)).toBe(`End.${NBSP}Next`);
+    expect(postProcess(`end.${THIN}next`)).toBe(`End.${THIN}Next`);
+    expect(postProcess(`end.${NEL}next`)).toBe(`End.${NEL}Next`);
+    expect(postProcess(`end.${BOM}next`)).toBe(`End. ${BOM}next`);
+    expect(postProcess(`end.${ZWSP}next`)).toBe(`End. ${ZWSP}next`);
+    expect(postProcess(`в 5${NBSP}тыс.${NBSP}руб. всего`)).toBe(`В 5${NBSP}тыс.${NBSP}руб. всего`);
+    expect(postProcess(`go to https://x.io/a${NBSP},next`)).toBe('Go to https://x.io/a, next');
+  });
+
+  test('the digit in the spacing lookahead is any decimal digit', () => {
+    const ARABIC_INDIC_THREE = String.fromCodePoint(0x663);
+    expect(postProcess(`a,${ARABIC_INDIC_THREE} b`)).toBe(`A,${ARABIC_INDIC_THREE} b`);
+  });
+
+  test('a word character is a letter of any script — so a glued sentence stays glued (#79)', () => {
+    expect(postProcess('конец.Начало')).toBe('конец.Начало');
+    expect(postProcess('end.Начало')).toBe('end.Начало');
+    // '_' and 'т' are both word characters: no boundary, so the multi-dot shield does not fire.
+    expect(postProcess('x _т.д. y')).toBe('X _т. Д. Y');
   });
 });
 
@@ -106,9 +148,11 @@ describe('postProcess — placeholder restore (spintax-js#52)', () => {
     expect(src).not.toContain(NUL);
     expect(postProcess(src)).toBe(src);
     expect(postProcess(src)).not.toContain(NUL);
-    // The same shape reached through the abbreviation shield rather than the URL one.
-    expect(postProcess('hello worldт.д.URL_0http://x.io/p?q=1')).toBe(
-      'Hello worldт.д.URL_0http://x.io/p?q=1',
+    // The same shape reached through the abbreviation shield rather than the URL one. The space
+    // before 'т' is load-bearing: under UCP a letter glued to it is no boundary, and the shield
+    // would not fire at all (this input read 'worldт.д.' while the boundary was ASCII).
+    expect(postProcess('hello world т.д.URL_0http://x.io/p?q=1')).toBe(
+      'Hello world т.д.URL_0http://x.io/p?q=1',
     );
   });
 });

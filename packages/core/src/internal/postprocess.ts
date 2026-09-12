@@ -7,6 +7,7 @@
  * This is the COSMETIC stage (gated by `postProcess`). The mandatory neutralize
  * safety-restore (§6) is separate (M2e) and always runs.
  */
+import { UCP_SPACE, UCP_WORD } from './charclass';
 
 // Single-token abbreviations (case-insensitive) that would otherwise look like a
 // sentence end. Multi-dot forms (т.д.) are handled by the 5a regex.
@@ -20,11 +21,19 @@ const SINGLE_ABBREVS = [
   'Corp', 'No', 'St', 'Ave', 'Blvd',
 ];
 
-// ASCII whitespace only — PHP `\s`/`\b` under /u (no PCRE_UCP) are ASCII, while
-// JS `\s` is Unicode. Using `\s` would diverge around NBSP / thin spaces, so every
-// whitespace class below is the explicit ASCII set. (`\b` in JS is already ASCII.)
-const WS = ' \\t\\r\\n\\f\\x0B';
+// Every pattern of this stage carries /u in PHP — the decimal shield alone does not — and /u is
+// PCRE2_UCP: `\s` takes NBSP and the rest of \p{Z}, `\b` and `\d` see every script. So the
+// classes are UCP, spelled out (./charclass); this block once said the opposite, and Cyrillic
+// abbreviations, IDN domains and NBSP were mangled here while PHP rendered them intact.
+const WS = UCP_SPACE;
 const S = `[${WS}]`;
+/**
+ * `\b` in front of a pattern that begins with a word character: the character before is not one.
+ * Equivalent to PHP's leading `\b` there, and a single lookbehind instead of two alternatives.
+ */
+const AFTER_NON_WORD = `(?<![${UCP_WORD}])`;
+/** `\b` in general — a TLD can end in `-`, so the boundary after a domain can go either way. */
+const WORD_BOUNDARY = `(?:(?<=[${UCP_WORD}])(?![${UCP_WORD}])|(?<![${UCP_WORD}])(?=[${UCP_WORD}]))`;
 
 const DOMAIN_PART =
   '(?:(?:(?:xn--)?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*)\\.)+(?:xn--[a-z0-9\\-]{2,59}|[\\p{L}][\\p{L}\\p{N}-]{1,62})';
@@ -56,10 +65,12 @@ const URI_RE = new RegExp(`(?:(?:https?|ftp):\\/\\/|(?:mailto|tel):)${URI_BODY}+
 // Which placeholder prefix a match gets. Kept distinct (URL vs URI) even though one pass mints
 // both: the prefixes are what the other engines' fixtures and #52's restore regex speak.
 const MAILTEL_PREFIX_RE = /^(?:mailto|tel):/iu;
-const EMAIL_RE = new RegExp(`[a-z0-9._%+\\-]+@${DOMAIN_PART}\\b`, 'giu');
-const DOMAIN_RE = new RegExp(`\\b${DOMAIN_PART}\\b`, 'giu');
+const EMAIL_RE = new RegExp(`[a-z0-9._%+\\-]+@${DOMAIN_PART}${WORD_BOUNDARY}`, 'giu');
+const DOMAIN_RE = new RegExp(`${AFTER_NON_WORD}${DOMAIN_PART}${WORD_BOUNDARY}`, 'giu');
+// PHP's decimal shield is the one pattern here without /u: byte mode, so its `\b` and `\d` are
+// ASCII — as JS's are. Deliberately not widened with the rest.
 const DECIMAL_RE = /\b\d+\.\d+\b/gu;
-const MULTI_ABBR_RE = new RegExp(`\\b(?:\\p{L}{1,2}\\.${S}*){2,}`, 'gu');
+const MULTI_ABBR_RE = new RegExp(`${AFTER_NON_WORD}(?:\\p{L}{1,2}\\.${S}*){2,}`, 'gu');
 const SINGLE_ABBR_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${SINGLE_ABBREVS.join('|')})\\.(?=${S}|$|<)`, 'giu');
 const TRAILING_PUNCT_RE = /([.,;:!]+)$/u;
 
@@ -89,14 +100,14 @@ const SENTENCE_OPENERS = '¿¡';
  */
 const LEAD = `(?:<[^>]+>|[${SENTENCE_OPENERS}]|${S})*`;
 
-// Spacing + capitalization (all ASCII-whitespace).
+// Spacing + capitalization. PHP's `\s` and `\d` here are UCP: `\d` is any decimal digit (\p{Nd}).
 const SPACE_BEFORE_PUNCT_RE = new RegExp(`${S}+([,;:!?.])`, 'gu');
-const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\d)(?!${S}|$|<)`, 'gu');
+const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
 // A run of sentence punctuation is ONE sentence end, not several: "..." and "?!" have to survive
 // intact, so the space goes after the whole run. `(?![.!?])` is what completes the run — a greedy
 // `+` on its own still backtracks INTO it to satisfy the lookaheads, turning "Wow!!!" into
 // "Wow!! !". (JS has no possessive quantifiers, and PHP must match this shape exactly.)
-const SPACE_AFTER_SENTENCE_RE = new RegExp(`([.!?]+)(?![.!?])(?!\\d)(?!${S}|$|<)`, 'gu');
+const SPACE_AFTER_SENTENCE_RE = new RegExp(`([.!?]+)(?![.!?])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
 // An opener binds to the word it opens: "¿ qué tal ?" → "¿qué tal?". MUST run before the
 // capitalization passes, so they see the real first letter instead of a space.
 const SPACE_AFTER_OPENER_RE = new RegExp(`([${SENTENCE_OPENERS}])${S}+`, 'gu');

@@ -17,9 +17,9 @@ export default tseslint.config(
       // TypeScript resolves identifiers (Request/Response/URL/console/globalThis),
       // so ESLint's no-undef would only false-positive here.
       'no-undef': 'off',
-      // The engine deliberately embeds U+000B (vertical tab) in whitespace classes
-      // to mirror PHP's ASCII `\s` (no PCRE_UCP) for post-process/parse parity —
-      // these control chars are intentional, not stray copy-paste artifacts.
+      // The engine spells PHP's whitespace classes out (packages/core/src/internal/charclass.ts):
+      // U+000B in the ASCII set of PHP's byte-mode patterns, U+0085 in the UCP set of its /u
+      // ones — these control chars are intentional, not stray copy-paste artifacts.
       'no-control-regex': 'off',
       // `_foo` = intentionally unused: a parameter that only exists to position the ones after
       // it, or to give a test mock the real call signature so the test can assert on what was

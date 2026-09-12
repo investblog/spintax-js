@@ -3,6 +3,69 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+**The post-process reads characters the way PHP does.** PHP compiles every pattern of the cosmetic
+stage with `/u`, and `/u` turns on PCRE2_UCP: `\s`, `\d`, `\w` and `\b` are Unicode classes there.
+This engine took them for ASCII — the belief was written into its own comments ("no PCRE_UCP") — and
+the three ports that copied the classes did the same. Measured on both PHP engines:
+
+| input | 0.7.0 | both PHP engines, and now this one |
+|---|---|---|
+| `и т.д. и т.п. всё` | `И т. Д. И т. П. Всё` | `И т.д. и т.п. всё` |
+| `открой пример.рф сегодня` | `Открой пример. Рф сегодня` | `Открой пример.рф сегодня` |
+| `пишите на info@сайт.рф` | `Пишите на info@сайт. Рф` | `Пишите на info@сайт.рф` |
+| `end.<NBSP>next` | `End. <NBSP>next` | `End.<NBSP>Next` |
+| `в 5<NBSP>тыс.<NBSP>руб.` | `В 5<NBSP>тыс. <NBSP>руб.` | `В 5<NBSP>тыс.<NBSP>руб.` |
+
+Minor rather than patch when it ships: rendered text changes for every template of these shapes.
+
+### Fixed
+
+- **The post-process classes are PHP's UCP classes** (`internal/charclass.ts`). Whitespace is PCRE2's
+  `\s` — NBSP, the thin spaces, NEL — and not JavaScript's, which adds U+FEFF and misses U+0085 and
+  U+180E. `\b` counts a letter of any script as a word character. The digit in the two spacing
+  lookaheads is any `\p{Nd}`. The decimal shield stays ASCII: PHP writes that one pattern without `/u`.
+- **Conditional truthiness uses the same whitespace.** A value of U+FEFF alone is truthy (it was blank
+  here); a value of U+0085 alone is blank (it was truthy).
+- **The permutation-config patterns go the other way.** PHP writes them without `/u`, so their `\s` is
+  ASCII, while JavaScript's `\s` is Unicode on any flags. A no-break space around `=` is no longer
+  config whitespace — `[<minsize<NBSP>=<NBSP>1>a|b|c]` is one separator, as in PHP — and the validator
+  agrees: `[<foo<NBSP>=1>a|b]` is valid, `[<minsize=2<NBSP>>a|b]` is `permutation.minsize-not-integer`.
+
+### Changed, visibly
+
+- A no-break space behaves like a space around punctuation: removed before `,.;:!?`, no second space
+  inserted after one, and the next sentence capitalized through it. French typography with U+202F
+  before `!` or `?` loses it — as a plain `bonjour !` always has, in every engine.
+- A glued Cyrillic sentence stays glued: `конец.Начало` matches the bare-domain shield in PHP and now
+  here, exactly as `compact.Game` always has in ASCII. Whether the shield should take a capitalized
+  TLD at all is #79.
+
+### Corpus
+
+Twenty fixtures, every expectation taken from BOTH PHP engines (docker, real code): fifteen in
+`render-postprocess.json` — Cyrillic multi-dot abbreviations, an IDN domain, email and TLD, NBSP before
+and after punctuation and after a whitelisted abbreviation, a URL that ends at NBSP, an Arabic-Indic
+digit, NEL as whitespace and U+FEFF as not, a glued Cyrillic sentence, `_` before an abbreviation — plus
+`conditional/bom-only-is-truthy`, `conditional/nel-only-is-falsy`,
+`perm/config-nbsp-is-not-config-whitespace` and its two `validate/*` twins. Nineteen fail on 0.7.0; the
+twentieth is a negative guard. No earlier fixture put a non-ASCII character next to a boundary or a
+whitespace class — every domain, email and multi-dot case was Latin — which is how a premise stated in
+a comment stayed green for two months. `postprocess.test.ts` had pinned the mangled `т.д.` "in both
+engines", with an assertion that passed on the capital letter alone.
+
+### Notes
+
+**Cost.** The post-process is about 30% slower on shield-heavy text and unchanged on plain prose: V8
+runs a Unicode-class lookbehind more slowly than its ASCII `\b`. On the scaling bench's 756 KB,
+106–118 → 139–145 ms (per pattern, `MULTI_ABBR_RE` 14 → 37 ms and `DOMAIN_RE` 56 → 71 ms); the
+scaling stays linear.
+
+**Two PHP builds differ at the margin.** PCRE2 10.43 made non-spacing marks and connector punctuation
+word characters, so PHP 8.3 sees a boundary between `x` and U+0301 that PHP 8.4 does not. The corpus
+runs PHP 8.4 and this engine follows it; recorded in the conformance README.
+
 ## 0.7.0 — 2026-09-12
 
 **A `%variable%` written directly inside `{…}` or `[…]` is now spliced as TEXT before the construct

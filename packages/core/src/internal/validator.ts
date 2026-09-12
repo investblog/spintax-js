@@ -175,26 +175,32 @@ function checkDirectives(text: string, out: Diagnostic[]): void {
   }
 }
 
-/** `[<config>]` prefixes: known keys only, minsize/maxsize must be digit runs. */
+/**
+ * `[<config>]` prefixes: known keys only, minsize/maxsize must be digit runs.
+ *
+ * The plugin's patterns here carry no /u, so its `\s` is ASCII; JS's `\s` is Unicode on any flags,
+ * hence the class spelled out — with `\s`, `[<key<NBSP>=1>…]` was an unknown key to this validator
+ * and no config at all to PHP's, a verdict apart (./charclass).
+ */
 function checkPermutationConfigs(text: string, idx: LineIndex, out: Diagnostic[]): void {
   for (const m of text.matchAll(/\[<([^>]*?)>/gu)) {
     const configStr = m[1] ?? '';
-    if (!/\w+\s*=/.test(configStr)) continue; // not a key=value config
+    if (!/\w+[ \t\n\x0B\f\r]*=/.test(configStr)) continue; // not a key=value config
     const configBase = (m.index ?? 0) + 2; // offset of configStr in text (past "[<")
 
-    for (const km of configStr.matchAll(/(\w+)\s*=/gu)) {
+    for (const km of configStr.matchAll(/(\w+)[ \t\n\x0B\f\r]*=/gu)) {
       const key = (km[1] ?? '').toLowerCase();
       if (!KNOWN_CONFIG_KEYS.has(key)) {
         out.push(err('permutation.unknown-key', `Unknown permutation config key: '${km[1]}'.`,
           { ...span(idx, configBase + (km.index ?? 0), (km[1] ?? '').length), data: { key: km[1] } }));
       }
     }
-    const min = /minsize\s*=\s*([^;>\s]+)/i.exec(configStr);
+    const min = /minsize[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*([^;> \t\n\x0B\f\r]+)/i.exec(configStr);
     if (min && !/^\d+$/.test(min[1] ?? '')) {
       out.push(err('permutation.minsize-not-integer', `minsize must be a positive integer, got '${min[1]}'.`,
         { ...span(idx, configBase + min.index, min[0].length), data: { value: min[1] } }));
     }
-    const max = /maxsize\s*=\s*([^;>\s]+)/i.exec(configStr);
+    const max = /maxsize[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*([^;> \t\n\x0B\f\r]+)/i.exec(configStr);
     if (max && !/^\d+$/.test(max[1] ?? '')) {
       out.push(err('permutation.maxsize-not-integer', `maxsize must be a positive integer, got '${max[1]}'.`,
         { ...span(idx, configBase + max.index, max[0].length), data: { value: max[1] } }));

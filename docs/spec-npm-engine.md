@@ -163,7 +163,9 @@ the line explicitly:
   unknown/malformed locale falls back to the default 2-form and never throws.
   (Reference: `plugin/src/Core/Engine/Plurals.php`.)
 - **Conditional truthiness.** `{?VAR?…}` "set + non-whitespace" truthiness, inverted
-  `{?!VAR?…}`, resolution before AND after `%var%` expansion — identical rules.
+  `{?!VAR?…}`, resolution before AND after `%var%` expansion — identical rules. "Whitespace" is
+  the plugin's `/\S/u`, i.e. PCRE2_UCP `\s` (§5): a value of U+FEFF alone is truthy, of U+0085
+  alone is not — JavaScript's own `\s` has both the other way round.
 - **`#set` macro / `#def` roll-once semantics.** A `#set` value is substituted at every `%var%`
   reference and its brackets re-roll each time; a `#def` value is rendered once per render and the
   result is held. The roll happens **after** the merged context exists, so a definition can read
@@ -286,6 +288,24 @@ space-after-punctuation steps are gated by `(?!\d)` (so `a,1` stays unspaced —
 decimals), and capitalization is Unicode-aware (`\p{Ll}` + locale-safe uppercasing — mind
 the Turkish-i hazard). A TS port using ASCII `[ \t]` or a naive `toUpperCase()` will
 mismatch the corpus.
+
+**Character classes follow PHP's modifier, not the port's dialect.** PHP compiles a pattern
+written with `/u` with PCRE2_UCP, so `\s`, `\d`, `\w` and `\b` are Unicode classes in every
+step of this stage — except the decimal shield, whose pattern carries no `/u` and runs in byte
+mode, where they are ASCII. Concretely, measured on PHP 8.4 / PCRE2 10.44:
+
+- whitespace (`\s`): U+0009–U+000D, U+0020, U+0085, U+00A0, U+1680, U+180E, U+2000–U+200A,
+  U+2028, U+2029, U+202F, U+205F, U+3000. JavaScript's `\s` is a different set — it adds U+FEFF
+  and lacks U+0085 and U+180E;
+- word character (`\w`, and so `\b`): `\p{L}`, `\p{N}`, `\p{Mn}`, `\p{Pc}`. JavaScript's `\b`
+  is ASCII even under `u`, and PCRE2 before 10.43 leaves out `\p{Mn}` and every `\p{Pc}` but `_`;
+- digit (`\d`): `\p{Nd}`.
+
+The same rule decides the permutation-config patterns the other way: the plugin writes those
+without `/u`, so their `\s` is ASCII, and a no-break space around `=` is not config whitespace.
+`@spintax/core` spells every such class out (`internal/charclass.ts`). It used to take them for
+ASCII here on the belief that `/u` does not set UCP — which mangled `т.д.` into `т. Д.`, split IDN
+domains (`пример. Рф`) and mis-spaced text around NBSP, in every tree-walk engine, until 2026-09-12.
 
 ---
 

@@ -380,13 +380,16 @@ function parsePlural(afterPrefix: string): Node {
 
 // ─── Permutation parsing (config + per-element separators) ────────────────────
 
-const CONFIG_KEY_RE = /\b(?:minsize|maxsize|sep|lastsep)\s*=/i;
-const MINSIZE_RE = /minsize\s*=\s*(\d+)/i;
-const MAXSIZE_RE = /maxsize\s*=\s*(\d+)/i;
-const SEP_RE = /(?<!last)sep\s*=\s*"([^"]*)"/i; // negative lookbehind excludes "lastsep"
-const LASTSEP_RE = /lastsep\s*=\s*"([^"]*)"/i;
-const HTML_TAG_RE = /^([a-zA-Z][a-zA-Z0-9-]*)(?:\s+[^>]*)?\/?$/;
-const PER_ELEM_HTML_RE = /^[a-zA-Z][a-zA-Z0-9]*\s/;
+// The plugin writes these without /u — byte mode — so its `\s` is ASCII here, and JS's `\s` is
+// Unicode whatever the flags: the class is spelled out, or `minsize<NBSP>=2` is a size to this
+// parser and a single separator to PHP's (./charclass has the rule for both kinds of pattern).
+const CONFIG_KEY_RE = /\b(?:minsize|maxsize|sep|lastsep)[ \t\n\x0B\f\r]*=/i;
+const MINSIZE_RE = /minsize[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*(\d+)/i;
+const MAXSIZE_RE = /maxsize[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*(\d+)/i;
+const SEP_RE = /(?<!last)sep[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*"([^"]*)"/i; // negative lookbehind excludes "lastsep"
+const LASTSEP_RE = /lastsep[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*"([^"]*)"/i;
+const HTML_TAG_RE = /^([a-zA-Z][a-zA-Z0-9-]*)(?:[ \t\n\x0B\f\r]+[^>]*)?\/?$/;
+const PER_ELEM_HTML_RE = /^[a-zA-Z][a-zA-Z0-9]*[ \t\n\x0B\f\r]/;
 
 function defaultPermConfig(): PermConfig {
   return { minsize: null, maxsize: null, sep: ' ', lastsep: null };
@@ -441,7 +444,7 @@ function looksLikeHtmlStartTag(tagText: string, remaining: string): boolean {
   if (!m) return false;
   if (trimmed.endsWith('/')) return true; // self-closing
   const tagName = (m[1] ?? '').toLowerCase();
-  return new RegExp(`</${escapeRegExp(tagName)}\\s*>`, 'iu').test(remaining);
+  return new RegExp(`</${escapeRegExp(tagName)}[ \\t\\n\\x0B\\f\\r]*>`, 'iu').test(remaining);
 }
 
 /**

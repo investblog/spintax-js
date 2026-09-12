@@ -231,6 +231,14 @@ than a non-goal — it is here because a template that ends in an invisible is n
 writes on purpose, and because NUL is the shielding sentinel, so changing the trim needs the
 `neutralize()` round-trip checked first (spintax-js#52–#54 were all paid for in that area).
 
+**Two PHP builds disagree next to a combining mark.** The plugin's `/u` patterns are PCRE2_UCP, and
+what UCP counts as a word character moved in PCRE2 10.43: non-spacing marks (`\p{Mn}`) and connector
+punctuation (`\p{Pc}` beyond `_`) became word characters. Measured 2026-09-12: PHP 8.3.32 (PCRE2 10.42)
+sees a `\b` between `x` and U+0301, PHP 8.4.23 (10.44) does not. The corpus runs PHP 8.4, and
+`@spintax/core` follows it (`internal/charclass.ts`). Only decomposed text (NFD) or a rare connector
+beside a shielded domain, email or abbreviation reaches it; what would move it into work is a host on
+an older PHP rendering such text through the plugin and comparing.
+
 **What would move any of these into work:** someone rendering the same template through two engines
 and getting output they cannot explain. Then the fix is worth its cost — and these notes are the
 starting measurement.

@@ -234,7 +234,7 @@
   },
   {
     "id": "postprocess/abbrev-multidot",
-    "note": "Multi-dot abbreviation 'e.g.' (2+ dotted groups) is shielded by step 5a. NB: step 5a uses \\b, which — like PHP PCRE without UCP — is ASCII, so it shields ASCII abbreviations but NOT a Cyrillic one like т.д. (parity holds; the ru whitelist covers single-token Cyrillic via a \\p{L} lookbehind).",
+    "note": "Multi-dot abbreviation 'e.g.' (2+ dotted groups) is shielded by step 5a. Its \\b is PHP's under /u — PCRE2_UCP, a letter of any script is a word character — so a Cyrillic 'т.д.' is shielded the same way (postprocess/ru-multidot-abbreviation). This note used to say the opposite, and every tree-walk engine mangled 'т.д.' on the strength of it.",
     "kind": "deterministic",
     "op": "render",
     "template": "See e.g. this",
@@ -461,6 +461,171 @@
     "postProcess": true,
     "expect": {
       "output": "See https://x.io/a.mailto:contact@example.com now"
+    }
+  },
+  {
+    "id": "postprocess/ru-multidot-abbreviation",
+    "note": "A Cyrillic multi-dot abbreviation is shielded exactly like 'e.g.': step 5a's leading \\b is PHP's under /u, and /u is PCRE2_UCP, so a letter of any script is a word character. Every tree-walk engine had an ASCII \\b here and rendered 'и т. Д. И т. П. Всё'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "яблоки, груши и т.д. и т.п. всё",
+    "postProcess": true,
+    "expect": {
+      "output": "Яблоки, груши и т.д. и т.п. всё"
+    }
+  },
+  {
+    "id": "postprocess/ru-multidot-abbreviation-spaced",
+    "note": "The spaced form of step 5a ((?:\\p{L}{1,2}\\.\\s*){2,}): 'т. е.' is one abbreviation, so neither 'е' nor the next word is capitalized.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "то есть т. е. так",
+    "postProcess": true,
+    "expect": {
+      "output": "То есть т. е. так"
+    }
+  },
+  {
+    "id": "postprocess/idn-domain-cyrillic",
+    "note": "A domain in its Unicode form is shielded — §5 names IDN beside ASCII and punycode (the punycode twin of this one is postprocess/punycode-domain-shielded). The leading \\b before 'пример' exists only because PHP's \\b is UCP.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "открой пример.рф сегодня",
+    "postProcess": true,
+    "expect": {
+      "output": "Открой пример.рф сегодня"
+    }
+  },
+  {
+    "id": "postprocess/idn-email-cyrillic",
+    "note": "The email shield ends in \\b as well. With an ASCII \\b the TLD 'рф' has no boundary after it, the address goes unshielded, and the punctuation pass splits it: 'info@сайт. Рф'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "пишите на info@сайт.рф сегодня",
+    "postProcess": true,
+    "expect": {
+      "output": "Пишите на info@сайт.рф сегодня"
+    }
+  },
+  {
+    "id": "postprocess/ascii-label-cyrillic-tld",
+    "note": "An ASCII label under a Cyrillic TLD: the boundary AFTER the domain is the UCP one too.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "visit example.рф now",
+    "postProcess": true,
+    "expect": {
+      "output": "Visit example.рф now"
+    }
+  },
+  {
+    "id": "postprocess/nbsp-before-punctuation-is-removed",
+    "note": "Step 7 removes \\s+ before punctuation, and PHP's \\s is UCP: a no-break space before the comma goes like a space would.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "word\u00a0, next",
+    "postProcess": true,
+    "expect": {
+      "output": "Word, next"
+    }
+  },
+  {
+    "id": "postprocess/nbsp-after-comma-is-a-space",
+    "note": "(?!\\s|$|<) sees the no-break space, so no second space is inserted after the comma.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a,\u00a0b",
+    "postProcess": true,
+    "expect": {
+      "output": "A,\u00a0b"
+    }
+  },
+  {
+    "id": "postprocess/nbsp-after-sentence-capitalizes",
+    "note": "A no-break space after a full stop is whitespace to the spacing pass (nothing inserted) and to the capitalization lead (the next word is capitalized).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "end.\u00a0next",
+    "postProcess": true,
+    "expect": {
+      "output": "End.\u00a0Next"
+    }
+  },
+  {
+    "id": "postprocess/nbsp-after-abbreviation",
+    "note": "Russian typesetting binds 'тыс.' and 'руб.' with a no-break space. The whitelist lookahead (?=\\s|$|<) has to see it, or 'тыс.' is not shielded and the spacing pass adds a second space.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "в 5\u00a0тыс.\u00a0руб. всего",
+    "postProcess": true,
+    "expect": {
+      "output": "В 5\u00a0тыс.\u00a0руб. всего"
+    }
+  },
+  {
+    "id": "postprocess/url-ends-at-nbsp",
+    "note": "The URI body class excludes \\s, which is UCP in PHP: a no-break space ends the URL, and what follows is spaced and capitalized as ordinary text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "go to https://x.io/a\u00a0,next",
+    "postProcess": true,
+    "expect": {
+      "output": "Go to https://x.io/a, next"
+    }
+  },
+  {
+    "id": "postprocess/any-decimal-digit-blocks-comma-space",
+    "note": "(?!\\d) is UCP in PHP — any decimal digit, \\p{Nd}; here ARABIC-INDIC DIGIT THREE — so no space is inserted after the comma, as with an ASCII digit.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a,\u0663 b",
+    "postProcess": true,
+    "expect": {
+      "output": "A,\u0663 b"
+    }
+  },
+  {
+    "id": "postprocess/nel-is-whitespace",
+    "note": "U+0085 (NEL) is \\s under PCRE2_UCP but NOT in JavaScript's \\s — an engine porting the class from JS gets this one wrong. Nothing is inserted after the stop, and the next word is capitalized.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "end.\u0085next",
+    "postProcess": true,
+    "expect": {
+      "output": "End.\u0085Next"
+    }
+  },
+  {
+    "id": "postprocess/bom-is-not-whitespace",
+    "note": "NEGATIVE, the mirror of postprocess/nel-is-whitespace: U+FEFF is \\s in JavaScript but NOT under PCRE2_UCP. So a space is inserted after the stop and the next word stays lowercase, the character between them not counting as a gap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "end.\ufeffnext",
+    "postProcess": true,
+    "expect": {
+      "output": "End. \ufeffnext"
+    }
+  },
+  {
+    "id": "postprocess/glued-cyrillic-sentence-is-a-domain",
+    "note": "Pinned as both PHP engines render it, not as a verdict on it: 'конец.Начало' matches the bare-domain shield — a label and a TLD of 2+ letters, UCP boundaries on both sides — so the missing space is not inserted and nothing is capitalized, exactly as 'compact.Game' in ASCII. Whether the shield should take a capitalized TLD at all is spintax-js#79; deciding that moves this fixture.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "конец.Начало",
+    "postProcess": true,
+    "expect": {
+      "output": "конец.Начало"
+    }
+  },
+  {
+    "id": "postprocess/underscore-before-abbreviation-is-no-boundary",
+    "note": "The boundary seen from the other side: UCP \\w includes '_' AND every letter, so there is no boundary between '_' and 'т' and the multi-dot shield does not fire. An engine with an ASCII \\b saw one there and shielded '_т.д.'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x _т.д. y",
+    "postProcess": true,
+    "expect": {
+      "output": "X _т. Д. Y"
     }
   }
 ]

@@ -960,5 +960,31 @@
         }
       ]
     }
+  },
+  {
+    "id": "validate/perm-config-nbsp-is-not-config-whitespace",
+    "note": "The validator half of perm/config-nbsp-is-not-config-whitespace: its key=value test (\\w+\\s*=) is byte-mode ASCII in PHP as well, so 'foo<NBSP>=1' is no config and raises no unknown-key diagnostic.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<foo\u00a0=1>a|b]",
+    "expect": {
+      "verdict": "valid"
+    }
+  },
+  {
+    "id": "validate/permutation-minsize-trailing-nbsp-not-integer",
+    "note": "The value class [^;>\\s]+ is ASCII in PHP, so a trailing no-break space belongs to the value '2<NBSP>', which is not a run of digits.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "[<minsize=2\u00a0>a|b]",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "permutation.minsize-not-integer",
+          "severity": "error"
+        }
+      ]
+    }
   }
 ]
