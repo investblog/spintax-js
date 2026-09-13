@@ -276,6 +276,11 @@ A generated differential that aims per-element separators and conditional config
 (3 000 renders, 2026-09-12) meets the first shape twice and nothing else. What would move these into
 work is a template that builds its separators out of a nested pick.
 
+Decided 2026-09-13, not only deferred: re-reading every permutation's body as text would put a parse
+back into every render of every permutation, for shapes no template has been seen to write — the
+owner's rule for this kind of trade is performance. The shapes stay recorded here; a real template
+that hits one is still what reopens it.
+
 **Unicode versions drift at the margin too.** The UCP classes are PCRE2 10.44's, and PCRE2 10.44 ships
 Unicode 15.0; a JavaScript runtime carries its own tables. On Node 22 (Unicode 17.0), `\p{L}\p{N}\p{Mn}\p{Pc}`
 takes 9 736 code points PCRE2's `\w` does not (newer scripts and CJK Extension I, e.g. U+088F) and misses
