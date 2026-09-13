@@ -148,9 +148,16 @@ describe('postProcess — character classes are PHP’s /u classes (UCP)', () =>
     within(() => postProcess(`x${`\n${NBSP}`.repeat(100_000)}1`)); // breaks, no letter: 4 s at a fifth of this
   });
 
-  test('a word character is a letter of any script — so a glued sentence stays glued (#79)', () => {
-    expect(postProcess('конец.Начало')).toBe('конец.Начало');
-    expect(postProcess('end.Начало')).toBe('end.Начало');
+  test('a TLD is a label in one case, so a capital after the dot starts a sentence (#79)', () => {
+    expect(postProcess('конец.Начало')).toBe('Конец. Начало');
+    expect(postProcess('end.Начало')).toBe('End. Начало');
+    expect(postProcess('built on ASP.NET and example.com')).toBe('Built on ASP.NET and example.com');
+    // The domain patterns carry no `i`: under it a `\p{Ll}` matches capitals, and `Com` would be a TLD again.
+    expect(postProcess('write to info@Example.COM, not info@example.Com')).toBe('Write to info@Example.COM, not info@example. Com');
+    // The punycode form keeps the plugin's caseless reading.
+    expect(postProcess('see a.XN--P1ai and b.xn--p1AI')).toBe('See a.XN--P1ai and b.xn--p1AI');
+    // A letter without case opens the lower-case branch as well as the upper-case one.
+    expect(postProcess('see a.中a here')).toBe('See a.中a here');
     // '_' and 'т' are both word characters: no boundary, so the multi-dot shield does not fire.
     expect(postProcess('x _т.д. y')).toBe('X _т. Д. Y');
   });

@@ -607,14 +607,14 @@
     }
   },
   {
-    "id": "postprocess/glued-cyrillic-sentence-is-a-domain",
-    "note": "Pinned as both PHP engines render it, not as a verdict on it: 'конец.Начало' matches the bare-domain shield — a label and a TLD of 2+ letters, UCP boundaries on both sides — so the missing space is not inserted and nothing is capitalized, exactly as 'compact.Game' in ASCII. Whether the shield should take a capitalized TLD at all is spintax-js#79; deciding that moves this fixture.",
+    "id": "postprocess/glued-cyrillic-sentence-is-spaced",
+    "note": "A TLD is a label in ONE case (spintax-js#79): 'Начало' starts with a capital and goes on in lower case, so 'конец.Начало' is not a bare domain — the space after the dot is inserted and both sentences are capitalized, as 'compact.Game' is in ASCII. Until #79 was decided this pinned the opposite, the shield taking any-case TLDs.",
     "kind": "deterministic",
     "op": "render",
     "template": "конец.Начало",
     "postProcess": true,
     "expect": {
-      "output": "конец.Начало"
+      "output": "Конец. Начало"
     }
   },
   {
@@ -626,6 +626,94 @@
     "postProcess": true,
     "expect": {
       "output": "X _т. Д. Y"
+    }
+  },
+  {
+    "id": "postprocess/title-case-tld-is-a-sentence",
+    "note": "The shape spintax-js#79 was filed for: a sentence glued to the next one, 'compact.Game'. A TLD is a label in one case, so a capital followed by lower case is the start of a sentence, not a domain — the missing space is inserted.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "kept compact.Game categories",
+    "postProcess": true,
+    "expect": {
+      "output": "Kept compact. Game categories"
+    }
+  },
+  {
+    "id": "postprocess/mixed-case-tld-is-not-a-domain",
+    "note": "One case means the whole label, not its first letter: 'cOM' mixes cases and is no TLD, so the dot gets its space and the next word its capital. Guards an implementation that only looks at the letter after the dot.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a foo.cOM bar",
+    "postProcess": true,
+    "expect": {
+      "output": "A foo. COM bar"
+    }
+  },
+  {
+    "id": "postprocess/uppercase-tld-is-a-domain",
+    "note": "NEGATIVE for spintax-js#79: a TLD all in capitals is still a domain — 'ASP.NET' keeps its dot, and so does the lower-case 'Node.js' beside it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "built on ASP.NET and Node.js",
+    "postProcess": true,
+    "expect": {
+      "output": "Built on ASP.NET and Node.js"
+    }
+  },
+  {
+    "id": "postprocess/uppercase-email-domain-is-shielded",
+    "note": "NEGATIVE for spintax-js#79: an email whose domain ends in a TLD all in capitals is shielded whole, as before.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "write to info@Example.COM today",
+    "postProcess": true,
+    "expect": {
+      "output": "Write to info@Example.COM today"
+    }
+  },
+  {
+    "id": "postprocess/title-case-email-tld-is-not-shielded",
+    "note": "The consequence spintax-js#79 accepted, pinned so it is not mistaken for a defect: the email shield shares the domain pattern, so 'info@example.Com' is no email and the dot before 'Com' is spaced like a sentence end.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "mail info@example.Com now",
+    "postProcess": true,
+    "expect": {
+      "output": "Mail info@example. Com now"
+    }
+  },
+  {
+    "id": "postprocess/caseless-script-tld-is-a-domain",
+    "note": "NEGATIVE for spintax-js#79: letters without case (\\p{Lo}, \\p{Lm} — CJK, Arabic, Thai) fit the one-case rule, so '例子.中国' stays a domain. An implementation that demands \\p{Ll} or \\p{Lu} breaks every such TLD.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "visit 例子.中国 now",
+    "postProcess": true,
+    "expect": {
+      "output": "Visit 例子.中国 now"
+    }
+  },
+  {
+    "id": "postprocess/uppercase-punycode-tld-is-a-domain",
+    "note": "NEGATIVE for spintax-js#79: the punycode TLD keeps the caseless reading it always had — 'XN--P1AI' is a domain in capitals too. Only the letter TLD took the one-case rule.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see site.XN--P1AI today",
+    "postProcess": true,
+    "expect": {
+      "output": "See site.XN--P1AI today"
+    }
+  },
+  {
+    "id": "postprocess/titlecase-letter-after-block-tag-is-kept",
+    "note": "PHP writes the capitalizer after a block tag caseless (/ui), but PCRE2 does not fold a Unicode property: its \\p{Ll} stays lower case only, so the titlecase digraph U+01C5 after <p> is left as it is. A JavaScript \\p{Ll} under i takes every cased letter and made it U+01C4.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "<p>\u01c5ivot</p>",
+    "postProcess": true,
+    "expect": {
+      "output": "<p>\u01c5ivot</p>"
     }
   }
 ]

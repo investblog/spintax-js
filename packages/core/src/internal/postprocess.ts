@@ -35,8 +35,23 @@ const AFTER_NON_WORD = `(?<![${UCP_WORD}])`;
 /** `\b` in general — a TLD can end in `-`, so the boundary after a domain can go either way. */
 const WORD_BOUNDARY = `(?:(?<=[${UCP_WORD}])(?![${UCP_WORD}])|(?<![${UCP_WORD}])(?=[${UCP_WORD}]))`;
 
-const LABEL = '(?:xn--)?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*';
-const DOMAIN_PART = `(?:${LABEL}\\.)+(?:xn--[a-z0-9\\-]{2,59}|[\\p{L}][\\p{L}\\p{N}-]{1,62})`;
+/**
+ * A punycode label as the plugin reads `xn--` under `i`: either case, and the two non-ASCII letters that fold into
+ * `[a-z]` — U+017F LONG S and U+212A KELVIN SIGN. Spelled out, because the domain patterns carry no `i` (below).
+ */
+const XN = '[xX][nN]--';
+const LABEL = `(?:${XN})?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*`;
+/**
+ * A TLD is a label in ONE case: `example.com` and `ASP.NET` are domains, `compact.Game` is a sentence glued to the
+ * next one, and so is `конец.Начало` (#79). Letters without case (`\p{Lo}`, `\p{Lm}` — CJK, Arabic, Thai)
+ * fit either reading, so `例子.中国` stays a domain. PHP writes this alternative under `(?-i:…)`; JavaScript has no
+ * inline modifier on the runtimes this engine supports, and under `i` a `\p{Ll}` matches capitals as well —
+ * so the domain patterns drop `i` and spell out the one part that is case-insensitive, the punycode form.
+ */
+const TLD_LOWER = '\\p{Ll}\\p{Lm}\\p{Lo}';
+const TLD_UPPER = '\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}';
+const TLD = `(?:${XN}[a-zA-Z0-9\\-\\u017F\\u212A]{2,59}|[${TLD_LOWER}][${TLD_LOWER}\\p{N}-]{1,62}|[${TLD_UPPER}][${TLD_UPPER}\\p{N}-]{1,62})`;
+const DOMAIN_PART = `(?:${LABEL}\\.)+${TLD}`;
 /**
  * URIs — `https?`/`ftp` (with a `//` authority) and `mailto:`/`tel:` (without one) — shielded
  * in ONE pass, deliberately.
@@ -76,7 +91,7 @@ const MAILTEL_PREFIX_RE = /^(?:mailto|tel):/iu;
  * `@` — so the run's first start matches or none does, and a failed run is skipped whole. That makes the
  * `@` the thing to look for: the only run that can match is the one ending at it.
  */
-const DOMAIN_AT_RE = new RegExp(`${DOMAIN_PART}${WORD_BOUNDARY}`, 'iuy');
+const DOMAIN_AT_RE = new RegExp(`${DOMAIN_PART}${WORD_BOUNDARY}`, 'uy');
 /**
  * Domain: an attempt that fails at the start of a chain of labels (`a.b-c.d…`) fails at every later
  * start in that chain too — prefix the chain's own labels to a match further in and it is a match here.
@@ -84,7 +99,7 @@ const DOMAIN_AT_RE = new RegExp(`${DOMAIN_PART}${WORD_BOUNDARY}`, 'iuy');
  * matches at exactly the starts the shield tries (a word character not preceded by one — every label
  * begins with one), group 1 is a domain, and when there is none the whole match is the chain to skip.
  */
-const DOMAIN_SCAN_RE = new RegExp(`${AFTER_NON_WORD}(?:(${DOMAIN_PART}${WORD_BOUNDARY})|(?:${LABEL}\\.)*${LABEL})`, 'giu');
+const DOMAIN_SCAN_RE = new RegExp(`${AFTER_NON_WORD}(?:(${DOMAIN_PART}${WORD_BOUNDARY})|(?:${LABEL}\\.)*${LABEL})`, 'gu');
 // PHP's decimal shield is the one pattern here without /u: byte mode, so its `\b` and `\d` are
 // ASCII — as JS's are. Deliberately not widened with the rest.
 const DECIMAL_RE = /\b\d+\.\d+\b/gu;
@@ -239,9 +254,12 @@ function indexLeads(text: string): LeadIndex {
   return { leadEnd };
 }
 
+/**
+ * The letter every capitalizer upper-cases. PHP writes the block-tag pass `/ui`, but PCRE2 does not fold a Unicode
+ * property, so its `\p{Ll}` is still lower case only; JavaScript's `\p{Ll}` under `i` takes every cased letter, and
+ * reading it that way here turned a titlecase `ǅ` after `<p>` into `Ǆ` where PHP keeps it. Only the tag name is caseless.
+ */
 const LOWER_RE = /^\p{Ll}/u;
-/** The block-tag capitalizer is caseless in both engines, and caseless `\p{Ll}` takes every cased letter. */
-const LOWER_CASELESS_RE = /^\p{Ll}/iu;
 const BLOCK_TAG_NAME_RE = /<\/?(?:p|h[1-6]|li|blockquote|div|td|th)/iuy;
 /** `.`, `!`, `?` and `…` — the boundaries of the sentence capitalizer. */
 const SENTENCE_END_SCAN_RE = new RegExp(`[.!?${String.fromCharCode(0x2026)}]`, 'g');
@@ -480,7 +498,7 @@ export function postProcess(input: string): string {
   const leadContext: { leads: LeadIndex | null } = { leads: null };
   text = capitalizeAfter(text, LOWER_RE, afterSentenceEnd, leadContext);
   // 10: capitalize after block-level HTML tags.
-  text = capitalizeAfter(text, LOWER_CASELESS_RE, afterBlockTag(), leadContext);
+  text = capitalizeAfter(text, LOWER_RE, afterBlockTag(), leadContext);
   // 11: capitalize after line breaks.
   text = capitalizeAfter(text, LOWER_RE, afterLineBreak, leadContext);
 

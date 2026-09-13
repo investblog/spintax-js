@@ -3,6 +3,57 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed, visibly
+
+- **A TLD is a label in ONE case (#79).** The bare-domain and email shields took any `word.Word` for a
+  domain, so a sentence glued to the next one kept its missing space and its lower-case start:
+  `kept compact.Game categories`, `конец.Начало`. On a production host's stored content that shape was
+  a sentence start 369 times in 56 tenants and a domain never. Now a TLD is all lower case or all upper
+  case — letters without case (CJK, Arabic, Thai) fit either — so those sentences get their space and
+  their capital, while `example.com`, `ASP.NET`, `info@Example.COM`, `ПРИМЕР.РФ`, `例子.中国` and a punycode
+  TLD in any case stay whole. The accepted cost: a Title-case second half reads as a sentence too —
+  `Yandex.Money` renders `Yandex. Money`, and `info@example.Com` is no longer shielded as an email. Both
+  PHP engines take the same rule.
+
+### Fixed
+
+- **A titlecase letter after a block tag stays as PHP leaves it.** The plugin writes that capitalizer
+  `/ui`, and PCRE2 does not fold a Unicode property, so its `\p{Ll}` stays lower case only. This engine
+  read `\p{Ll}` under JavaScript's `i`, which takes every cased letter, and `<p>ǅivot</p>` became
+  `<p>Ǆivot</p>`. Found by the post-process differential once its alphabet held a titlecase digraph; as
+  old as the capitalizer.
+
+### Corpus
+
+Nine cases in `render-postprocess.json`, every expectation taken from both PHP engines with the rule
+applied: `postprocess/title-case-tld-is-a-sentence` (`compact.Game`), `postprocess/mixed-case-tld-is-not-a-domain`
+(`cOM` — one case means the whole label), `postprocess/title-case-email-tld-is-not-shielded` (the cost,
+pinned so nobody files it), the negatives `postprocess/uppercase-tld-is-a-domain`,
+`postprocess/uppercase-email-domain-is-shielded`, `postprocess/caseless-script-tld-is-a-domain` and
+`postprocess/uppercase-punycode-tld-is-a-domain`, and `postprocess/titlecase-letter-after-block-tag-is-kept`.
+`postprocess/glued-cyrillic-sentence-is-a-domain` becomes `postprocess/glued-cyrillic-sentence-is-spaced`:
+it pinned the reading before #79, and its note said deciding #79 would move it.
+
+### Notes
+
+**One JavaScript trap behind both.** Under `i`, a JavaScript `\p{Ll}` matches capitals and a `\p{Lu}`
+matches lower case; PCRE2 leaves a property alone under `/i`. PHP can also switch `i` off for one
+alternative with `(?-i:…)`, which JavaScript lacks on every runtime this engine supports. So the domain
+patterns carry no `i` and spell out the one part that is caseless, the punycode prefix and class — U+017F
+and U+212A included, as PCRE2's caseless `[a-z]` takes them.
+
+**Verified.** 24 000 generated post-process inputs — the earlier alphabet with caseless scripts, mixed-case
+TLDs and a titlecase digraph added, plus dotted chains whose TLD candidate is lower, upper, title, mixed or
+caseless, in prose and in emails — through both PHP engines with the rule applied: they agree with each other
+everywhere, this engine differs on none but the recorded final `trim`, and 0.8.0 on 4 552. Control mutations:
+`i` restored on either shield, the caseless letters dropped from one branch or both, the any-case TLD
+restored — each turns the suite red. Dropping U+017F and U+212A from the punycode class is output-equivalent,
+not caught: a TLD that needs them always has the shorter `xn--` reading from the same start, and the
+unshielded rest is text no later pass rewrites. Post-process cost is unchanged — 1 000 prose calls 18 ms
+against 19, HTML blocks 27 against 26, a 756 KB shield-heavy text 147 ms against 154.
+
 ## 0.8.0 — 2026-09-13
 
 Two defects found by the ports while they mirrored 0.7.0, both places where this engine read a
