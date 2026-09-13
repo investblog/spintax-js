@@ -57,7 +57,7 @@ start; a mixed-case prefix has none (`site.xN--ſA`, found by the Codex gate), a
 18 ms against 19, HTML blocks 27 against 26, a 756 KB shield-heavy text 147 ms against 154.
 
 **The PHP engines skip what they cannot shield.** Rejecting `Game` made `a.a.…a.Game` — one domain from its
-first start before — a chain PCRE retried from every label: 4 000 labels took 48 ms where they had taken
+first start before — a chain PCRE retried from every label: 2 000 one-character labels (about 4 KB) took 48 ms where they had taken
 0.7 (found by the Codex gate). Both PHP shields now take a run or a chain they cannot shield and
 `(*SKIP)(*FAIL)` past it — the skips this engine's scanners already prove output-neutral — which also
 removes the older retry on a chain whose last label is too short to be a TLD: 2 000 labels, 39 ms before,
