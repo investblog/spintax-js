@@ -96,6 +96,17 @@ Minor rather than patch when it ships: rendered text changes for every template 
   The closing tag is found by a scan now, matching exactly what the pattern matched: any case, and the
   two non-ASCII letters `iu` folds into ASCII (U+017F, U+212A). Found by the scaling probe behind the
   note on template scans below.
+- **`constructor` and `__proto__` are ordinary variable names.** The variable and definition maps were
+  plain JavaScript objects, so both names found `Object`'s own members, and assigning `__proto__` stored
+  nothing. `render('a %constructor% b')` threw `TypeError` — §9.2 lets `render()` throw only on a resolver
+  or a foreign `Ast` — while `validate()` called the name merely undefined, so nothing could screen it out.
+  `%__proto__%` rendered as nothing, `{?constructor?…}` and `{?__proto__?…}` took the then-branch, a
+  `#set`, a `#def` or a context value under `__proto__` was lost, a runtime list under it spliced
+  `[object Object]`, and the validator withheld `plural.arity`, `plural.count-macro` and
+  `plural.nested-brackets` for a `#set` of either name — valid where both PHP validators say invalid.
+  Both PHP engines read variables from arrays and always treated them as ordinary names. The maps have
+  no prototype now (`internal/name-map.ts`). Found by the Codex gate on the nesting rewrite, where
+  `%__proto__%` had left the expansion budget `NaN`.
 
 ### Changed, visibly
 
@@ -137,6 +148,13 @@ cases carry it: `validate/cycle-diamond-terminates` (22, one per name) and the n
 `validate/plural-count-macro-per-reference`, which records #73's decision: `plural.count-macro` once
 per tainted reference in the count slot, as this engine, `spintax-core` and both PHP validators already
 emit it. No engine output changed for either.
+
+Twelve fixtures for the prototype names, every expectation taken from both PHP engines: eight in
+`render-semantics.json` — undefined references, conditionals, a `#set` of each name, context keys, a
+`#def` rolled once, a `#def` naming them undefined, a runtime list spliced into a permutation, a form
+slot — and four in `validate.json`: the three withheld plural verdicts and the negative
+`validate/prototype-names-defined-and-undefined`. Eleven fail on 0.7.0. A JSON-decoded context carries
+`__proto__` as an ordinary key in every engine's harness; a JavaScript object literal would not.
 
 ### Notes
 
@@ -324,6 +342,17 @@ renders take 120 ms against 0.7.0's 86. Everything else measured got faster once
 re-reads without reading, the walk stopped copying and the post-process lost its per-call overhead: the FAQ
 with a providers gate four times over, 513 ms against 1 322; plain prose, 145 against 198; all 1 262
 construct-bearing literals of the production host's migrations, rendered once each, 178 ms against 262.
+
+**The prototype names, verified against a renamed oracle.** 0.7.0's output under those names was the
+defect, so the fixed build is compared with the build before it on each document with `__proto__` and
+`constructor` renamed to ordinary names of the same length, renamed back in the output: 20 000 generated
+documents, 19 875 carrying one of the names in a reference, a conditional, a `#set`, a `#def`, a plural
+slot or a context key, through `parse`, `validate`, `analyze` and five renders — no difference, with three
+control mutations caught first (an unrelated truthiness change, and the alias map or the `#def` map left a
+plain object). The 449 009 alphabet strings, which name neither, are unchanged. The maps are merged by a
+loop: `Object.assign` into a map with no prototype took five times the spread it replaced, once per
+`#def` — 1 000 renders of a template with 60 context variables and 20 definitions went from 920 ms to
+1 336 — and the loop brings that to 968. The production templates, the FAQ and prose measure as before.
 
 **Recorded, not closed** — in the conformance README, under the known divergences. A value carrying an
 unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`) re-cuts the enclosing construct in PHP and only its

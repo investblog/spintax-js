@@ -189,6 +189,10 @@ the line explicitly:
   `MAX_VARIABLE_DEPTH=50`); **conditional name grammar differs from `%var%`** — conditionals
   require `[A-Za-z_][A-Za-z0-9_]*` (no leading digit; malformed ⇒ left literal) while `%var%`
   allows `\w+` (leading digit OK). A port that shares one regex across both will diverge.
+  **Every name the grammar accepts is an ordinary name** — `constructor` and `__proto__` included:
+  the PHP engines keep variables in arrays, so an engine whose map inherits members (a plain
+  JavaScript object, as `@spintax/core` 0.7.0 used) must not read or store names through them
+  (`variable/prototype-names-*`, `validate/prototype-name-*`).
 - **A `%var%` or a `{?…}` directly inside `{…}`/`[…]` is text before the split.** The plugin
   resolves conditionals (Stage 6a) and expands variables over the whole text before any bracket is
   read, so a pipe-joined value inside a construct is a list of options/elements, a conditional's

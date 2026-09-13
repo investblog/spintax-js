@@ -29,6 +29,7 @@ import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, Con
 import { UCP_SPACE } from './charclass';
 import { IncludeResolverError } from './errors';
 import { flatten, joinFragments, lengthOf, trimFragment, type Fragment } from './fragment';
+import { nameMap } from './name-map';
 import { BRACE_CLOSE, BRACE_OPEN, matchAnyPairs, matchPairs } from './pairs';
 import { parseSequence, parseTemplate, phpTrim, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
@@ -115,7 +116,7 @@ export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
   // context, globals and runtime included, so it must wait until that context exists.
   const vars =
     Object.keys(ast.defDefs).length > 0
-      ? { ...base, ...rollDefinitions(ast.defDefs, base, ctx.runtimeContext, walkOpts) }
+      ? nameMap(base, rollDefinitions(ast.defDefs, base, ctx.runtimeContext, walkOpts))
       : base;
   const text = renderNodes(ast.nodes, { ...walkOpts, vars });
   return ctx.resolver ? resolveIncludes(text, ctx) : text;
@@ -197,7 +198,7 @@ export function buildVars(
   setDefs: Readonly<Record<string, string>>,
   context: Readonly<Record<string, string>>,
 ): Record<string, string> {
-  const vars: Record<string, string> = {};
+  const vars = nameMap();
   for (const [name, value] of Object.entries(setDefs)) {
     vars[name] = value;
   }
@@ -226,22 +227,24 @@ export function rollDefinitions(
   opts: Omit<RenderInternalOptions, 'vars'>,
 ): Record<string, string> {
   const outranked = new Set(Object.keys(context).map((key) => key.toLowerCase()));
-  const rolled: Record<string, string> = {};
+  const rolled = nameMap();
+  // Copied, because an `Ast` handed back from elsewhere may carry an ordinary object here.
+  const definitions = nameMap(defDefs);
 
   // The alias map is every macro value a definition can see, minus the definitions that will
   // actually be rolled — a `#def` shadows a same-named global, and hopping through the shadowed
   // value computes the wrong graph. A definition the runtime outranks is NOT removed: it is never
   // rolled, so the runtime value is what really gets substituted and the graph must follow it.
-  const aliases: Record<string, string> = {};
+  const aliases = nameMap();
   for (const [name, value] of Object.entries(vars)) {
-    if (name in defDefs && !outranked.has(name)) continue;
+    if (name in definitions && !outranked.has(name)) continue;
     aliases[name] = value;
   }
 
-  for (const name of orderDefinitions(defDefs, aliases)) {
+  for (const name of orderDefinitions(definitions, aliases)) {
     if (outranked.has(name)) continue;
-    const value = defDefs[name] ?? '';
-    rolled[name] = renderNodes(parseSequence(value), { ...opts, vars: { ...vars, ...rolled } });
+    const value = definitions[name] ?? '';
+    rolled[name] = renderNodes(parseSequence(value), { ...opts, vars: nameMap(vars, rolled) });
   }
 
   return rolled;

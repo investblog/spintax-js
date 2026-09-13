@@ -1009,5 +1009,78 @@
         "plural.count-macro": 3
       }
     }
+  },
+  {
+    "id": "validate/prototype-name-set-counts-plural-forms",
+    "note": "A #set named `__proto__` is counted into the form list like any macro: two forms where ru needs three. 0.7.0 lost the definition, met a reference it could not resolve and withheld the verdict — valid, where both PHP validators say invalid.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %__proto__% = x\n{plural 2: one|%__proto__%}",
+    "locale": "ru",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/prototype-name-set-count-macro",
+    "note": "The count-slot rule holds for a #set of either name: one tainted reference, one error (#73). 0.7.0 withheld it.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %__proto__% = {1|2}\n{plural %__proto__%: one|two}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.count-macro",
+          "severity": "error"
+        }
+      ],
+      "diagnosticCount": {
+        "plural.count-macro": 1
+      }
+    }
+  },
+  {
+    "id": "validate/prototype-name-set-nested-brackets",
+    "note": "A #set named `constructor` holding brackets, named directly in a form slot, earns plural.nested-brackets. 0.7.0 found Object under that name in the empty #def map, took it for a definition, and said nothing.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %constructor% = {a|b}\n{plural 2: one|%constructor%}",
+    "locale": "en",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.nested-brackets",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/prototype-names-defined-and-undefined",
+    "note": "NEGATIVE: a defined `__proto__` is not reported, and an undefined `constructor` is, once, as a warning. The reference checks already kept names in Maps; this pins that for every engine.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#set %__proto__% = x\n%__proto__% %constructor%",
+    "expect": {
+      "verdict": "valid",
+      "diagnostics": [
+        {
+          "code": "variable.undefined",
+          "severity": "warning"
+        }
+      ],
+      "diagnosticCount": {
+        "variable.undefined": 1
+      }
+    }
   }
 ]

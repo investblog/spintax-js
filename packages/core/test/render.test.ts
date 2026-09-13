@@ -596,3 +596,37 @@ describe('render — plural slots share the 51-hop arithmetic and the freeze (0.
     expect(render(`${chain}\n#set %a52% = END\n{plural 1: %a1%|two}`, 'first', {}, 'en')).toBe('\n\n%a52%');
   });
 });
+
+// The variable and definition maps were plain objects, so `constructor` and `__proto__` found Object's own
+// members and assigning `__proto__` stored nothing: 0.7.0 threw TypeError on `%constructor%`. What every
+// engine must render is pinned by the corpus (the prototype-name fixtures); these pin the ways back in that
+// only a JavaScript engine has.
+describe('render — prototype names are ordinary names', () => {
+  test('nothing a template can name there throws', () => {
+    for (const template of ['%constructor%', '%__proto__%', '#def %d% = %constructor%\n%d%', '{plural %__proto__%: a|b}', '[%constructor%|%__proto__%]']) {
+      expect(() => publicRender(template, { seed: 1 })).not.toThrow();
+    }
+  });
+
+  test('a context key __proto__ decoded from JSON is stored like any other key', () => {
+    expect(publicRender('%__proto__%', { context: JSON.parse('{"__proto__":"x"}'), postProcess: false })).toBe('x');
+  });
+
+  test('an included template reads the same maps', () => {
+    const includeResolver = (): string => '%constructor%{?__proto__?t|f}';
+    expect(publicRender('#include "c"', { includeResolver, postProcess: false })).toBe('%constructor%f');
+  });
+
+  test('a definition reached through a global named constructor is rolled first, from a plain-object map too', () => {
+    // `name in defDefs` is true for `constructor` on any plain object, which dropped the global from the alias
+    // graph and rolled `a` before the `b` it depends on: `a` came out as a literal `%b%`.
+    const opts = { rng: rngFromStrategy('first'), locale: '', depth: 0, onPluralError: undefined, budget: { left: 1024 * 1024 } };
+    const rolled = rollDefinitions({ a: '%constructor%', b: '{1|2}' }, buildVars({ constructor: '%b%' }, {}), {}, opts);
+    expect(rolled.a).toBe('1');
+    expect(rolled.b).toBe('1');
+  });
+
+  test('analyze counts a #set of either name', () => {
+    expect(analyze('#set %__proto__% = x\n#set %constructor% = y').constructs.set).toBe(2);
+  });
+});

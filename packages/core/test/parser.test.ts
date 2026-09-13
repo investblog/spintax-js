@@ -221,6 +221,13 @@ describe('parseTemplate — #set global extraction / #include literal', () => {
     expect(parseTemplate('#set %Brand% = Acme').setDefs).toEqual({ brand: 'Acme' });
   });
 
+  test('a prototype name is stored like any other: a plain object dropped `__proto__` and answered for `constructor`', () => {
+    const ast = parseTemplate('#set %__proto__% = x\n#def %Constructor% = y');
+    expect(Object.entries(ast.setDefs)).toEqual([['__proto__', 'x']]);
+    expect(Object.entries(ast.defDefs)).toEqual([['constructor', 'y']]);
+    expect(ast.setDefs['constructor']).toBeUndefined();
+  });
+
   test('#set line stripped; a following reference remains', () => {
     const ast = parseTemplate('#set %g% = hi\n%g%');
     expect(ast.setDefs).toEqual({ g: 'hi' });

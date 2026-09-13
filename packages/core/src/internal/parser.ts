@@ -15,6 +15,7 @@
  * plugin's post-enum `resolve_includes`).
  */
 import { AST_VERSION, type Node, type ParsedAst, type PermConfig } from './ast';
+import { nameMap } from './name-map';
 import { stripSentinels } from './neutralize';
 import { BRACE_OPEN, BRACKET_OPEN } from './pairs';
 import { TextIndex, rereadSpans } from './text-index';
@@ -85,8 +86,8 @@ export function extractDirectives(text: string): {
   defDefs: Record<string, string>;
   occurrences: DirectiveOccurrence[];
 } {
-  const setDefs: Record<string, string> = {};
-  const defDefs: Record<string, string> = {};
+  const setDefs = nameMap();
+  const defDefs = nameMap();
   const occurrences: DirectiveOccurrence[] = [];
 
   // Match offsets ascend (replace scans left to right), so the line number resumes

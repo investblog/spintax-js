@@ -1482,5 +1482,108 @@
     "expect": {
       "output": "a2b"
     }
+  },
+  {
+    "id": "variable/prototype-names-undefined-stay-literal",
+    "note": "NEGATIVE for an engine that keeps variables in a JavaScript object: `constructor` and `__proto__` match \\w+ and are ordinary names, undefined here, so both stay literal — both PHP engines read variables from arrays. @spintax/core 0.7.0 found Object's own members under them: this template threw TypeError out of render(), and %__proto__% rendered as nothing. A reference is lower-cased before the lookup, so %CONSTRUCTOR% reached them too.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a %constructor% b %__proto__% c %CONSTRUCTOR% d",
+    "postProcess": false,
+    "expect": {
+      "output": "a %constructor% b %__proto__% c %CONSTRUCTOR% d"
+    }
+  },
+  {
+    "id": "conditional/prototype-names-are-unset",
+    "note": "`{?…}` on a name nothing defines is falsy whatever the name. 0.7.0 read Object and Object.prototype under these two and took both then-branches, and neither inverted one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?constructor?yes|no} {?__proto__?yes|no} {?!constructor?yes|no} {?!__proto__?yes|no}",
+    "postProcess": false,
+    "expect": {
+      "output": "no no yes yes"
+    }
+  },
+  {
+    "id": "set/prototype-names-are-ordinary-names",
+    "note": "A #set may define either name. Assigning `__proto__` on a JavaScript object changes the prototype instead of storing a value, so 0.7.0 lost that definition and rendered the reference as nothing.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %constructor% = x\n#set %__proto__% = y\n%constructor% %__proto__% {?__proto__?t|f}",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\nx y t"
+    }
+  },
+  {
+    "id": "variable/prototype-names-from-context",
+    "note": "Runtime context keys are names like any other, `__proto__` included — a JSON-decoded context carries it as an ordinary key. 0.7.0 dropped it while merging the context, so the reference rendered empty.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "%constructor%/%__proto__%/{?__proto__?t|f}/{?constructor?t|f}",
+    "context": {
+      "constructor": "v",
+      "__proto__": "w"
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "v/w/t/t"
+    }
+  },
+  {
+    "id": "def/prototype-name-rolled-once",
+    "note": "def/rolled-once-and-held under a prototype name: one draw, held for both references, seq[1] never reached. 0.7.0 lost the rolled value the way it lost a #set, and printed \"-\".",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %__proto__% = {a|b}\n%__proto__%-%__proto__%",
+    "rng": {
+      "sequence": [
+        1,
+        0
+      ]
+    },
+    "postProcess": false,
+    "expect": {
+      "output": "\nb-b"
+    }
+  },
+  {
+    "id": "def/value-naming-undefined-prototype-names",
+    "note": "Definitions are rolled in the order of the names their values reach through macro values. 0.7.0 looked those names up in a plain object, found Object's members under `constructor` and `__proto__`, and threw TypeError reading them as text. Undefined, both stay literal.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %d% = %constructor% and %__proto__%\n%d%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n%constructor% and %__proto__%"
+    }
+  },
+  {
+    "id": "splice/prototype-name-list-in-permutation",
+    "note": "A runtime list under `__proto__` is spliced as text like any direct reference (#78): three elements, shuffled. 0.7.0 dropped the key and read Object.prototype instead, whose text '[object Object]' then parsed as a permutation of its own.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\",\">%__proto__%|b]",
+    "context": {
+      "__proto__": "x|y"
+    },
+    "rng": "first",
+    "postProcess": false,
+    "expect": {
+      "output": "y,b,x"
+    }
+  },
+  {
+    "id": "plural/prototype-name-in-form-stays-literal",
+    "note": "An undefined name in a form slot stays literal and the block resolves. 0.7.0 substituted Object.prototype's '[object Object]', and its brackets sent the block to the fullwidth fallback.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: %__proto__%|items}",
+    "locale": "en",
+    "postProcess": false,
+    "expect": {
+      "output": "%__proto__%"
+    }
   }
 ]
