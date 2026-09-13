@@ -3,7 +3,22 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
-## Unreleased
+## 0.3.3
+
+Bundles `@spintax/core` **0.8.0**, which reads a template the way both PHP engines do in three more
+places, so Render, Render Many and Lint see different text for templates of these shapes — and nothing
+else moves:
+
+- the post-process uses PHP's Unicode classes: `и т.д.` stays `и т.д.` (it printed `и т. Д.`),
+  `пример.рф` and `info@сайт.рф` stay whole, and a no-break space spaces and capitalizes like a space;
+- a `%var%` in a permutation's `<config>` (`minsize=%n%`, `sep=%S%`) and a `{?…}` directly inside
+  `{…}`/`[…]` are text before the split, so a taken branch's `|` separates options;
+- a permutation element that renders empty is dropped, with its separator — a list item gated by a
+  flag no longer leaves `slots, , poker` or a dangling `and`.
+
+`constructor` and `__proto__` are ordinary variable names in the engine now (`%constructor%` threw),
+and Validate reports `plural.arity`, `plural.count-macro` and `plural.nested-brackets` for a `#set` of
+either name. Deep nesting built by macros renders in a fraction of a second where 0.7.0 took up to 40 s.
 
 - **An item field named `__proto__` is a variable like any other.** The render context was built as a
   plain object, where that field name calls the prototype setter and is dropped, so `%__proto__%` never

@@ -3,7 +3,7 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## 0.8.0 — 2026-09-13
 
 Two defects found by the ports while they mirrored 0.7.0, both places where this engine read a
 template differently from the PHP engines — and both measured on those engines before anything
@@ -35,7 +35,7 @@ than its own rule:
 | `[<sep=", ";lastsep=" and ">{?f?live casino}\|slots\|poker]` | `slots, poker and ` | `poker and slots` |
 | `[<sep=", ">slots\|{live casino\|}\|poker]`, the empty option picked | `slots, , poker` | `slots, poker` |
 
-Minor rather than patch when it ships: rendered text changes for every template of these shapes, and
+Minor rather than patch: rendered text changes for every template of these shapes, and
 `AST_VERSION` moves to 4.
 
 ### Fixed
