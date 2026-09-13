@@ -7,7 +7,7 @@
  * This is the COSMETIC stage (gated by `postProcess`). The mandatory neutralize
  * safety-restore (§6) is separate (M2e) and always runs.
  */
-import { UCP_SPACE, UCP_WORD } from './charclass';
+import { isUcpSpace, UCP_SPACE, UCP_WORD } from './charclass';
 
 // Single-token abbreviations (case-insensitive) that would otherwise look like a
 // sentence end. Multi-dot forms (т.д.) are handled by the 5a regex.
@@ -35,8 +35,8 @@ const AFTER_NON_WORD = `(?<![${UCP_WORD}])`;
 /** `\b` in general — a TLD can end in `-`, so the boundary after a domain can go either way. */
 const WORD_BOUNDARY = `(?:(?<=[${UCP_WORD}])(?![${UCP_WORD}])|(?<![${UCP_WORD}])(?=[${UCP_WORD}]))`;
 
-const DOMAIN_PART =
-  '(?:(?:(?:xn--)?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*)\\.)+(?:xn--[a-z0-9\\-]{2,59}|[\\p{L}][\\p{L}\\p{N}-]{1,62})';
+const LABEL = '(?:xn--)?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*';
+const DOMAIN_PART = `(?:${LABEL}\\.)+(?:xn--[a-z0-9\\-]{2,59}|[\\p{L}][\\p{L}\\p{N}-]{1,62})`;
 /**
  * URIs — `https?`/`ftp` (with a `//` authority) and `mailto:`/`tel:` (without one) — shielded
  * in ONE pass, deliberately.
@@ -65,14 +65,82 @@ const URI_RE = new RegExp(`(?:(?:https?|ftp):\\/\\/|(?:mailto|tel):)${URI_BODY}+
 // Which placeholder prefix a match gets. Kept distinct (URL vs URI) even though one pass mints
 // both: the prefixes are what the other engines' fixtures and #52's restore regex speak.
 const MAILTEL_PREFIX_RE = /^(?:mailto|tel):/iu;
-const EMAIL_RE = new RegExp(`[a-z0-9._%+\\-]+@${DOMAIN_PART}${WORD_BOUNDARY}`, 'giu');
-const DOMAIN_RE = new RegExp(`${AFTER_NON_WORD}${DOMAIN_PART}${WORD_BOUNDARY}`, 'giu');
+/**
+ * The email and bare-domain shields are the plugin's patterns — `[a-z0-9._%+\-]+@DOMAIN\b` and
+ * `\bDOMAIN\b` — run by a scanner instead of a global replace, because the replace retried from every
+ * start inside a long run and went quadratic on untrusted text: one 131 000-letter word took 25 s, a
+ * dotted run `a.a.a.…` longer still, and a 336-byte macro template expands to either. The scanner tries
+ * the same regex at the same starts, in the same order, and skips only starts that provably fail.
+ *
+ * Email: every start inside one run of local-part characters reaches the same end — the class holds no
+ * `@` — so the run's first start matches or none does, and a failed run is skipped whole.
+ */
+const EMAIL_LOCAL_START_RE = /[a-z0-9._%+-]/giu;
+const EMAIL_LOCAL_RUN_RE = /[a-z0-9._%+-]*/iuy;
+/**
+ * Domain: an attempt that fails at the start of a chain of labels (`a.b-c.d…`) fails at every later
+ * start in that chain too — prefix the chain's own labels to a match further in and it is a match here.
+ * So a failed attempt skips to where the chain of labels ends. One sticky regex answers both questions:
+ * group 1 is a domain, and when it does not match, the whole match is the chain to skip.
+ */
+const DOMAIN_START_RE = new RegExp(`${AFTER_NON_WORD}[\\p{L}\\p{N}]`, 'giu');
+const DOMAIN_OR_CHAIN_RE = new RegExp(`(${DOMAIN_PART}${WORD_BOUNDARY})|(?:${LABEL}\\.)*${LABEL}`, 'iuy');
+const DOMAIN_AT_RE = new RegExp(`${DOMAIN_PART}${WORD_BOUNDARY}`, 'iuy');
 // PHP's decimal shield is the one pattern here without /u: byte mode, so its `\b` and `\d` are
 // ASCII — as JS's are. Deliberately not widened with the rest.
 const DECIMAL_RE = /\b\d+\.\d+\b/gu;
 const MULTI_ABBR_RE = new RegExp(`${AFTER_NON_WORD}(?:\\p{L}{1,2}\\.${S}*){2,}`, 'gu');
 const SINGLE_ABBR_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${SINGLE_ABBREVS.join('|')})\\.(?=${S}|$|<)`, 'giu');
-const TRAILING_PUNCT_RE = /([.,;:!]+)$/u;
+
+function shieldEmails(text: string, shield: (value: string) => string): string {
+  let out = '';
+  let emitted = 0;
+  let pos = 0;
+  for (;;) {
+    EMAIL_LOCAL_START_RE.lastIndex = pos;
+    const start = EMAIL_LOCAL_START_RE.exec(text);
+    if (start === null) break;
+    EMAIL_LOCAL_RUN_RE.lastIndex = start.index;
+    EMAIL_LOCAL_RUN_RE.exec(text);
+    const at = EMAIL_LOCAL_RUN_RE.lastIndex;
+    if (text.charCodeAt(at) === 0x40) {
+      DOMAIN_AT_RE.lastIndex = at + 1;
+      if (DOMAIN_AT_RE.exec(text) !== null) {
+        out += text.slice(emitted, start.index) + shield(text.slice(start.index, DOMAIN_AT_RE.lastIndex));
+        emitted = pos = DOMAIN_AT_RE.lastIndex;
+        continue;
+      }
+    }
+    pos = at;
+  }
+  return emitted === 0 ? text : out + text.slice(emitted);
+}
+
+function shieldDomains(text: string, shield: (value: string) => string): string {
+  let out = '';
+  let emitted = 0;
+  let pos = 0;
+  for (;;) {
+    DOMAIN_START_RE.lastIndex = pos;
+    const start = DOMAIN_START_RE.exec(text);
+    if (start === null) break;
+    DOMAIN_OR_CHAIN_RE.lastIndex = start.index;
+    const m = DOMAIN_OR_CHAIN_RE.exec(text) as RegExpExecArray; // the chain matches whenever the domain does not
+    if (m[1] !== undefined) {
+      out += text.slice(emitted, start.index) + shield(m[1]);
+      emitted = start.index + m[1].length;
+    }
+    pos = start.index + m[0].length;
+  }
+  return emitted === 0 ? text : out + text.slice(emitted);
+}
+
+/** Where the run of `.,;:!` that ends `value` starts — a loop: `/([.,;:!]+)$/` retried from every dot inside a URL. */
+function trailingPunctuationStart(value: string): number {
+  let cut = value.length;
+  while (cut > 0 && '.,;:!'.includes(value.charAt(cut - 1))) cut -= 1;
+  return cut;
+}
 
 /**
  * SENTENCE OPENERS — the inverted marks that OPEN a Spanish question/exclamation.
@@ -112,27 +180,105 @@ const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
 // intact, so the space goes after the whole run. `(?![.!?])` is what completes the run — a greedy
 // `+` on its own still backtracks INTO it to satisfy the lookaheads, turning "Wow!!!" into
 // "Wow!! !". (JS has no possessive quantifiers, and PHP must match this shape exactly.)
-const SPACE_AFTER_SENTENCE_RE = new RegExp(`([.!?]+)(?![.!?])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
+// And a match starts only where the run starts (`(?<![.!?])`): every start inside a run reaches the
+// same end and the same lookaheads, so a run followed by a digit or a space was otherwise rejected once
+// per mark — 32 000 dots before a digit took 5 s.
+const SPACE_AFTER_SENTENCE_RE = new RegExp(`(?<![.!?])([.!?]+)(?![.!?])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
 // An opener binds to the word it opens: "¿ qué tal ?" → "¿qué tal?". MUST run before the
 // capitalization passes, so they see the real first letter instead of a space.
 const SPACE_AFTER_OPENER_RE = new RegExp(`([${SENTENCE_OPENERS}])${S}+`, 'gu');
 const CAP_FIRST_RE = new RegExp(`^(${LEAD})(\\p{Ll})`, 'u');
-const CAP_AFTER_SENTENCE_RE = new RegExp(`([.!?…])(${LEAD})(\\p{Ll})`, 'gu');
-const CAP_AFTER_BLOCK_RE = new RegExp(
-  `(<\\/?(?:p|h[1-6]|li|blockquote|div|td|th)[^>]*>${LEAD})(\\p{Ll})`,
-  'giu',
-);
-/**
- * A break that follows another break across nothing but whitespace is not a match start
- * (`(?<!\n${S}*?\n)`): the earlier break's attempt reads the same continuation, with no letter in
- * between to end sooner, so it either matches past this one or this one fails too. A run of breaks and
- * spaces with no letter after it was rescanned from every break — 20 000 of `\n` plus a space took 4 s.
- * The lead itself is untouched: leaving bare `\n` out of it instead looked equivalent and is not — a tag
- * holding a newline (`\n<b\nя>\nя`) then let the break INSIDE the tag capitalize.
- */
-const CAP_AFTER_BREAK_RE = new RegExp(`(\\n(?<!\\n${S}*?\\n)${LEAD})(\\p{Ll})`, 'gu');
 
 const up = (ch: string): string => ch.toUpperCase();
+
+/**
+ * The capitalizers after a sentence end, a block tag and a line break — the plugin's
+ * `([.!?…])(LEAD)(\p{Ll})`, `(<\/?(?:p|h[1-6]|li|blockquote|div|td|th)[^>]*>LEAD)(\p{Ll})` (caseless)
+ * and `(\nLEAD)(\p{Ll})` — run by a scanner, because the regexes rescanned the lead from every start:
+ * `.<` repeated with no `>` to close a tag, or `<p>` repeated with no letter after, went quadratic.
+ *
+ * What makes a scanner exact is that the lead has one reading. An opener or a whitespace character is a
+ * token of one character; a tag is `<`, at least one character that is not `>`, then the FIRST `>` —
+ * `[^>]+` cannot cross a `>`, so a tag ends where the next `>` is, and a `<` followed at once by `>`, or
+ * by no `>` at all, is no tag. Every shorter run of tokens ends before a `<`, an opener or a space,
+ * none of which is `\p{Ll}`, so a start matches exactly when the character after its LONGEST lead is a
+ * lowercase letter. Both facts are indexed once per pass, from the right.
+ */
+interface LeadIndex {
+  /** `leadEnd[i]`: where the lead that starts at `i` ends. */
+  readonly leadEnd: Int32Array;
+  /** `nextGt[i]`: the first `>` at or after `i`, or -1. */
+  readonly nextGt: Int32Array;
+}
+
+function indexLeads(text: string): LeadIndex {
+  const n = text.length;
+  const leadEnd = new Int32Array(n + 1);
+  const nextGt = new Int32Array(n + 1);
+  leadEnd[n] = n;
+  nextGt[n] = -1;
+  for (let i = n - 1; i >= 0; i -= 1) {
+    const code = text.charCodeAt(i);
+    nextGt[i] = code === 0x3e ? i : (nextGt[i + 1] as number);
+    let tokenEnd = -1;
+    if (code === 0xbf || code === 0xa1 || isUcpSpace(code)) {
+      tokenEnd = i + 1;
+    } else if (code === 0x3c) {
+      const gt = nextGt[i + 1] as number;
+      if (gt > i + 1) tokenEnd = gt + 1;
+    }
+    leadEnd[i] = tokenEnd === -1 ? i : (leadEnd[tokenEnd] as number);
+  }
+  return { leadEnd, nextGt };
+}
+
+const LOWER_RE = /^\p{Ll}/u;
+/** The block-tag capitalizer is caseless in both engines, and caseless `\p{Ll}` takes every cased letter. */
+const LOWER_CASELESS_RE = /^\p{Ll}/iu;
+const BLOCK_TAG_NAME_RE = /<\/?(?:p|h[1-6]|li|blockquote|div|td|th)/iuy;
+
+/**
+ * Upper-case the `\p{Ll}` at the end of the lead that follows each boundary. `boundaryEnd(text, i, index)`
+ * returns where the lead starts when index `i` begins a boundary (`.`, a block tag, `\n`), or -1. After
+ * a match the scan resumes behind the letter, as a global replace does.
+ */
+function capitalizeAfter(
+  text: string,
+  lower: RegExp,
+  boundaryEnd: (text: string, i: number, index: LeadIndex) => number,
+): string {
+  const index = indexLeads(text);
+  let out = '';
+  let emitted = 0;
+  let changed = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const leadStart = boundaryEnd(text, i, index);
+    if (leadStart === -1) continue;
+    const at = index.leadEnd[leadStart] as number;
+    const cp = text.codePointAt(at);
+    if (cp === undefined) continue;
+    const ch = String.fromCodePoint(cp);
+    if (!lower.test(ch)) continue;
+    out += text.slice(emitted, at) + up(ch);
+    emitted = at + ch.length;
+    changed = true;
+    i = emitted - 1;
+  }
+  return changed ? out + text.slice(emitted) : text;
+}
+
+const afterSentenceEnd = (text: string, i: number): number => {
+  const code = text.charCodeAt(i);
+  return code === 0x2e || code === 0x21 || code === 0x3f || code === 0x2026 ? i + 1 : -1;
+};
+const afterBlockTag = (text: string, i: number, index: LeadIndex): number => {
+  if (text.charCodeAt(i) !== 0x3c) return -1;
+  BLOCK_TAG_NAME_RE.lastIndex = i;
+  if (!BLOCK_TAG_NAME_RE.test(text)) return -1;
+  const gt = index.nextGt[BLOCK_TAG_NAME_RE.lastIndex] as number;
+  return gt === -1 ? -1 : gt + 1;
+};
+const afterLineBreak = (text: string, i: number): number => (text.charCodeAt(i) === 0x0a ? i + 1 : -1);
 
 // The shield's placeholder prefixes, in one place: RESTORE_RE below is built from this
 // list, so a new shield pass cannot mint a key shape the single-pass restore fails to
@@ -199,13 +345,9 @@ export function postProcess(input: string): string {
     return key;
   };
   const storeWithTrailingPunct = (value: string, prefix: ShieldPrefix): string => {
-    const m = TRAILING_PUNCT_RE.exec(value);
-    if (m) {
-      const suffix = m[1] ?? '';
-      const body = value.slice(0, value.length - suffix.length);
-      return body === '' ? suffix : store(body, prefix) + suffix;
-    }
-    return store(value, prefix);
+    const cut = trailingPunctuationStart(value);
+    if (cut === value.length) return store(value, prefix);
+    return cut === 0 ? value : store(value.slice(0, cut), prefix) + value.slice(cut);
   };
 
   let text = input;
@@ -216,8 +358,8 @@ export function postProcess(input: string): string {
   text = text.replace(URI_RE, (m) =>
     storeWithTrailingPunct(m, MAILTEL_PREFIX_RE.test(m) ? 'URI' : 'URL'),
   );
-  text = text.replace(EMAIL_RE, (m) => store(m, 'EMAIL'));
-  text = text.replace(DOMAIN_RE, (m) => store(m, 'DOM'));
+  text = shieldEmails(text, (m) => store(m, 'EMAIL'));
+  text = shieldDomains(text, (m) => store(m, 'DOM'));
   text = text.replace(DECIMAL_RE, (m) => store(m, 'NUM'));
   text = text.replace(MULTI_ABBR_RE, (m) => store(m, 'ABBR'));
   text = text.replace(SINGLE_ABBR_RE, (m) => store(m, 'ABBR'));
@@ -236,11 +378,11 @@ export function postProcess(input: string): string {
   // 8: capitalize the first letter (skipping leading HTML tags and sentence openers).
   text = text.replace(CAP_FIRST_RE, (_m, lead: string, ch: string) => lead + up(ch));
   // 9: capitalize after sentence punctuation (through HTML tags).
-  text = text.replace(CAP_AFTER_SENTENCE_RE, (_m, p: string, gap: string, ch: string) => p + gap + up(ch));
+  text = capitalizeAfter(text, LOWER_RE, afterSentenceEnd);
   // 10: capitalize after block-level HTML tags.
-  text = text.replace(CAP_AFTER_BLOCK_RE, (_m, tag: string, ch: string) => tag + up(ch));
+  text = capitalizeAfter(text, LOWER_CASELESS_RE, afterBlockTag);
   // 11: capitalize after line breaks.
-  text = text.replace(CAP_AFTER_BREAK_RE, (_m, br: string, ch: string) => br + up(ch));
+  text = capitalizeAfter(text, LOWER_RE, afterLineBreak);
 
   // 12: restore placeholders, then trim.
   return restore(text, input, placeholders).trim();

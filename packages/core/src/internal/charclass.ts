@@ -20,6 +20,24 @@
 export const UCP_SPACE =
   '\\t\\n\\x0B\\f\\r \\x85\\xA0\\u1680\\u180E\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000';
 
+/** The same set as {@link UCP_SPACE}, for a scanner that reads char codes instead of running a regex. */
+export function isUcpSpace(code: number): boolean {
+  return (
+    (code >= 0x09 && code <= 0x0d) ||
+    code === 0x20 ||
+    code === 0x85 ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    code === 0x180e ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000
+  );
+}
+
 /**
  * PCRE2 UCP `\w` — letters, numbers, non-spacing marks and connector punctuation, `_` among them.
  * PCRE2 before 10.43 leaves out the marks and every connector but `_`, so a PHP host on an older

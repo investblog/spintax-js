@@ -61,6 +61,42 @@ describe('postProcess — shielding', () => {
   });
 });
 
+// Each shape below took seconds to minutes when the pass was a global regex replace retried from every
+// start inside a long run, and each is a few hundred bytes of macros away from any renderer of untrusted
+// templates. The scanners that replaced those passes are proven output-identical to the regexes by an
+// exhaustive differential; these only pin that they stay linear. The bound is loose on purpose.
+describe('postProcess — no pass rescans a long run from every start', () => {
+  const N = 400_000;
+  const within = (fn: () => void): void => {
+    const started = Date.now();
+    fn();
+    expect(Date.now() - started).toBeLessThan(2_000);
+  };
+
+  test('the email and domain shields: a long word, dotted chains in any script, a hyphen run', () => {
+    within(() => postProcess('a'.repeat(N)));
+    within(() => postProcess(`x ${'a.'.repeat(N / 2)}`));
+    within(() => postProcess(`x ${'а.'.repeat(N / 2)}`));
+    within(() => postProcess(`x ${'1.'.repeat(N / 2)}`));
+    within(() => postProcess('a-'.repeat(N / 2)));
+  });
+
+  test('a URL whose body is a run of trailing-punctuation characters', () => {
+    within(() => postProcess(`see https://x${'.'.repeat(N)}a`));
+  });
+
+  test('a run of sentence marks followed by a digit or a space', () => {
+    within(() => postProcess(`x${'.'.repeat(N)}1`));
+    within(() => postProcess(`x${'?!'.repeat(N / 2)} y`));
+  });
+
+  test('capitalization across unclosed tags and runs of block tags', () => {
+    within(() => postProcess('.<'.repeat(N / 2)));
+    within(() => postProcess(`${'<p>'.repeat(N / 3)}1`));
+    within(() => postProcess('\n<'.repeat(N / 2)));
+  });
+});
+
 // Every pattern of the cosmetic stage carries /u in PHP — the decimal shield alone does not — and /u
 // is PCRE2_UCP. The expectations are the PHP engines' output (docker, both engines), not this one's.
 describe('postProcess — character classes are PHP’s /u classes (UCP)', () => {

@@ -441,6 +441,17 @@ describe('render — the re-read covers a whole <config> and every conditional i
     expect(render('[{ a |b}|c]', 'first')).toBe('c a');
   });
 
+  test('a few hundred bytes of macros cannot buy a quadratic post-process', () => {
+    // 336 bytes doubling one letter took 25 s to post-process; the dotted and tag-shaped units longer.
+    for (const unit of ['a', 'a.', '.<', '<p>']) {
+      let template = `#set %l0% = ${unit.repeat(8)}\n`;
+      for (let i = 1; i <= 16; i += 1) template += `#set %l${i}% = %l${i - 1}%%l${i - 1}%\n`;
+      const started = Date.now();
+      publicRender(`${template}x %l16%1`, { seed: 1 });
+      expect(Date.now() - started).toBeLessThan(3_000);
+    }
+  });
+
   test('a padded element is trimmed in linear time — whitespace from a value is not seconds (review)', () => {
     // Trimming every assembled element with an end-anchored regex went quadratic on a long run inside
     // the text: 51 000 spaces took 3 s, and the expansion budget allows a megabyte.

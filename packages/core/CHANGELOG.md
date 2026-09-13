@@ -135,12 +135,33 @@ emit it. No engine output changed for either.
 runs a Unicode-class lookbehind more slowly than its ASCII `\b`. On the scaling bench's 756 KB,
 106–118 → 139–145 ms (per pattern, `MULTI_ABBR_RE` 14 → 37 ms and `DOMAIN_RE` 56 → 71 ms).
 
-**What is still super-linear, and was in 0.7.0.** Measured, not fixed here, on 8 KB to 60 KB of
-adversarial text: the bare-domain shield on a long dotted run of one-character labels (`a.a.a.…`, 8 KB:
-~0.16 s in 0.7.0 and now, 0.14 s in PHP) — and, new with the classes, the same run in any other script
-reaches it, where 0.7.0 never shielded one (`а.а.а.…`, 8 KB: 0.02 → 0.9 s, where PHP still takes 0.14 s); capitalization after a long run of block tags with no letter after it (`<p>` × 20 000: 1.4 s);
-and a lead holding an unclosed `<` repeated (`\n<` × 20 000: 0.7 s). Each needs its own linear rewrite
-of a parity-gated pattern and gets one on its own, with a differential of its own.
+**The post-process is linear — and was a live denial of service in every release before this.** Eight
+of its passes were global regex replaces that a long run made retry from every start inside it: the
+email shield (one long word), the bare-domain shield (a dotted chain in any script), the
+trailing-punctuation cut of a URL, the space after a run of sentence marks, and the three capitalizers
+after a sentence end, a block tag and a line break (an unclosed `<`, a run of `<p>`). None of those
+runs needs a long template: 336 bytes of `#set` doubling one letter expand to 131 000 characters, whose
+post-process took 25 s, and the dotted, mark and tag units ran longer — so any host rendering untrusted
+templates with post-process on, the reference Worker and the hosted MCP server among them, could be held
+for as long as its CPU limit allowed. The expansion budget bounded the size of that text, never the time
+to post-process it.
+
+The shields and the capitalizers are scanners now. They run the plugin's own patterns at the same starts,
+in the same order, and skip only starts that provably fail: every start inside one run of email-local
+characters meets the same `@` or none; an attempt that fails at the start of a chain of labels fails at
+every later start in that chain, because the chain's own labels prefix any match further in; and a lead
+has exactly one tokenization — a tag ends at the first `>` — so where each lead ends is indexed once, from
+the right. The URL cut is a loop, and the sentence-mark space starts a match only where its run starts.
+Output is byte-identical: 7.9 million strings against the regex implementation — exhaustive over small
+alphabets aimed at each pass, plus random soup — with every real control mutation caught, and the 20 000-input
+post-process differential against both PHP engines unchanged at zero. Those macro templates now render
+half a megabyte to a megabyte in 0.1–0.2 s, and the scaling bench is no slower on prose.
+
+**What is still super-linear, and was in 0.7.0: the template-level scans.** Reading a template, not
+post-processing a render: `[<` repeated (render 1.9 s at 32 KB, validate 0.35 s), `[<li>` repeated
+(0.8 s), `[<sep="` repeated (0.8 s), an unclosed `{?a?` repeated (render 1.1 s), `{plural 1:` repeated
+(render 0.4 s, validate 0.26 s). The hosted surfaces cap a source at 8 KB, where these cost a tenth of
+that; they are next, in their own change.
 
 **Two PHP builds differ at the margin.** PCRE2 10.43 made non-spacing marks and connector punctuation
 word characters, so PHP 8.3 sees a boundary between `x` and U+0301 that PHP 8.4 does not. The corpus
