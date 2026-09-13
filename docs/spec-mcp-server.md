@@ -208,7 +208,10 @@ Three decisions worth keeping:
   The envelope, measured on the live deployment (2026-08-19) with the 8192-character template cap
   in place: the heaviest *legitimate* batch — 8 KB of spinnable prose, `count: 100` — returns
   **703 KB in 0.74–0.92 s**, and the deepest nesting the cap allows, 4 000 levels, renders in
-  **0.98 s**. Everything reachable answers in about a second. 2 MB is roughly a second of answer
+  **0.98 s**. Everything reachable answers in about a second. (Re-measured on the Worker after
+  `@spintax/core` 0.8.0, 2026-09-13: a 100-variant batch of 8 KB prose 418 KB in 0.14–0.31 s, 4 000
+  levels in 0.10–0.12 s, and 705 bytes of macros spelling 32 768 levels — 40 s on 0.7.0 — in
+  0.24–0.28 s, network included. Faster everywhere; the caps did not need to move.) 2 MB is roughly a second of answer
   and about three times the heaviest real batch, so it can only ever catch expansion — the one
   shape where bytes and time come apart, where 62 characters become megabytes.
 

@@ -35,8 +35,8 @@ const MAX_BATCH = 100;
  * Input cap — a HOST policy, not an engine one (§9.3: small core, rich Worker).
  *
  * The engine is lenient by contract and will happily chew on a megabyte of
- * pathological markup; nesting costs the same super-linear time in every engine of
- * the family, and `/render-batch` multiplies it by up to MAX_BATCH. The hosted MCP
+ * pathological markup, and `/render-batch` multiplies whatever one render costs by up
+ * to MAX_BATCH. The hosted MCP
  * server has capped templates at this size from the start — this is the same number,
  * so the two public doors answer alike.
  *
@@ -62,6 +62,12 @@ const MAX_INCLUDE_RESOLUTIONS = 200;
  *   `count: 100` — returns **703 KB in 0.74–0.92 s**;
  * - the deepest nesting the source cap allows, 4 000 levels, renders in **0.98 s**;
  * - so with MAX_TEMPLATE_CHARS in place, everything reachable answers in about a second.
+ *
+ * Re-measured on @spintax/core 0.8.0 (2026-09-13), which reads nesting as spans of one indexed
+ * text instead of rescanning it at every level: a 100-variant batch of 8 KB prose returns 418 KB
+ * in 0.14–0.31 s, 4 000 levels render in 0.10–0.12 s, and 705 bytes of macros that spell 32 768
+ * levels — 40 s on 0.7.0 — in 0.24–0.28 s, network included. Neither cap moved: both still sit
+ * above every legitimate answer, and this one still exists for expansion.
  *
  * This cap exists for the one shape where bytes and time come apart: expansion. A
  * 62-character template can become megabytes (spintax-js#69), and `/render-batch` multiplies
