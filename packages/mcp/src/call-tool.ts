@@ -197,7 +197,8 @@ export function callTool(
               message: '"context" must be an object mapping variable names to strings.',
             };
           }
-          context = {};
+          // No prototype, so a `__proto__` key reaches the engine like any other name.
+          context = Object.create(null) as Record<string, string>;
           for (const [k, v] of Object.entries(args.context as Record<string, unknown>)) {
             context[k] = String(v);
           }

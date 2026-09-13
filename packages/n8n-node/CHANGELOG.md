@@ -3,6 +3,13 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## Unreleased
+
+- **An item field named `__proto__` is a variable like any other.** The render context was built as a
+  plain object, where that field name calls the prototype setter and is dropped, so `%__proto__%` never
+  resolved. The context has no prototype now. Found by the Codex gate beside the engine's own
+  prototype-name fix.
+
 ## 0.3.2
 
 Bundles `@spintax/core` **0.7.0**: a `%variable%` written directly inside `{…}` or `[…]` is spliced

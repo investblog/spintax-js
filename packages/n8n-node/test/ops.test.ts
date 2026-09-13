@@ -18,6 +18,12 @@ describe('buildContext', () => {
     expect(ctx).toEqual({ name: 'Ada', age: '36', vip: 'true' });
   });
 
+  it('keeps an item field named __proto__ as a variable — a plain object swallowed it', () => {
+    const ctx = buildContext({ itemJson: JSON.parse('{"__proto__":"x","constructor":"y"}'), neutralizeIncoming: false });
+    expect(Object.entries(ctx)).toEqual([['__proto__', 'x'], ['constructor', 'y']]);
+    expect(renderOp('%__proto__%/%constructor%', { context: ctx, seed: 1, postProcess: false })).toBe('x/y');
+  });
+
   it('shields incoming (T2) values by default — markup stays data', () => {
     const ctx = buildContext({ itemJson: { v: '{x|y}' } });
     expect(renderOp('%v%', { context: ctx, seed: 1, postProcess: false })).toBe('{x|y}');

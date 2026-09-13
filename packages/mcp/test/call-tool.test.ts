@@ -94,6 +94,17 @@ describe('render_spintax', () => {
     expect(out.structured.variants).toEqual(['Prague 7']);
   });
 
+  it('passes a context key named __proto__ through like any other name', () => {
+    // Copied into a plain object, the key hit the prototype setter and never reached the engine.
+    const out = ok('render_spintax', {
+      template: '%__proto__%/%constructor%',
+      context: JSON.parse('{"__proto__":"x","constructor":"y"}'),
+      count: 1,
+      seed: 1,
+    });
+    expect(out.structured.variants).toEqual(['X/y']);
+  });
+
   it('refuses a context that is not an object', () => {
     for (const context of ['x', 7, ['a'], true]) {
       expect(callTool('render_spintax', { template: 'a', context }, CAPPED)).toEqual({

@@ -285,6 +285,17 @@ describe('/draft speaks the canonical prompt, not its own dialect', () => {
     expect(text).not.toMatch(/\d\. You have %n% {2}waiting\./u); // the noun did not disappear
   });
 
+  test('a variable named after an Object member is outside the demo set too', async () => {
+    // `r in DRAFT_CONTEXT` is true for `constructor` on any object: the draft got a #def of Object's source.
+    aiRun.mockResolvedValueOnce({ response: 'Hi %name%, your %constructor% is ready.' });
+    await bot.fetch(update('/draft a plan upgrade'), ENV);
+
+    const text: string = sent[0].text;
+    expect(text).not.toContain('#def %constructor%');
+    expect(text).toContain('outside the demo set');
+    expect(text).toMatch(/\d\. Hi Ada, your %constructor% is ready\./u);
+  });
+
   test('a variable outside the demo set is reported, not silently left raw', async () => {
     aiRun.mockResolvedValueOnce({ response: 'Hi %name%, your %plan% plan is ready.' });
     await bot.fetch(update('/draft a plan upgrade'), ENV);

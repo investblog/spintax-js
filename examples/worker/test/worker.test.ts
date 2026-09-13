@@ -60,6 +60,16 @@ describe('worker — routing & guards', () => {
     expect(res.status).toBe(200);
     expect((await bodyOf(res)).output).toBe('Hello');
   });
+  test('an include ref or a context key named after an Object member is an ordinary name', async () => {
+    // Plain-object maps answered for `constructor` — a function, handed to the engine as an include
+    // body, so the render threw and this answered HTTP 500 — and swallowed a JSON `__proto__` key.
+    const unknown = await post('/preview-render', { template: '#include "constructor"', includes: {} });
+    expect(unknown.status).toBe(200);
+    expect((await bodyOf(unknown)).output).toBe('');
+    const context = await post('/preview-render', JSON.parse('{"template":"%__proto__%","context":{"__proto__":"x"}}'));
+    expect(context.status).toBe(200);
+    expect((await bodyOf(context)).output).toBe('X');
+  });
   test('an include DAG that fans out is bounded, and stays lenient', async () => {
     // Under a kilobyte of unique source, ~2^20 child renders: each body references the
     // next one twice. Acyclic, so the engine's cycle guard never fires, and maxDepth

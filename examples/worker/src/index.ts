@@ -86,9 +86,13 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
 const strArray = (v: unknown): string[] | undefined =>
   Array.isArray(v) && v.every((x) => typeof x === 'string') ? (v as string[]) : undefined;
 
+/**
+ * Keys are caller data, so the map has no prototype: `__proto__` is stored like any key instead of
+ * being swallowed by the setter, and a name such as `constructor` does not find Object's members.
+ */
 function strRecord(v: unknown): Record<string, string> | undefined {
   if (typeof v !== 'object' || v === null) return undefined;
-  const out: Record<string, string> = {};
+  const out = Object.create(null) as Record<string, string>;
   for (const [k, val] of Object.entries(v)) if (typeof val === 'string') out[k] = val;
   return out;
 }
@@ -108,7 +112,7 @@ function validateOpts(body: Body): ValidateOptions {
 function shieldContext(body: Body): Record<string, string> | undefined {
   const ctx = strRecord(body.context);
   if (!ctx) return undefined;
-  const shielded: Record<string, string> = {};
+  const shielded = Object.create(null) as Record<string, string>;
   for (const [k, v] of Object.entries(ctx)) shielded[k] = neutralize(v);
   return shielded;
 }
@@ -131,7 +135,9 @@ function includeResolver(body: Body): ((ref: string) => string | null) | undefin
   return (ref) => {
     if (budget <= 0) return null;
     budget -= 1;
-    return ref in map ? (map[ref] ?? null) : null;
+    // An own key only: `#include "constructor"` over a plain object handed Object's constructor to
+    // the engine as a body, and the render threw — HTTP 500 (found by the Codex gate).
+    return Object.hasOwn(map, ref) ? (map[ref] ?? null) : null;
   };
 }
 

@@ -183,7 +183,8 @@ function runtimeRefs(src: string): string[] {
  * set" warning instead.
  */
 function inlineDraftDefs(template: string): string {
-  const demo = runtimeRefs(template).filter((r) => r in DRAFT_CONTEXT);
+  // An own key only: `in` also finds `constructor` on any object, which inlined Object's source as a #def.
+  const demo = runtimeRefs(template).filter((r) => Object.hasOwn(DRAFT_CONTEXT, r));
   if (demo.length === 0) return template;
   const defs = demo.map((v) => `#def %${v}% = ${DRAFT_CONTEXT[v]}`).join('\n');
   return `${defs}\n${template}`;
@@ -419,7 +420,7 @@ function draftReply(template: string, startSeed: number): { text: string; nextSe
   // New drafts define their demo variables inline (see `inlineDraftDefs`), so there is nothing to
   // explain. A demo-data ref can still reach here through the reroll button on a message sent
   // BEFORE the defs were inlined — only then is the note both true and needed.
-  const demoFilled = runtimeRefs(template).filter((r) => r in DRAFT_CONTEXT);
+  const demoFilled = runtimeRefs(template).filter((r) => Object.hasOwn(DRAFT_CONTEXT, r));
   if (demoFilled.length > 0) {
     reply += `\n\nℹ️ Rendered with demo data: ${demoFilled.map((v) => `%${v}%=${DRAFT_CONTEXT[v] ?? ''}`).join(', ')}`;
   }

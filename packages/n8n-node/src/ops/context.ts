@@ -28,7 +28,8 @@ export interface BuildContextOptions {
  * are skipped — mapping those is the workflow's job, not a guess of ours.
  */
 export function buildContext(opts: BuildContextOptions): Record<string, string> {
-  const context: Record<string, string> = {};
+  // No prototype: an item field named `__proto__` is a variable like any other, not a setter call.
+  const context = Object.create(null) as Record<string, string>;
 
   if (!opts.ignoreIncoming && opts.itemJson) {
     const shield = opts.neutralizeIncoming !== false;

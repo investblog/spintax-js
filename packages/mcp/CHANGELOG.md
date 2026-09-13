@@ -3,6 +3,13 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- **A context key named `__proto__` reaches the engine.** `render_spintax` and `render_variants` copied
+  `context` into a plain object, where that key calls the prototype setter and is gone, so
+  `%__proto__%` stayed unresolved while `@spintax/core` itself would have filled it. The copy has no
+  prototype now. Found by the Codex gate beside the engine's own prototype-name fix.
+
 ## 0.3.1 — 2026-09-12
 
 Depends on `@spintax/core` **^0.7.0**: a `%variable%` written directly inside `{…}` or `[…]` is
