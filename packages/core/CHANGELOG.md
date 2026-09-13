@@ -223,10 +223,10 @@ strategies, with and without post-process), `validate`, `analyze`, `extract` and
 exhaustive over alphabets aimed at each rewritten scan, plus random soup — with all twelve control
 mutations caught first.
 
-**Deep nesting is linear too — and the re-read had made it a live denial of service.** #68 kept nesting
-super-linear on the ground that depth costs source: at the hosted 8 KB cap, 4 000 levels answered in about
-a second. 0.7.0's re-read took that ground away, because a construct re-read as text hands the parser
-whatever its macros spell (found by the Codex gate):
+**Deep nesting no longer costs its depth again at every level — and the re-read had made that a live denial
+of service.** #68 kept nesting super-linear on the ground that depth costs source: at the hosted 8 KB cap,
+4 000 levels answered in about a second. 0.7.0's re-read took that ground away, because a construct re-read
+as text hands the parser whatever its macros spell (found by the Codex gate):
 
 | input (Node 22, the two measured side by side) | 0.7.0 | now |
 |---|---|---|
@@ -247,7 +247,10 @@ Four costs were paid once per level, and each is gone:
   top-level pipes grouped by the brace and bracket totals in front of them, since `split_top_level`'s two
   signed counters split exactly where both totals equal the ones at the span's start; a conditional's pipe
   by jumping each opener to where one stack of both bracket kinds closes it, which is what the clamped
-  counter counts; the quote parity of every `>`; every closing tag by name; every `<` and `>`.
+  counter counts; the quote parity of every `>`; every closing tag by name; every `<` and `>`. Most of those
+  answers are a binary search in a sorted list of positions, so a template of n characters parses in
+  O(n log n) at worst rather than O(n) — the logarithm shows on many small siblings: 200 000 `{a|b}` parse in
+  150 ms against 0.7.0's 137, 100 000 `[<sep=",">a|b]` in 208 against 161 (found by the Codex gate).
 - **The walk joined each frame's output into a new string**, copying a construct's text once for every
   level above it. Frames hand fragments up instead — joins, and windows for a trimmed permutation element,
   every join knowing how many PHP trim characters sit at its ends — and the text is made once.

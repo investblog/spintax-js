@@ -731,7 +731,9 @@ function spliceConstruct(
  */
 function rereadCouldChange({ index, start, end }: RereadSpan, opts: RenderInternalOptions): boolean {
   if (index.hasConditionalWithin(start, end)) return true;
-  return opts.budget.left > 0 && index.hasDefinedReferenceWithin(start, end, opts.vars);
+  // The expansion's own test, negated as written: a budget that is not a number (a prototype name such as
+  // `%__proto__%` subtracts an undefined length) fails `<= 0` and still expands (found by the Codex gate).
+  return !(opts.budget.left <= 0) && index.hasDefinedReferenceWithin(start, end, opts.vars);
 }
 
 interface Element {

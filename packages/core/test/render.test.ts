@@ -337,8 +337,8 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
 // cost is gone now — the parser reads spans of one indexed text, the walk hands fragments up instead of
 // copying each level's output, a marked construct asks the index before re-reading, and a variable's
 // truthiness is tested once per map. Output identity is proven by a differential kept outside the repo;
-// these pin that depth stays linear. The bounds are loose on purpose.
-describe('render — deep nesting is linear, however it is reached', () => {
+// these pin that depth is not paid for again at every level. The bounds are loose on purpose.
+describe('render — depth is not paid for again at every level, however it is reached', () => {
   const within = (fn: () => void): void => {
     const started = Date.now();
     fn();
@@ -350,7 +350,7 @@ describe('render — deep nesting is linear, however it is reached', () => {
     return out;
   };
 
-  test('705 bytes of macros spliced into a construct: 32 768 levels, 31 s until this change', () => {
+  test('705 bytes of macros spliced into a construct: 32 768 levels, 31–40 s until this change', () => {
     const template = `${doubling('o', '{', 15)}${doubling('c', '}', 15)}{%o15%x%c15%|y}`;
     within(() => expect(['X', 'Y']).toContain(publicRender(template, { seed: 1 })));
   });
@@ -365,6 +365,15 @@ describe('render — deep nesting is linear, however it is reached', () => {
   test('levels marked for the re-read that it cannot change are not re-read', () => {
     // An undefined reference marks every level; the index says the splice would change nothing.
     within(() => publicRender('{a%u%'.repeat(50_000) + 'x' + '}'.repeat(50_000), { postProcess: false }));
+  });
+
+  test('a re-read is skipped only where the expansion would skip it — a budget made NaN still expands', () => {
+    // `%__proto__%` resolves through Object.prototype and charges an undefined length, so the budget is
+    // NaN; `left <= 0` is false and the expansion runs, so the check must not read the budget as spent
+    // (Codex gate). The prototype lookup is a defect of its own; this pins only that the splice happens.
+    const out = publicRender('%__proto__%{%x%}', { context: { x: 'a|b' }, seed: 1, postProcess: false });
+    expect(out).not.toContain('|');
+    expect(['a', 'b']).toContain(out.slice(-1));
   });
 
   test('a nest spelled by a #def roll, and conditionals over a megabyte-long whitespace value', () => {

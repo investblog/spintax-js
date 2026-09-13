@@ -5,8 +5,10 @@
  * closer, to split on top-level pipes, to find a conditional's pipe, a config's end, a closing tag, a
  * trailing separator. Each of those reads the whole subtree again at every level of nesting, and the
  * re-read of a construct lets a few hundred bytes of macros spell tens of thousands of levels — 705 bytes
- * made 32 768 and took 31 s. Here each question is answered from a table built in one pass over the
+ * made 32 768 and took 31–40 s. Here each question is answered from a table built in one pass over the
  * text, for a span of it, and a construct's children are spans of the same text rather than copies.
+ * Most answers are a binary search in a sorted list of positions, so a construct costs its own markup
+ * plus a logarithm, and a text of n characters parses in O(n log n) at worst.
  *
  * Every table is built on first use, so a text that never asks a question pays nothing for it.
  */

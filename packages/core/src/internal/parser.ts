@@ -148,9 +148,10 @@ export function stripComments(text: string): string {
  * A construct's children are SPANS of the one text, read against one {@link TextIndex}, never copies
  * of it: every step that decides what a construct is — its closer, its top-level pipes, a conditional's
  * pipe, a config's end, a closing tag, a trailing separator — asks the index about the span, and costs
- * what the construct itself holds. Scanning each construct's content instead read the whole subtree at
- * every level, and the re-read lets a few hundred bytes of macros spell tens of thousands of levels:
- * 705 bytes, 32 768 levels, 31 s (#68 had kept that cost when depth still cost source).
+ * what the construct itself holds, plus a binary search. Scanning each construct's content instead read
+ * the whole subtree at every level, and the re-read lets a few hundred bytes of macros spell tens of
+ * thousands of levels: 705 bytes, 32 768 levels, 31–40 s (#68 had kept that cost when depth still cost
+ * source).
  */
 export function parseSequence(text: string): Node[] {
   const index = new TextIndex(text);
