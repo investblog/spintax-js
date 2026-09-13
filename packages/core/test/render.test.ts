@@ -288,7 +288,6 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
     expect(publicRender(deep, { locale: 'en', seed: 1 })).toBe('X');
     expect(analyze(deep).constructs.enumeration).toBe(3000);
   });
-
   test('an expansion bomb renders instead of ending the process (#69)', () => {
     // 62 characters. Each pass replaces one reference with two, so depth 50 is 2^50 —
     // an out-of-memory abort here, a memory fatal in the PHP engines, HTTP 503 on the
@@ -330,6 +329,50 @@ describe('plural count slot: conditionals (spintax-js#67)', () => {
     const started = Date.now();
     expect(publicRender(unbalanced, { locale: 'en' })).toContain('｛plural');
     expect(Date.now() - started).toBeLessThan(10_000);
+  });
+});
+
+// #68 kept deep nesting super-linear because depth cost source. The 0.7.0 re-read took that away: macros
+// spliced into a construct spell tens of thousands of levels from a few hundred bytes. Every per-level
+// cost is gone now — the parser reads spans of one indexed text, the walk hands fragments up instead of
+// copying each level's output, a marked construct asks the index before re-reading, and a variable's
+// truthiness is tested once per map. Output identity is proven by a differential kept outside the repo;
+// these pin that depth stays linear. The bounds are loose on purpose.
+describe('render — deep nesting is linear, however it is reached', () => {
+  const within = (fn: () => void): void => {
+    const started = Date.now();
+    fn();
+    expect(Date.now() - started).toBeLessThan(3_000);
+  };
+  const doubling = (name: string, unit: string, levels: number): string => {
+    let out = `#set %${name}0% = ${unit}\n`;
+    for (let i = 1; i <= levels; i += 1) out += `#set %${name}${i}% = %${name}${i - 1}%%${name}${i - 1}%\n`;
+    return out;
+  };
+
+  test('705 bytes of macros spliced into a construct: 32 768 levels, 31 s until this change', () => {
+    const template = `${doubling('o', '{', 15)}${doubling('c', '}', 15)}{%o15%x%c15%|y}`;
+    within(() => expect(['X', 'Y']).toContain(publicRender(template, { seed: 1 })));
+  });
+
+  test('a tree whose every level adds text is not copied once per level', () => {
+    const n = 100_000;
+    within(() => expect(publicRender('{a'.repeat(n) + 'x' + 'b}'.repeat(n), { postProcess: false })).toHaveLength(2 * n + 1));
+    within(() => expect(publicRender('[a'.repeat(n) + 'x' + 'b]'.repeat(n), { postProcess: false })).toHaveLength(2 * n + 1));
+    within(() => publicRender('[ a |'.repeat(n) + 'x' + ']'.repeat(n), { seed: 1, postProcess: false }));
+  });
+
+  test('levels marked for the re-read that it cannot change are not re-read', () => {
+    // An undefined reference marks every level; the index says the splice would change nothing.
+    within(() => publicRender('{a%u%'.repeat(50_000) + 'x' + '}'.repeat(50_000), { postProcess: false }));
+  });
+
+  test('a nest spelled by a #def roll, and conditionals over a megabyte-long whitespace value', () => {
+    const def = `${doubling('o', '{', 15)}${doubling('c', '}', 15)}#def %d% = %o15%x%c15%\n%d%`;
+    within(() => expect(publicRender(def, { postProcess: false })).toContain('x'));
+    // 2^17 form feeds, all whitespace to PHP's \s: every nested conditional used to scan them again.
+    const blank = `${doubling('w', '\f', 17)}#def %s% = %w17%\n${'{?s?a|'.repeat(20_000)}x${'}'.repeat(20_000)}`;
+    within(() => publicRender(blank, { postProcess: false }));
   });
 });
 

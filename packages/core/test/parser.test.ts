@@ -385,9 +385,32 @@ describe('splitTopLevel', () => {
 describe('parser — depth (#68)', () => {
   // The parser used to recurse once per level and threw `RangeError` at about 2000 —
   // a 3.9 KB template — while §9.2 promises the engine never throws on content. The
-  // walk is a frame stack now. 3000 is chosen to sit past the old wall and still cost
-  // under a second; 50 000 returns too, in minutes rather than never.
+  // walk is a frame stack now, and since every construct is read as a span of one indexed
+  // text, depth costs what the markup does: the per-level scans made 32 768 levels 31 s.
   const nested = (n: number): string => '{'.repeat(n) + 'x' + '}'.repeat(n);
+
+  test('100 000 levels of every construct kind parse in linear time', () => {
+    // Each shape leans on a step that used to read the whole subtree once per level: the closer,
+    // the top-level split, a conditional's pipe, a config's end, a closing tag, a trailing separator,
+    // the plural prefix's colon. The bound is loose on purpose; the old parser took minutes.
+    const n = 100_000;
+    const shapes: [string, string, string][] = [
+      ['{', 'x', '}'],
+      ['{a|', 'x', '}'],
+      ['[a|', 'x', ']'],
+      ['{?f?a|', 'x', '}'],
+      ['[<sep=", ">a|', 'x', ']'],
+      ['[<li>a|', 'x', ']'],
+      ['[a <,>|', 'x', ']'],
+      ['{plural ', 'x', '}'],
+      ['{a%u%|', 'x', '}'],
+    ];
+    for (const [open, mid, close] of shapes) {
+      const started = Date.now();
+      parseTemplate(open.repeat(n) + mid + close.repeat(n));
+      expect(Date.now() - started, open).toBeLessThan(3_000);
+    }
+  });
 
   test('3000 levels parse instead of throwing', () => {
     const ast = parseTemplate(nested(3000));

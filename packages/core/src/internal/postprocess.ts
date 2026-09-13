@@ -73,64 +73,75 @@ const MAILTEL_PREFIX_RE = /^(?:mailto|tel):/iu;
  * the same regex at the same starts, in the same order, and skips only starts that provably fail.
  *
  * Email: every start inside one run of local-part characters reaches the same end — the class holds no
- * `@` — so the run's first start matches or none does, and a failed run is skipped whole.
+ * `@` — so the run's first start matches or none does, and a failed run is skipped whole. That makes the
+ * `@` the thing to look for: the only run that can match is the one ending at it.
  */
-const EMAIL_LOCAL_START_RE = /[a-z0-9._%+-]/giu;
-const EMAIL_LOCAL_RUN_RE = /[a-z0-9._%+-]*/iuy;
+const DOMAIN_AT_RE = new RegExp(`${DOMAIN_PART}${WORD_BOUNDARY}`, 'iuy');
 /**
  * Domain: an attempt that fails at the start of a chain of labels (`a.b-c.d…`) fails at every later
  * start in that chain too — prefix the chain's own labels to a match further in and it is a match here.
- * So a failed attempt skips to where the chain of labels ends. One sticky regex answers both questions:
- * group 1 is a domain, and when it does not match, the whole match is the chain to skip.
+ * So a failed attempt skips to where the chain of labels ends. One global regex does all of it: it
+ * matches at exactly the starts the shield tries (a word character not preceded by one — every label
+ * begins with one), group 1 is a domain, and when there is none the whole match is the chain to skip.
  */
-const DOMAIN_START_RE = new RegExp(`${AFTER_NON_WORD}[\\p{L}\\p{N}]`, 'giu');
-const DOMAIN_OR_CHAIN_RE = new RegExp(`(${DOMAIN_PART}${WORD_BOUNDARY})|(?:${LABEL}\\.)*${LABEL}`, 'iuy');
-const DOMAIN_AT_RE = new RegExp(`${DOMAIN_PART}${WORD_BOUNDARY}`, 'iuy');
+const DOMAIN_SCAN_RE = new RegExp(`${AFTER_NON_WORD}(?:(${DOMAIN_PART}${WORD_BOUNDARY})|(?:${LABEL}\\.)*${LABEL})`, 'giu');
 // PHP's decimal shield is the one pattern here without /u: byte mode, so its `\b` and `\d` are
 // ASCII — as JS's are. Deliberately not widened with the rest.
 const DECIMAL_RE = /\b\d+\.\d+\b/gu;
 const MULTI_ABBR_RE = new RegExp(`${AFTER_NON_WORD}(?:\\p{L}{1,2}\\.${S}*){2,}`, 'gu');
 const SINGLE_ABBR_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${SINGLE_ABBREVS.join('|')})\\.(?=${S}|$|<)`, 'giu');
 
+/**
+ * `[a-z0-9._%+-]` as the plugin's pattern reads it under `iu`: both cases, and the two non-ASCII letters that
+ * fold into the class — U+017F LONG S and U+212A KELVIN SIGN.
+ */
+function isEmailLocalChar(code: number): boolean {
+  return (
+    (code >= 0x61 && code <= 0x7a) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    (code >= 0x30 && code <= 0x39) ||
+    code === 0x2e ||
+    code === 0x5f ||
+    code === 0x25 ||
+    code === 0x2b ||
+    code === 0x2d ||
+    code === 0x17f ||
+    code === 0x212a
+  );
+}
+
 function shieldEmails(text: string, shield: (value: string) => string): string {
   let out = '';
   let emitted = 0;
+  // Where the run search would resume: after the last shield, and past every `@` already tried.
   let pos = 0;
-  for (;;) {
-    EMAIL_LOCAL_START_RE.lastIndex = pos;
-    const start = EMAIL_LOCAL_START_RE.exec(text);
-    if (start === null) break;
-    EMAIL_LOCAL_RUN_RE.lastIndex = start.index;
-    EMAIL_LOCAL_RUN_RE.exec(text);
-    const at = EMAIL_LOCAL_RUN_RE.lastIndex;
-    if (text.charCodeAt(at) === 0x40) {
-      DOMAIN_AT_RE.lastIndex = at + 1;
-      if (DOMAIN_AT_RE.exec(text) !== null) {
-        out += text.slice(emitted, start.index) + shield(text.slice(start.index, DOMAIN_AT_RE.lastIndex));
-        emitted = pos = DOMAIN_AT_RE.lastIndex;
-        continue;
-      }
+  for (let at = text.indexOf('@'); at !== -1; at = text.indexOf('@', Math.max(at + 1, pos))) {
+    // The run of local-part characters that ends at this `@`, begun no earlier than the scan could begin it.
+    let start = at;
+    while (start > pos && isEmailLocalChar(text.charCodeAt(start - 1))) start -= 1;
+    if (start === at) continue; // no run ends here, so no attempt is made at it
+    DOMAIN_AT_RE.lastIndex = at + 1;
+    if (DOMAIN_AT_RE.exec(text) !== null) {
+      out += text.slice(emitted, start) + shield(text.slice(start, DOMAIN_AT_RE.lastIndex));
+      emitted = pos = DOMAIN_AT_RE.lastIndex;
     }
-    pos = at;
   }
   return emitted === 0 ? text : out + text.slice(emitted);
 }
 
+/** Every domain holds a dot followed by the first character of a label; most prose holds none. */
+const DOMAIN_DOT_RE = /\.[\p{L}\p{N}]/u;
+
 function shieldDomains(text: string, shield: (value: string) => string): string {
+  if (!DOMAIN_DOT_RE.test(text)) return text;
   let out = '';
   let emitted = 0;
-  let pos = 0;
-  for (;;) {
-    DOMAIN_START_RE.lastIndex = pos;
-    const start = DOMAIN_START_RE.exec(text);
-    if (start === null) break;
-    DOMAIN_OR_CHAIN_RE.lastIndex = start.index;
-    const m = DOMAIN_OR_CHAIN_RE.exec(text) as RegExpExecArray; // the chain matches whenever the domain does not
+  DOMAIN_SCAN_RE.lastIndex = 0;
+  for (let m = DOMAIN_SCAN_RE.exec(text); m !== null; m = DOMAIN_SCAN_RE.exec(text)) {
     if (m[1] !== undefined) {
-      out += text.slice(emitted, start.index) + shield(m[1]);
-      emitted = start.index + m[1].length;
+      out += text.slice(emitted, m.index) + shield(m[1]);
+      emitted = m.index + m[1].length;
     }
-    pos = start.index + m[0].length;
   }
   return emitted === 0 ? text : out + text.slice(emitted);
 }
@@ -202,83 +213,125 @@ const up = (ch: string): string => ch.toUpperCase();
  * `[^>]+` cannot cross a `>`, so a tag ends where the next `>` is, and a `<` followed at once by `>`, or
  * by no `>` at all, is no tag. Every shorter run of tokens ends before a `<`, an opener or a space,
  * none of which is `\p{Ll}`, so a start matches exactly when the character after its LONGEST lead is a
- * lowercase letter. Both facts are indexed once per pass, from the right.
+ * lowercase letter. Where each lead ends is indexed from the right, when a lead first needs it.
  */
 interface LeadIndex {
   /** `leadEnd[i]`: where the lead that starts at `i` ends. */
   readonly leadEnd: Int32Array;
-  /** `nextGt[i]`: the first `>` at or after `i`, or -1. */
-  readonly nextGt: Int32Array;
 }
 
 function indexLeads(text: string): LeadIndex {
   const n = text.length;
   const leadEnd = new Int32Array(n + 1);
-  const nextGt = new Int32Array(n + 1);
   leadEnd[n] = n;
-  nextGt[n] = -1;
+  let gt = -1; // the first `>` after the position being indexed
   for (let i = n - 1; i >= 0; i -= 1) {
     const code = text.charCodeAt(i);
-    nextGt[i] = code === 0x3e ? i : (nextGt[i + 1] as number);
     let tokenEnd = -1;
     if (code === 0xbf || code === 0xa1 || isUcpSpace(code)) {
       tokenEnd = i + 1;
-    } else if (code === 0x3c) {
-      const gt = nextGt[i + 1] as number;
-      if (gt > i + 1) tokenEnd = gt + 1;
+    } else if (code === 0x3c && gt > i + 1) {
+      tokenEnd = gt + 1;
     }
     leadEnd[i] = tokenEnd === -1 ? i : (leadEnd[tokenEnd] as number);
+    if (code === 0x3e) gt = i;
   }
-  return { leadEnd, nextGt };
+  return { leadEnd };
 }
 
 const LOWER_RE = /^\p{Ll}/u;
 /** The block-tag capitalizer is caseless in both engines, and caseless `\p{Ll}` takes every cased letter. */
 const LOWER_CASELESS_RE = /^\p{Ll}/iu;
 const BLOCK_TAG_NAME_RE = /<\/?(?:p|h[1-6]|li|blockquote|div|td|th)/iuy;
+/** `.`, `!`, `?` and `…` — the boundaries of the sentence capitalizer. */
+const SENTENCE_END_SCAN_RE = new RegExp(`[.!?${String.fromCharCode(0x2026)}]`, 'g');
+
+/** Lead steps walked one character at a time before the lead index is built — see {@link leadEndFrom}. */
+const LEAD_WALK = 32;
 
 /**
- * Upper-case the `\p{Ll}` at the end of the lead that follows each boundary. `boundaryEnd(text, i, index)`
- * returns where the lead starts when index `i` begins a boundary (`.`, a block tag, `\n`), or -1. After
- * a match the scan resumes behind the letter, as a global replace does.
+ * Where the lead starting at `i` ends. Openers and whitespace are one character each, so a short lead is
+ * walked; a tag, or a lead longer than {@link LEAD_WALK}, is answered by the index, built once per text
+ * when first needed. Walking every lead in full would read a run of line breaks once per break — each
+ * one starts a lead that holds the rest.
+ */
+function leadEndFrom(text: string, i: number, leads: () => LeadIndex): number {
+  let j = i;
+  for (let steps = 0; steps < LEAD_WALK && j < text.length; steps += 1) {
+    const code = text.charCodeAt(j);
+    if (code === 0x3c) return leads().leadEnd[j] as number;
+    if (code !== 0xbf && code !== 0xa1 && !isUcpSpace(code)) return j;
+    j += 1;
+  }
+  return j < text.length ? (leads().leadEnd[j] as number) : j;
+}
+
+/**
+ * One capitalizer pass: for each boundary the `next` search finds, upper-case the `\p{Ll}` at the end of the
+ * lead after it. After a match the search resumes behind the letter, as a global replace does. `next(from)`
+ * returns where the lead starts for the first boundary at or after `from`, and where to search from after
+ * it; the passes find their boundaries natively instead of testing every character.
  */
 function capitalizeAfter(
   text: string,
   lower: RegExp,
-  boundaryEnd: (text: string, i: number, index: LeadIndex) => number,
+  next: (text: string, from: number) => { leadStart: number; resume: number } | null,
+  context: { leads: LeadIndex | null },
 ): string {
-  const index = indexLeads(text);
+  // The passes only change the case of letters, and no upper-case mapping is shorter than its letter, so a
+  // text of the same length has every `<`, `>`, opener and space where the index saw them: one index serves
+  // all three passes unless a letter grew (`ß` → `SS`).
+  const leads = (): LeadIndex => {
+    if (context.leads === null || context.leads.leadEnd.length !== text.length + 1) context.leads = indexLeads(text);
+    return context.leads;
+  };
   let out = '';
   let emitted = 0;
-  let changed = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const leadStart = boundaryEnd(text, i, index);
-    if (leadStart === -1) continue;
-    const at = index.leadEnd[leadStart] as number;
+  let from = 0;
+  for (let boundary = next(text, from); boundary !== null; boundary = next(text, from)) {
+    from = boundary.resume;
+    const at = leadEndFrom(text, boundary.leadStart, leads);
     const cp = text.codePointAt(at);
     if (cp === undefined) continue;
     const ch = String.fromCodePoint(cp);
     if (!lower.test(ch)) continue;
     out += text.slice(emitted, at) + up(ch);
     emitted = at + ch.length;
-    changed = true;
-    i = emitted - 1;
+    from = emitted;
   }
-  return changed ? out + text.slice(emitted) : text;
+  return emitted === 0 ? text : out + text.slice(emitted);
 }
 
-const afterSentenceEnd = (text: string, i: number): number => {
-  const code = text.charCodeAt(i);
-  return code === 0x2e || code === 0x21 || code === 0x3f || code === 0x2026 ? i + 1 : -1;
+const afterSentenceEnd = (text: string, from: number): { leadStart: number; resume: number } | null => {
+  SENTENCE_END_SCAN_RE.lastIndex = from;
+  const m = SENTENCE_END_SCAN_RE.exec(text);
+  return m === null ? null : { leadStart: m.index + 1, resume: m.index + 1 };
 };
-const afterBlockTag = (text: string, i: number, index: LeadIndex): number => {
-  if (text.charCodeAt(i) !== 0x3c) return -1;
-  BLOCK_TAG_NAME_RE.lastIndex = i;
-  if (!BLOCK_TAG_NAME_RE.test(text)) return -1;
-  const gt = index.nextGt[BLOCK_TAG_NAME_RE.lastIndex] as number;
-  return gt === -1 ? -1 : gt + 1;
+
+/** The block-tag pass asks for the first `>` after each tag name, at positions that only grow: one scan. */
+function afterBlockTag(): (text: string, from: number) => { leadStart: number; resume: number } | null {
+  let gtFrom = -1;
+  let gt = -1;
+  return (text, from) => {
+    for (let lt = text.indexOf('<', from); lt !== -1; lt = text.indexOf('<', lt + 1)) {
+      BLOCK_TAG_NAME_RE.lastIndex = lt;
+      if (!BLOCK_TAG_NAME_RE.test(text)) continue;
+      const nameEnd = BLOCK_TAG_NAME_RE.lastIndex;
+      if (gtFrom === -1 || nameEnd < gtFrom || (gt !== -1 && nameEnd > gt)) {
+        gtFrom = nameEnd;
+        gt = text.indexOf('>', nameEnd);
+      }
+      if (gt === -1) continue;
+      return { leadStart: gt + 1, resume: lt + 1 };
+    }
+    return null;
+  };
+}
+
+const afterLineBreak = (text: string, from: number): { leadStart: number; resume: number } | null => {
+  const at = text.indexOf('\n', from);
+  return at === -1 ? null : { leadStart: at + 1, resume: at + 1 };
 };
-const afterLineBreak = (text: string, i: number): number => (text.charCodeAt(i) === 0x0a ? i + 1 : -1);
 
 // The shield's placeholder prefixes, in one place: RESTORE_RE below is built from this
 // list, so a new shield pass cannot mint a key shape the single-pass restore fails to
@@ -424,11 +477,12 @@ export function postProcess(input: string): string {
   // 8: capitalize the first letter (skipping leading HTML tags and sentence openers).
   text = text.replace(CAP_FIRST_RE, (_m, lead: string, ch: string) => lead + up(ch));
   // 9: capitalize after sentence punctuation (through HTML tags).
-  text = capitalizeAfter(text, LOWER_RE, afterSentenceEnd);
+  const leadContext: { leads: LeadIndex | null } = { leads: null };
+  text = capitalizeAfter(text, LOWER_RE, afterSentenceEnd, leadContext);
   // 10: capitalize after block-level HTML tags.
-  text = capitalizeAfter(text, LOWER_CASELESS_RE, afterBlockTag);
+  text = capitalizeAfter(text, LOWER_CASELESS_RE, afterBlockTag(), leadContext);
   // 11: capitalize after line breaks.
-  text = capitalizeAfter(text, LOWER_RE, afterLineBreak);
+  text = capitalizeAfter(text, LOWER_RE, afterLineBreak, leadContext);
 
   // 12: restore placeholders, then trim.
   return restore(text, input, placeholders).trim();

@@ -16,9 +16,16 @@
  */
 import { AST_VERSION, type Node, type ParsedAst, type PermConfig } from './ast';
 import { stripSentinels } from './neutralize';
-import { BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, matchPairs } from './pairs';
+import { BRACE_OPEN, BRACKET_OPEN } from './pairs';
+import { TextIndex, rereadSpans } from './text-index';
 
-const VARIABLE_RE = /^%(\w+)%/;
+/** A reference at a given offset (sticky), no `u`: the name is ASCII `\w`. */
+const VARIABLE_RE = /%(\w+)%/y;
+const PERCENT = 0x25;
+const QUESTION = 0x3f;
+const PIPE = 0x7c;
+const LT = 0x3c;
+const GT = 0x3e;
 // `\r?` before the multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
 /**
  * The one grammar for `#set` and `#def`. Whitespace is `[ \t]` (not `\s`) so a directive is a
@@ -134,41 +141,51 @@ export function stripComments(text: string): string {
   return from === 0 ? text : out + text.slice(from);
 }
 
-/** Parse a run of text into a node sequence (construct parsing only — no comment
- *  strip / #set extraction; the renderer uses this to re-process variable values). */
+/**
+ * Parse a run of text into a node sequence (construct parsing only — no comment strip / #set
+ * extraction; the renderer uses this to re-process variable values).
+ *
+ * A construct's children are SPANS of the one text, read against one {@link TextIndex}, never copies
+ * of it: every step that decides what a construct is — its closer, its top-level pipes, a conditional's
+ * pipe, a config's end, a closing tag, a trailing separator — asks the index about the span, and costs
+ * what the construct itself holds. Scanning each construct's content instead read the whole subtree at
+ * every level, and the re-read lets a few hundred bytes of macros spell tens of thousands of levels:
+ * 705 bytes, 32 768 levels, 31 s (#68 had kept that cost when depth still cost source).
+ */
 export function parseSequence(text: string): Node[] {
+  const index = new TextIndex(text);
+
   interface Frame {
-    text: string;
+    readonly start: number;
+    readonly end: number;
     i: number;
-    literal: string;
+    /** Where the pending literal starts: everything from here to `i` that no node took. */
+    literal: number;
     nodes: Node[];
     /** The construct whose children this frame is collecting, if any. */
     plan: ChildPlan | null;
     parts: Node[][];
-    /** Matching closers of this frame's text, built once an opener of that kind turns out never to close. */
-    braces: Int32Array | null;
-    brackets: Int32Array | null;
   }
 
-  const frame = (t: string): Frame => ({
-    text: t,
-    i: 0,
-    literal: '',
+  const frame = (start: number, end: number): Frame => ({
+    start,
+    end,
+    i: start,
+    literal: start,
     nodes: [],
     plan: null,
     parts: [],
-    braces: null,
-    brackets: null,
   });
-  const stack: Frame[] = [frame(text)];
+  const stack: Frame[] = [frame(0, text.length)];
 
   while (stack.length > 0) {
     const f = stack[stack.length - 1] as Frame;
 
     // A construct is mid-flight: descend into its next child, or assemble it.
     if (f.plan !== null) {
-      if (f.parts.length < f.plan.texts.length) {
-        stack.push(frame(f.plan.texts[f.parts.length] as string));
+      if (f.parts.length < f.plan.spans.length) {
+        const span = f.plan.spans[f.parts.length] as Span;
+        stack.push(frame(span[0], span[1]));
         continue;
       }
       f.nodes.push(f.plan.build(f.parts));
@@ -177,42 +194,40 @@ export function parseSequence(text: string): Node[] {
       continue;
     }
 
-    const flushLiteral = (): void => {
-      if (f.literal !== '') {
-        f.nodes.push({ type: 'literal', value: f.literal });
-        f.literal = '';
-      }
+    const flushLiteral = (to: number): void => {
+      if (to > f.literal) f.nodes.push({ type: 'literal', value: text.slice(f.literal, to) });
     };
 
     let planned: Planned | null = null;
-    while (f.i < f.text.length && planned === null) {
-      const ch = f.text.charAt(f.i);
+    while (f.i < f.end && planned === null) {
+      const code = text.charCodeAt(f.i);
 
-      if (ch === '{' || ch === '[') {
-        const end = closerOf(f, ch);
-        if (end === -1) {
-          f.literal += ch;
+      if (code === BRACE_OPEN || code === BRACKET_OPEN) {
+        const close = index.closerWithin(f.i, f.end);
+        if (close === -1) {
           f.i += 1;
           continue;
         }
-        const inner = f.text.slice(f.i + 1, end);
-        flushLiteral();
-        planned = ch === '{' ? planBraceConstruct(inner) : planPermutation(inner);
-        f.i = end + 1;
+        flushLiteral(f.i);
+        planned = code === BRACE_OPEN ? planBraceConstruct(index, f.i + 1, close) : planPermutation(index, f.i + 1, close);
+        f.i = close + 1;
+        f.literal = f.i;
         continue;
       }
 
-      if (ch === '%') {
-        const name = VARIABLE_RE.exec(f.text.slice(f.i))?.[1];
-        if (name !== undefined) {
-          flushLiteral();
-          f.nodes.push({ type: 'variable', name });
-          f.i += name.length + 2; // "%" + name + "%"
+      if (code === PERCENT) {
+        VARIABLE_RE.lastIndex = f.i;
+        const m = VARIABLE_RE.exec(text);
+        // A reference ends inside its span or is none: the closing `%` of a longer one belongs elsewhere.
+        if (m !== null && VARIABLE_RE.lastIndex <= f.end) {
+          flushLiteral(f.i);
+          f.nodes.push({ type: 'variable', name: m[1] as string });
+          f.i = VARIABLE_RE.lastIndex;
+          f.literal = f.i;
           continue;
         }
       }
 
-      f.literal += ch;
       f.i += 1;
     }
 
@@ -223,7 +238,7 @@ export function parseSequence(text: string): Node[] {
     }
 
     // Frame exhausted: finish it and hand its nodes to the parent's pending construct.
-    flushLiteral();
+    flushLiteral(f.end);
     stack.pop();
     const parent = stack[stack.length - 1];
     if (parent !== undefined) parent.parts.push(f.nodes);
@@ -233,44 +248,12 @@ export function parseSequence(text: string): Node[] {
   return [];
 }
 
-/**
- * Index of the closer matching the `{` or `[` at `f.i` — depth of that bracket pair only — or -1.
- *
- * Counted forward from the opener while every opener so far has closed: a balanced construct costs its
- * own length, and the walk then skips past it. The count for an opener that never closes runs to the
- * end of the text, though, and a run of them ran it from each one — `[<` or `{plural 1:` repeated, which
- * macros spell inside a re-read construct: 1.3 and 6.2 s from 333 and 341 bytes, four times that per
- * doubling. So the first such opener builds a table of the frame's pairs in one pass
- * ({@link matchPairs}), and every later opener of its kind is answered from it. Not a table from the
- * start: that cost deep balanced nesting up to a third more, one table per level, and nesting is
- * super-linear either way — each level still reads its whole subtree in the steps below (#68).
- */
-function closerOf(
-  f: { text: string; i: number; braces: Int32Array | null; brackets: Int32Array | null },
-  open: '{' | '[',
-): number {
-  const table = open === '{' ? f.braces : f.brackets;
-  if (table !== null) return table[f.i] as number;
-
-  const close = open === '{' ? '}' : ']';
-  let depth = 0;
-  for (let i = f.i; i < f.text.length; i += 1) {
-    const ch = f.text.charAt(i);
-    if (ch === open) {
-      depth += 1;
-    } else if (ch === close) {
-      depth -= 1;
-      if (depth === 0) return i;
-    }
-  }
-  if (open === '{') f.braces = matchPairs(f.text, BRACE_OPEN, BRACE_CLOSE);
-  else f.brackets = matchPairs(f.text, BRACKET_OPEN, BRACKET_CLOSE);
-  return -1;
-}
+/** `[start, end)` of the text a {@link TextIndex} holds. */
+type Span = readonly [number, number];
 
 /**
- * A construct whose children still need parsing: their raw texts, and how to assemble
- * the node once they are parsed.
+ * A construct whose children still need parsing: their spans, and how to assemble the node once they
+ * are parsed.
  *
  * This is what lets the parser be iterative. Each construct used to call
  * `parseSequence` on every child — one stack frame per level of nesting — so
@@ -279,39 +262,66 @@ function closerOf(
  * content. The shape mirrors the Python port's `_plan_*` functions, written this way
  * from the start for exactly this reason.
  */
-type ChildPlan = { texts: string[]; build: (parts: Node[][]) => Node };
+type ChildPlan = { spans: Span[]; build: (parts: Node[][]) => Node };
 type Planned = { node: Node } | ChildPlan;
 
+/** The spans between the given pipes of `[start, end)`. */
+function spansBetween(start: number, end: number, pipes: readonly number[]): Span[] {
+  const spans: Span[] = [];
+  let from = start;
+  for (const pipe of pipes) {
+    spans.push([from, pipe]);
+    from = pipe + 1;
+  }
+  spans.push([from, end]);
+  return spans;
+}
+
 /**
- * Decide what a `{…}` (content between the braces) is: a conditional (`?…`), a
- * plural (`plural …:` …), or — the default and the fallback for a malformed
- * conditional — an enumeration.
+ * Decide what a `{…}` (content `[start, end)`) is: a conditional (`?…`), a plural (`plural …:` …),
+ * or — the default and the fallback for a malformed conditional — an enumeration.
  */
-function planBraceConstruct(content: string): Planned {
-  if (content.charAt(0) === '?') {
-    const parts = splitConditional(content);
-    if (parts !== null) {
+function planBraceConstruct(index: TextIndex, start: number, end: number): Planned {
+  const { text } = index;
+  if (start < end && text.charCodeAt(start) === QUESTION) {
+    const head = recognizeConditional(text, start, end, index.anyPairs());
+    if (head !== null) {
+      const then: Span = [head.bodyStart, head.sepIndex < 0 ? end : head.sepIndex];
+      const otherwise: Span = head.sepIndex < 0 ? [end, end] : [head.sepIndex + 1, end];
       return {
-        texts: [parts.thenRaw, parts.elseRaw],
+        spans: [then, otherwise],
         build: (children) => ({
           type: 'conditional',
-          name: parts.name,
-          inverted: parts.inverted,
+          name: head.name,
+          inverted: head.inverted,
           then: children[0] ?? [],
           else: children[1] ?? [],
         }),
       };
     }
     // Malformed conditional ⇒ fall back to enumeration (plugin parity).
-  } else if (content.startsWith(PLURAL_PREFIX) && content.slice(PLURAL_PREFIX.length).includes(':')) {
-    return { node: parsePlural(content.slice(PLURAL_PREFIX.length)) };
+  } else if (end - start >= PLURAL_PREFIX.length && text.startsWith(PLURAL_PREFIX, start)) {
+    const colon = index.colonWithin(start + PLURAL_PREFIX.length, end);
+    if (colon !== -1) {
+      // Count + raw forms are kept as strings; the renderer expands variables in them
+      // FIRST (Stage 6d runs after var-expansion, before enum/perm), then splits/checks.
+      return {
+        node: {
+          type: 'plural',
+          countRaw: text.slice(start + PLURAL_PREFIX.length, colon),
+          formsRaw: text.slice(colon + 1, end),
+        },
+      };
+    }
   }
   return {
-    texts: splitTopLevel(content),
-    build: (children) =>
-      needsTextualReread(children)
-        ? { type: 'enumeration', options: children, raw: content }
-        : { type: 'enumeration', options: children },
+    spans: spansBetween(start, end, index.topLevelPipes(start, end)),
+    build: (children) => {
+      if (!needsTextualReread(children)) return { type: 'enumeration', options: children };
+      const node: Node = { type: 'enumeration', options: children, raw: text.slice(start, end) };
+      rereadSpans.set(node, { index, start, end });
+      return node;
+    },
   };
 }
 
@@ -361,28 +371,30 @@ function holdsConditional(text: string): boolean {
 const holdsTextForReread = (text: string): boolean => REFERENCE_RE.test(text) || holdsConditional(text);
 
 /**
- * `[<config>a|b|c]` — the config and the per-element separators resolve here; the
- * element texts are parsed by the caller's loop.
+ * `[<config>a|b|c]` (content `[start, end)`) — the config and the per-element separators resolve here;
+ * the element spans are parsed by the caller's loop.
  */
-function planPermutation(rawInner: string): Planned {
-  const { config, content } = extractPermutationConfig(rawInner);
-  const { texts, separators } = permutationElements(splitTopLevel(content));
+function planPermutation(index: TextIndex, start: number, end: number): Planned {
+  const { text } = index;
+  const { config, contentStart } = extractPermutationConfig(index, start, end);
+  const { spans, separators } = permutationElements(index, spansBetween(contentStart, end, index.topLevelPipes(contentStart, end)));
   // The reference engines resolve conditionals in and expand the config and the per-element
   // separators too — to them it is all text — so a reference or a `{?…}` ANYWHERE in the `<…>`
   // header or a separator is as direct as one in an element: a size (`minsize=%n%`), an unquoted
-  // separator (`sep=%S%`), `lastsep="{?en? and | и }"`. The header is exactly what precedes
-  // `content`, which is always a suffix of the input. (0.7.0 tested the PARSED `sep` and `lastsep`
-  // for references only, where `%n%` never arrives — a size that is not digits parses to nothing,
-  // an unquoted separator to the default — so none of these was ever read as text: #80.)
-  const header = rawInner.slice(0, rawInner.length - content.length);
+  // separator (`sep=%S%`), `lastsep="{?en? and | и }"`. The header is exactly what precedes the
+  // content. (0.7.0 tested the PARSED `sep` and `lastsep` for references only, where `%n%` never
+  // arrives — a size that is not digits parses to nothing, an unquoted separator to the default — so
+  // none of these was ever read as text: #80.)
+  const header = text.slice(start, contentStart);
   const textNeedsReread = holdsTextForReread(header) || separators.some((sep) => sep !== null && holdsTextForReread(sep));
   return {
-    texts,
+    spans,
     build: (children) => {
       const options = children.map((nodes, i) => ({ nodes, separator: separators[i] ?? null }));
-      return textNeedsReread || needsTextualReread(children)
-        ? { type: 'permutation', config, options, raw: rawInner }
-        : { type: 'permutation', config, options };
+      if (!textNeedsReread && !needsTextualReread(children)) return { type: 'permutation', config, options };
+      const node: Node = { type: 'permutation', config, options, raw: text.slice(start, end) };
+      rereadSpans.set(node, { index, start, end });
+      return node;
     },
   };
 }
@@ -402,29 +414,24 @@ export interface ConditionalHead {
   readonly sepIndex: number;
 }
 
-/** A recognized `{?…}` with its branches materialized — what the parser needs. */
-export interface ConditionalParts {
-  readonly name: string;
-  readonly inverted: boolean;
-  readonly thenRaw: string;
-  readonly elseRaw: string;
-}
-
 /**
  * Recognize `?VAR?then|else` / `?!VAR?then` in `text[contentStart, contentEnd)`
  * (the span between the braces), or null if malformed — the ONE place the
- * conditional grammar lives. Reports offsets only; {@link splitConditional} is
- * the wrapper that materializes the branches for the parser.
+ * conditional grammar lives. Reports offsets only.
  *
  * The renderer needs the branches unparsed as well as parsed: the plural count
  * slot resolves conditionals textually, without resolving the enums a branch may
  * carry (spintax-js#67). Two readers, one recognizer — a second copy of these
  * rules would be a syntax-surface divergence waiting to happen (#55–#57).
+ *
+ * `anyPairs` ({@link matchAnyPairs} of `text`) lets the branch split jump over nested constructs
+ * instead of reading them; without it the body is scanned, which a short text can afford.
  */
 export function recognizeConditional(
   text: string,
   contentStart: number,
   contentEnd: number,
+  anyPairs?: Int32Array,
 ): ConditionalHead | null {
   let p = contentStart + 1; // past the leading '?'
   let inverted = false;
@@ -441,30 +448,8 @@ export function recognizeConditional(
   if (text.charAt(p) !== '?') return null; // required '?' after the name
   p += 1;
 
-  return { name, inverted, bodyStart: p, sepIndex: firstTopLevelPipe(text, p, contentEnd) };
-}
-
-export function splitConditional(content: string): ConditionalParts | null {
-  const head = recognizeConditional(content, 0, content.length);
-  if (head === null) return null;
-
-  const body = content.slice(head.bodyStart);
-  const sep = head.sepIndex < 0 ? -1 : head.sepIndex - head.bodyStart;
-
-  return {
-    name: head.name,
-    inverted: head.inverted,
-    thenRaw: sep < 0 ? body : body.slice(0, sep),
-    elseRaw: sep < 0 ? '' : body.slice(sep + 1),
-  };
-}
-
-/** Parse `<count>: forms` (the part after the `plural ` prefix). */
-function parsePlural(afterPrefix: string): Node {
-  const colon = afterPrefix.indexOf(':');
-  // Count + raw forms are kept as strings; the renderer expands variables in them
-  // FIRST (Stage 6d runs after var-expansion, before enum/perm), then splits/checks.
-  return { type: 'plural', countRaw: afterPrefix.slice(0, colon), formsRaw: afterPrefix.slice(colon + 1) };
+  const sepIndex = anyPairs === undefined ? firstTopLevelPipe(text, p, contentEnd) : firstTopLevelPipeByPairs(text, p, contentEnd, anyPairs);
+  return { name, inverted, bodyStart: p, sepIndex };
 }
 
 // ─── Permutation parsing (config + per-element separators) ────────────────────
@@ -482,43 +467,28 @@ const LASTSEP_RE = /lastsep[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*"([^"]*)"/i;
 // makes `$` fail. Quadratic in the config, which a macro can make a megabyte long.
 const HTML_TAG_RE = /^([a-zA-Z][a-zA-Z0-9-]*)(?:[ \t\n\x0B\f\r][^>]*)?\/?$/;
 const PER_ELEM_HTML_RE = /^[a-zA-Z][a-zA-Z0-9]*[ \t\n\x0B\f\r]/;
-/**
- * Every `</name>` in a text, with the name read as the tag-name pattern reads one. Under `iu` the
- * class also takes U+017F and U+212A — they fold to `s` and `k` — which {@link foldTagName} maps back.
- */
-const CLOSING_TAG_RE = /<\/([a-z][a-z0-9-]*)[ \t\n\x0B\f\r]*>/giu;
 
 function defaultPermConfig(): PermConfig {
   return { minsize: null, maxsize: null, sep: ' ', lastsep: null };
 }
 
-/** Split a leading `<config>` off the body (config is extracted BEFORE the top-level split). */
-function extractPermutationConfig(content: string): { config: PermConfig; content: string } {
-  const trimmed = phpLtrim(content);
-  if (trimmed === '' || trimmed.charAt(0) !== '<') {
-    return { config: defaultPermConfig(), content };
-  }
-  const end = findConfigEnd(trimmed);
-  if (end === -1) return { config: defaultPermConfig(), content };
+/**
+ * Split a leading `<config>` off the body `[start, end)` (config is extracted BEFORE the top-level
+ * split). Without one, the content is the whole body, leading whitespace included.
+ */
+function extractPermutationConfig(index: TextIndex, start: number, end: number): { config: PermConfig; contentStart: number } {
+  const { text } = index;
+  let lt = start;
+  while (lt < end && isPhpTrimChar(text.charCodeAt(lt))) lt += 1;
+  if (lt === end || text.charCodeAt(lt) !== LT) return { config: defaultPermConfig(), contentStart: start };
 
-  const configStr = trimmed.slice(1, end);
-  const remaining = trimmed.slice(end + 1);
+  const gt = index.configEnd(lt, end);
+  if (gt === -1) return { config: defaultPermConfig(), contentStart: start };
+
+  const configStr = text.slice(lt + 1, gt);
   // A leading `<li>…</li>`-style tag is HTML, not config.
-  if (looksLikeHtmlStartTag(configStr, remaining)) {
-    return { config: defaultPermConfig(), content };
-  }
-  return { config: parseConfigString(configStr), content: remaining };
-}
-
-/** Index of the closing `>` of a `<…>` config, respecting quoted strings; -1 if none. */
-function findConfigEnd(text: string): number {
-  let inQuote = false;
-  for (let i = 1; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (ch === '"') inQuote = !inQuote;
-    if (ch === '>' && !inQuote) return i;
-  }
-  return -1;
+  if (looksLikeHtmlStartTag(index, configStr, gt + 1, end)) return { config: defaultPermConfig(), contentStart: start };
+  return { config: parseConfigString(configStr), contentStart: gt + 1 };
 }
 
 function parseConfigString(str: string): PermConfig {
@@ -534,86 +504,74 @@ function parseConfigString(str: string): PermConfig {
   };
 }
 
-function looksLikeHtmlStartTag(tagText: string, remaining: string): boolean {
+/**
+ * Is the config a start tag whose closing tag follows in `[from, end)`? The closing tag is looked up in
+ * the index — neither a pattern built from this tag's name (V8 would not compile one past about 7.8 KB,
+ * and parse() threw `SyntaxError`, render() too from 333 bytes of macros) nor a scan of the rest of the
+ * body at every level.
+ */
+function looksLikeHtmlStartTag(index: TextIndex, tagText: string, from: number, end: number): boolean {
   const trimmed = phpTrim(tagText);
   if (trimmed === '') return false;
   const m = HTML_TAG_RE.exec(trimmed);
   if (!m) return false;
   if (trimmed.endsWith('/')) return true; // self-closing
-  const tagName = (m[1] ?? '').toLowerCase();
-  // A scan for closing tags, not a pattern built from this one's name: the pattern carried the whole
-  // name, V8 could not compile it past about 7.8 KB, and parse() threw `SyntaxError` — render() too,
-  // from a 333-byte template once macros spelled the name inside a re-read config.
-  for (const closing of remaining.matchAll(CLOSING_TAG_RE)) {
-    if (foldTagName(closing[1] ?? '') === tagName) return true;
-  }
-  return false;
+  return index.hasClosingTag((m[1] ?? '').toLowerCase(), from, end);
 }
-
-/**
- * A tag name as `iu` compares it. U+212A KELVIN SIGN lower-cases to `k` on its own; U+017F LATIN SMALL
- * LETTER LONG S is lower case already, so it is mapped by hand.
- */
-function foldTagName(name: string): string {
-  return name.toLowerCase().split(LONG_S).join('s');
-}
-const LONG_S = String.fromCharCode(0x17f);
 
 /**
  * Turn raw split parts into elements, moving a trailing `<sep>` on part[i] to be
- * the per-element separator of the element from part[i+1]. Each element's text is
+ * the per-element separator of the element from part[i+1]. Each element's span is
  * trimmed; empty elements are dropped (plugin `extract_per_element_separators`).
  */
-function permutationElements(rawParts: string[]): { texts: string[]; separators: (string | null)[] } {
-  const texts: string[] = [];
+function permutationElements(index: TextIndex, parts: readonly Span[]): { spans: Span[]; separators: (string | null)[] } {
+  const { text } = index;
+  const spans: Span[] = [];
   const separators: (string | null)[] = [];
   let pendingSep: string | null = null;
 
-  rawParts.forEach((part, i) => {
-    let text = part;
+  parts.forEach(([partStart, partEnd], i) => {
+    let textEnd = partEnd;
     let trailingSep: string | null = null;
-    if (i < rawParts.length - 1) {
-      const extracted = extractTrailingSep(part);
+    if (i < parts.length - 1) {
+      const extracted = extractTrailingSep(index, partStart, partEnd);
       if (extracted) {
-        text = extracted.text;
+        textEnd = extracted.textEnd;
         trailingSep = extracted.sep;
       }
     }
-    const trimmed = phpTrim(text);
-    if (trimmed !== '') {
-      texts.push(trimmed);
+    let a = partStart;
+    let b = textEnd;
+    while (a < b && isPhpTrimChar(text.charCodeAt(a))) a += 1;
+    while (b > a && isPhpTrimChar(text.charCodeAt(b - 1))) b -= 1;
+    if (b > a) {
+      spans.push([a, b]);
       separators.push(pendingSep);
     }
     pendingSep = trailingSep;
   });
 
-  return { texts, separators };
+  return { spans, separators };
 }
 
-/** Detect a trailing `< sep >` on a part (not an HTML tag). Returns {text, sep} or null. */
-function extractTrailingSep(part: string): { text: string; sep: string } | null {
-  const trimmed = phpRtrim(part);
-  const len = trimmed.length;
-  if (len === 0 || trimmed.charAt(len - 1) !== '>') return null;
+/** Detect a trailing `< sep >` on the part `[start, end)` (not an HTML tag): where its text ends, and the separator. */
+function extractTrailingSep(index: TextIndex, start: number, end: number): { textEnd: number; sep: string } | null {
+  const { text } = index;
+  let len = end;
+  while (len > start && isPhpTrimChar(text.charCodeAt(len - 1))) len -= 1;
+  if (len === start || text.charCodeAt(len - 1) !== GT) return null;
 
-  let openPos = -1;
-  for (let i = len - 2; i >= 0; i -= 1) {
-    const ch = trimmed.charAt(i);
-    if (ch === '<') {
-      openPos = i;
-      break;
-    }
-    if (ch === '>') return null; // nested/complex, bail
-  }
-  if (openPos === -1) return null;
+  // The nearest `<` or `>` before the final `>`: a `<` opens the separator, a `>` means nested or complex.
+  const openPos = index.lastAngleWithin(start, len - 2);
+  if (openPos === -1 || text.charCodeAt(openPos) === GT) return null;
 
-  const inner = trimmed.slice(openPos + 1, len - 1);
+  const inner = text.slice(openPos + 1, len - 1);
   const innerTrimmed = phpTrim(inner);
   // HTML tag → not a separator: closing </x>, self-closing <x/>, or tag-with-attrs `<x …>`.
   if (innerTrimmed.startsWith('/') || innerTrimmed.endsWith('/') || PER_ELEM_HTML_RE.test(innerTrimmed)) {
     return null;
   }
-  return { text: trimmed.slice(0, openPos), sep: inner };
+  return { textEnd: openPos, sep: inner };
 }
 
 function intGroup(m: RegExpExecArray | null): number | null {
@@ -630,7 +588,7 @@ function strGroup(m: RegExpExecArray | null): string | null {
 // Loops, not `/[…]+$/`: an end-anchored run class is retried from every position of a whitespace
 // run INSIDE the text and goes quadratic. 80 000 spaces cost seconds per call, and what gets trimmed
 // can be a megabyte of expanded text — the renderer trims every permutation element it assembles.
-function isPhpTrimChar(code: number): boolean {
+export function isPhpTrimChar(code: number): boolean {
   return code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d || code === 0x00 || code === 0x0b;
 }
 export function phpTrim(s: string): string {
@@ -651,27 +609,12 @@ function phpRtrim(s: string): string {
  * Split on top-level `|` — mirrors the plugin's `split_top_level`: brace and
  * bracket depths tracked INDEPENDENTLY and decremented UNCONDITIONALLY (may go
  * negative), split only when BOTH are exactly 0. So `a]|b` stays one option.
+ *
+ * The parser asks {@link TextIndex.topLevelPipes} for the same pipes of a span; this is that
+ * question put to a whole string.
  */
 export function splitTopLevel(inner: string): string[] {
-  const parts: string[] = [];
-  let brace = 0;
-  let bracket = 0;
-  let cur = '';
-  for (const ch of inner) {
-    if (ch === '{') brace += 1;
-    else if (ch === '}') brace -= 1;
-    else if (ch === '[') bracket += 1;
-    else if (ch === ']') bracket -= 1;
-
-    if (ch === '|' && brace === 0 && bracket === 0) {
-      parts.push(cur);
-      cur = '';
-    } else {
-      cur += ch;
-    }
-  }
-  parts.push(cur);
-  return parts;
+  return spansBetween(0, inner.length, new TextIndex(inner).topLevelPipes(0, inner.length)).map(([a, b]) => inner.slice(a, b));
 }
 
 /**
@@ -689,6 +632,29 @@ function firstTopLevelPipe(body: string, from = 0, to = body.length): number {
       if (depth > 0) depth -= 1;
     } else if (ch === '|' && depth === 0) {
       return j;
+    }
+  }
+  return -1;
+}
+
+/**
+ * {@link firstTopLevelPipe}, jumping. The clamped counter is the size of a stack holding both bracket
+ * kinds, so at depth zero an opener's run ends where {@link matchAnyPairs} closes it — the pairing a
+ * span makes of its own openers is the whole text's — and nothing between is at the top level. An
+ * opener that does not close before `to` keeps the depth above zero to the end.
+ */
+function firstTopLevelPipeByPairs(body: string, from: number, to: number, anyPairs: Int32Array): number {
+  let j = from;
+  while (j < to) {
+    const code = body.charCodeAt(j);
+    if (code === BRACE_OPEN || code === BRACKET_OPEN) {
+      const close = anyPairs[j] as number;
+      if (close === -1 || close >= to) return -1;
+      j = close + 1;
+    } else if (code === PIPE) {
+      return j;
+    } else {
+      j += 1;
     }
   }
   return -1;

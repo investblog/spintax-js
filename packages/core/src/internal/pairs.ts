@@ -27,3 +27,23 @@ export function matchPairs(text: string, open: number, close: number): Int32Arra
   }
   return pairs;
 }
+
+/**
+ * The same, with `{` and `[` on one stack and either closer popping it — the pairing behind a single
+ * depth counter clamped at zero, the one a conditional's branch split keeps. A closer with nothing open
+ * is ignored, as the clamp ignores it.
+ */
+export function matchAnyPairs(text: string): Int32Array {
+  const pairs = new Int32Array(text.length).fill(-1);
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code === BRACE_OPEN || code === BRACKET_OPEN) {
+      stack.push(i);
+    } else if (code === BRACE_CLOSE || code === BRACKET_CLOSE) {
+      const opener = stack.pop();
+      if (opener !== undefined) pairs[opener] = i;
+    }
+  }
+  return pairs;
+}

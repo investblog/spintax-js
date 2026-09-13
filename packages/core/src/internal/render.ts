@@ -28,10 +28,12 @@
 import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { UCP_SPACE } from './charclass';
 import { IncludeResolverError } from './errors';
-import { BRACE_CLOSE, BRACE_OPEN, matchPairs } from './pairs';
+import { flatten, joinFragments, lengthOf, trimFragment, type Fragment } from './fragment';
+import { BRACE_CLOSE, BRACE_OPEN, matchAnyPairs, matchPairs } from './pairs';
 import { parseSequence, parseTemplate, phpTrim, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
+import { lowerBound, rereadSpans, type RereadSpan } from './text-index';
 
 const MAX_VARIABLE_DEPTH = 50;
 /**
@@ -311,12 +313,21 @@ function directReferences(text: string): string[] {
  * rendered them.
  */
 export function renderNodes(nodes: readonly Node[], opts: RenderInternalOptions): string {
+  return flatten(renderFragment(nodes, opts));
+}
+
+/**
+ * {@link renderNodes} without the final copy: the walk hands fragments up, and the text is made once,
+ * by whoever needs a string. Joining at every frame copied a construct's output once per level above
+ * it.
+ */
+function renderFragment(nodes: readonly Node[], opts: RenderInternalOptions): Fragment {
   interface Frame {
     nodes: readonly Node[];
     i: number;
-    out: string[];
+    out: Fragment[];
     /** Child lists being rendered for the construct this frame paused on. */
-    pending: { lists: (readonly Node[])[]; done: string[]; assemble: (parts: string[]) => string } | null;
+    pending: Pending | null;
   }
 
   const frame = (list: readonly Node[]): Frame => ({ nodes: list, i: 0, out: [], pending: null });
@@ -336,26 +347,32 @@ export function renderNodes(nodes: readonly Node[], opts: RenderInternalOptions)
     }
 
     if (f.i >= f.nodes.length) {
-      const text = f.out.join('');
+      const text = joinFragments(f.out);
       stack.pop();
       const parent = stack[stack.length - 1];
       if (parent === undefined) return text;
-      (parent.pending as { done: string[] }).done.push(text);
+      (parent.pending as Pending).done.push(text);
       continue;
     }
 
     const node = f.nodes[f.i] as Node;
     f.i += 1;
     const step = renderNode(node, opts);
-    if (typeof step === 'string') f.out.push(step);
+    if (typeof step === 'string' || !('lists' in step)) f.out.push(step);
     else f.pending = step;
   }
 
   return '';
 }
 
+/** Child lists being rendered for a construct, and how to assemble the construct from them. */
+type Pending = { lists: (readonly Node[])[]; done: Fragment[]; assemble: (parts: Fragment[]) => Fragment };
+
 /** What a node contributes: finished text, or child lists plus how to assemble them. */
-type RenderStep = string | { lists: (readonly Node[])[]; done: string[]; assemble: (parts: string[]) => string };
+type RenderStep = Fragment | Pending;
+
+/** A construct that renders as the one child list it picked. */
+const single = (list: readonly Node[]): Pending => ({ lists: [list], done: [], assemble: (parts) => parts[0] ?? '' });
 
 function renderNode(node: Node, opts: RenderInternalOptions): RenderStep {
   switch (node.type) {
@@ -384,7 +401,7 @@ function randomInt(rng: Rng, min: number, max: number): number {
  * (recursive, depth-capped) so nested vars / conditionals / plurals introduced by
  * the value are resolved; a plain value is returned as-is; unresolved ⇒ verbatim.
  */
-function resolveVariable(name: string, opts: RenderInternalOptions): string {
+function resolveVariable(name: string, opts: RenderInternalOptions): Fragment {
   const value = opts.vars[name.toLowerCase()];
   if (value === undefined || opts.frozen === true) return `%${name}%`;
   // Out of budget ⇒ the reference stays literal, exactly as an undefined name does. No
@@ -402,7 +419,7 @@ function resolveVariable(name: string, opts: RenderInternalOptions): string {
   if (opts.depth >= MAX_VARIABLE_DEPTH || !/[{[%]/u.test(value)) return value;
   // parseSequence, NOT parseTemplate: a value must not be re-comment-stripped or
   // re-#set-extracted (those are one-time body passes in the plugin).
-  return renderNodes(parseSequence(value), { ...opts, depth: opts.depth + 1 });
+  return renderFragment(parseSequence(value), { ...opts, depth: opts.depth + 1 });
 }
 
 /**
@@ -455,16 +472,29 @@ function expandVarsFixpoint(
  */
 const NON_SPACE_RE = new RegExp(`[^${UCP_SPACE}]`, 'u');
 
+/**
+ * Truthiness per variable map, per name. A value is tested by scanning its leading whitespace, and a
+ * megabyte of it — a `#def` can roll that much — tested again by every one of thousands of nested
+ * conditionals naming it was a megabyte a level. A map is never changed once a walk has it.
+ */
+const truthinessByVars = new WeakMap<object, Map<string, boolean>>();
+
 /** Truthy = the raw var value is set and has a non-whitespace char (plugin is_truthy). */
 function conditionalTakesThen(name: string, inverted: boolean, opts: RenderInternalOptions): boolean {
-  const value = opts.vars[name.toLowerCase()];
-  const baseTruthy = value !== undefined && NON_SPACE_RE.test(value);
+  const key = name.toLowerCase();
+  let known = truthinessByVars.get(opts.vars);
+  if (known === undefined) truthinessByVars.set(opts.vars, (known = new Map()));
+  let baseTruthy = known.get(key);
+  if (baseTruthy === undefined) {
+    const value = opts.vars[key];
+    baseTruthy = value !== undefined && NON_SPACE_RE.test(value);
+    known.set(key, baseTruthy);
+  }
   return inverted ? !baseTruthy : baseTruthy;
 }
 
 function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): RenderStep {
-  const truthy = conditionalTakesThen(node.name, node.inverted, opts);
-  return { lists: [truthy ? node.then : node.else], done: [], assemble: (parts) => parts[0] ?? '' };
+  return single(conditionalTakesThen(node.name, node.inverted, opts) ? node.then : node.else);
 }
 
 /**
@@ -502,6 +532,11 @@ function resolveConditionalsInText(text: string, opts: RenderInternalOptions): s
   if (!text.includes('{?')) return text;
 
   const close = matchPairs(text, BRACE_OPEN, BRACE_CLOSE);
+  const any = matchAnyPairs(text);
+  // Every `{?`, found once. Searching the text again from each span's start ran past the span's end —
+  // to the end of the text, for each of the closers a deep nest leaves behind its branches.
+  const heads: number[] = [];
+  for (let at = text.indexOf('{?'); at !== -1; at = text.indexOf('{?', at + 1)) heads.push(at);
   const out: string[] = [];
   // Spans of `text` still to emit, in order. A taken branch is a SPAN of the same
   // string, never a copy, and the untaken one is skipped — so every character is
@@ -514,7 +549,8 @@ function resolveConditionalsInText(text: string, opts: RenderInternalOptions): s
     let i = segment[0];
 
     while (i < segEnd) {
-      const open = text.indexOf('{?', i);
+      const next = lowerBound(heads, i);
+      const open = next < heads.length ? (heads[next] as number) : -1;
       // `{?` found past this span belongs to the text around it, not to this span.
       if (open === -1 || open + 1 >= segEnd) {
         out.push(text.slice(i, segEnd));
@@ -524,7 +560,7 @@ function resolveConditionalsInText(text: string, opts: RenderInternalOptions): s
       // A close outside the span is no close at all: the branch it would reach
       // into is not ours to read.
       const shut = close[open] ?? -1;
-      const head = shut === -1 || shut >= segEnd ? null : recognizeConditional(text, open + 1, shut);
+      const head = shut === -1 || shut >= segEnd ? null : recognizeConditional(text, open + 1, shut, any);
       if (head === null) {
         // Unclosed, or `{?` that is not a conditional — a malformed one is an
         // enumeration to the parser, and enumerations are not this pass's business.
@@ -610,8 +646,8 @@ function renderPlural(node: PluralNode, opts: RenderInternalOptions): RenderStep
   // The picked form re-enters the pipeline (its enums/perms resolve after plurals) —
   // as a child list, so a deeply nested form does not cost a stack frame.
   const picked = pluralFor(base, Number.parseInt(count, 10), forms);
-  if (!formsPass.converged) return renderNodes(parseSequence(picked), { ...opts, frozen: true });
-  return { lists: [parseSequence(picked)], done: [], assemble: (parts) => parts[0] ?? '' };
+  if (!formsPass.converged) return renderFragment(parseSequence(picked), { ...opts, frozen: true });
+  return single(parseSequence(picked));
 }
 
 /** The construct as the renderer saw it — ASCII braces, for reports and logs. */
@@ -627,13 +663,13 @@ function fullwidthVerbatim(countRaw: string, formsRaw: string): string {
 /** Pick one option (outer-first) and render it. The pick happens BEFORE the descent,
  *  so an unpicked branch never consumes RNG — that ordering is pinned by fixtures. */
 function renderEnumeration(node: EnumerationNode, opts: RenderInternalOptions): RenderStep {
-  const spliced = node.raw === undefined ? null : spliceConstruct(node.raw, '{', '}', opts);
+  const spliced = node.raw === undefined ? null : spliceConstruct(node, node.raw, '{', '}', opts);
   if (spliced !== null) return spliced;
   const { options } = node;
   if (options.length === 0) return '';
   const picked = options[randomInt(opts.rng, 0, options.length - 1)];
   if (!picked) return '';
-  return { lists: [picked], done: [], assemble: (parts) => parts[0] ?? '' };
+  return single(picked);
 }
 
 /**
@@ -666,25 +702,45 @@ function renderEnumeration(node: EnumerationNode, opts: RenderInternalOptions): 
  * subtree at the depth cap instead, which spliced a leftover once more as finished text: a
  * 52nd hop, and one that hid a structural value from the split — found in review.)
  */
-function spliceConstruct(raw: string, open: string, close: string, opts: RenderInternalOptions): RenderStep | null {
+function spliceConstruct(
+  node: EnumerationNode | PermutationNode,
+  raw: string,
+  open: string,
+  close: string,
+  opts: RenderInternalOptions,
+): RenderStep | null {
   if (opts.frozen === true) return null;
+  const span = rereadSpans.get(node);
+  if (span !== undefined && !rereadCouldChange(span, opts)) return null;
   const expanded = expandVarsFixpoint(resolveConditionalsInText(raw, opts), opts, passesLeft(opts));
   const body = resolveConditionalsInText(expanded.text, opts);
   if (body === raw) return null;
   // The brackets go back on so an unbalanced value degrades exactly as the plugin's innermost
   // regex does: `{a}b}` is `a` followed by the literal `b}`, in both engines.
   const nodes = parseSequence(open + body + close);
-  if (!expanded.converged) return renderNodes(nodes, { ...opts, frozen: true });
-  return { lists: [nodes], done: [], assemble: (parts) => parts[0] ?? '' };
+  if (!expanded.converged) return renderFragment(nodes, { ...opts, frozen: true });
+  return single(nodes);
+}
+
+/**
+ * Could the splice change this construct's body? Only when its text holds a conditional the pass would
+ * resolve, or a reference expansion would substitute — a name the map defines, while the budget lasts.
+ * Otherwise both conditional passes and the fixpoint hand the body back as it was, and the splice
+ * returns null. The index answers without reading the body, which a nest of constructs each holding an
+ * undefined reference read once per level: 8 s at 8 192 levels.
+ */
+function rereadCouldChange({ index, start, end }: RereadSpan, opts: RenderInternalOptions): boolean {
+  if (index.hasConditionalWithin(start, end)) return true;
+  return opts.budget.left > 0 && index.hasDefinedReferenceWithin(start, end, opts.vars);
 }
 
 interface Element {
-  text: string;
+  text: Fragment;
   sep: string | null;
 }
 
 function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): RenderStep {
-  const spliced = node.raw === undefined ? null : spliceConstruct(node.raw, '[', ']', opts);
+  const spliced = node.raw === undefined ? null : spliceConstruct(node, node.raw, '[', ']', opts);
   if (spliced !== null) return spliced;
   if (node.options.length === 0) return '';
   return {
@@ -704,11 +760,11 @@ function renderPermutation(node: PermutationNode, opts: RenderInternalOptions): 
  *  three parts there and only two elements once `{live casino|}` picks its empty option; kept, it
  *  printed `slots, , poker` (#80). The size pick and the shuffle count what remains, as PHP's do;
  *  an element whose text is neither empty nor padded changes nothing, draws included. */
-function assemblePermutation(node: PermutationNode, rendered: string[], opts: RenderInternalOptions): string {
+function assemblePermutation(node: PermutationNode, rendered: Fragment[], opts: RenderInternalOptions): Fragment {
   const elements: Element[] = [];
   node.options.forEach((o, i) => {
-    const text = phpTrim(rendered[i] ?? '');
-    if (text !== '') elements.push({ text, sep: o.separator });
+    const text = trimFragment(rendered[i] ?? '');
+    if (lengthOf(text) !== 0) elements.push({ text, sep: o.separator });
   });
   const total = elements.length;
   if (total === 0) return '';
@@ -749,18 +805,18 @@ function shuffle(arr: Element[], rng: Rng): void {
   }
 }
 
-function joinWithSeparators(elements: readonly Element[], globalSep: string, globalLastsep: string): string {
+function joinWithSeparators(elements: readonly Element[], globalSep: string, globalLastsep: string): Fragment {
   const count = elements.length;
   if (count === 0) return '';
   if (count === 1) return (elements[0] as Element).text;
 
-  let out = (elements[0] as Element).text;
+  const pieces: Fragment[] = [(elements[0] as Element).text];
   for (let i = 1; i < count; i += 1) {
     const el = elements[i] as Element;
     const sep = el.sep ?? (i === count - 1 ? globalLastsep : globalSep);
-    out += padSeparator(sep) + el.text;
+    pieces.push(padSeparator(sep), el.text);
   }
-  return out;
+  return joinFragments(pieces);
 }
 
 /** Purely-alphabetic separators get space-padded; others pass through (plugin). */

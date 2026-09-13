@@ -140,9 +140,16 @@ emit it. No engine output changed for either.
 
 ### Notes
 
-**Cost.** The post-process is about 30% slower on shield-heavy text and unchanged on plain prose: V8
-runs a Unicode-class lookbehind more slowly than its ASCII `\b`. On the scaling bench's 756 KB,
-106–118 → 139–145 ms (per pattern, `MULTI_ABBR_RE` 14 → 37 ms and `DOMAIN_RE` 56 → 71 ms).
+**Cost.** Against 0.7.0, the post-process of this whole batch is faster on prose and on HTML blocks and
+about a third slower on shield-heavy text — V8 runs a Unicode-class lookbehind more slowly than its ASCII
+`\b`, and every shield pattern carries one now. Per 1 000 calls, the four builds side by side:
+
+| input | 0.7.0 | the classes alone (regexes) | first linear scanners | now |
+|---|---|---|---|---|
+| prose, 857 characters | 34 ms | 32 ms | 108 ms | 19 ms |
+| HTML blocks, about 700 characters | 33 ms | 31 ms | 86 ms | 27 ms |
+| a URL, email, domain, decimal and abbreviation line, 237 characters | 36 ms | 46 ms | 70 ms | 49 ms |
+| the same line ×3 200, 756 KB, once | 113 ms | 151 ms | 223 ms | 158 ms |
 
 **The post-process is linear — and was a live denial of service in every release before this.** Eight
 of its passes were global regex replaces that a long run made retry from every start inside it: the
@@ -159,15 +166,25 @@ placeholder — so a few hundred bytes doubling a NUL and a decimal took 2.1 s a
 times that per doubling.
 
 The shields and the capitalizers are scanners now. They run the plugin's own patterns at the same starts,
-in the same order, and skip only starts that provably fail: every start inside one run of email-local
-characters meets the same `@` or none; an attempt that fails at the start of a chain of labels fails at
-every later start in that chain, because the chain's own labels prefix any match further in; and a lead
-has exactly one tokenization — a tag ends at the first `>` — so where each lead ends is indexed once, from
-the right. The URL cut is a loop, and the sentence-mark space starts a match only where its run starts.
-Output is byte-identical: 7.9 million strings against the regex implementation — exhaustive over small
-alphabets aimed at each pass, plus random soup — with every real control mutation caught, and the 20 000-input
-post-process differential against both PHP engines unchanged at zero. Those macro templates now render
-half a megabyte to a megabyte in 0.1–0.2 s, and the scaling bench is no slower on prose.
+in the same order, and skip only starts that provably fail. Every start inside one run of email-local
+characters meets the same `@` or none, so the email shield works back from each `@` — a text without one
+costs nothing. An attempt that fails at the start of a chain of labels fails at every later start in that
+chain, because the chain's own labels prefix any match further in, so the domain shield is one regex that
+matches at the starts it tries and consumes the chain when there is no domain — and is skipped when no dot
+in the text is followed by a label's first character. A lead has exactly one tokenization — a tag ends at
+the first `>` — so the capitalizers find their boundaries natively, walk a short lead, and build an index of
+where each lead ends, from the right, only when a lead holds a tag or runs past 32 characters; one index
+serves all three passes unless a capital grew the text (`ß` → `SS`). The URL cut is a loop, and the
+sentence-mark space starts a match only where its run starts. Output is byte-identical: 7.9 million strings
+against the regex implementation — exhaustive over small alphabets aimed at each pass, plus random soup — and
+5.8 million more aimed at the final form of each scanner, with every real control mutation caught, and the
+20 000-input post-process differential against both PHP engines unchanged at zero. Those macro templates now
+render half a megabyte to a megabyte in 0.1–0.2 s.
+
+The first cut of these scanners paid for linearity on every call: a regex call per word, a JavaScript step
+per character, three times — 3.4 times the regex passes on a short paragraph (the table above). The scaling
+bench, one large text, could not show that, and this note first said the bench was no slower on prose. The
+shapes above are what came after measuring a thousand short renders instead.
 
 The NUL-path restore computes the loop's result in one pass. An occurrence of a key is always a stretch
 of the original text between two `\x00`s — no stored value holds a `\x00`, and no whole stored value
@@ -196,30 +213,67 @@ whatever its macros spell, so the parser's half was reachable from a few hundred
 | `[<a`, 32 KB of spaces, a quoted `>` — parse | 2.0 s | 10 ms |
 | `[<` and a 32 KB word `>` — validate | 0.9 s | 10 ms |
 
-The parser still counts forward, and only once an opener turns out never to close does its frame build
-a table of pairs in one pass, which answers every later opener; the plural scan uses the same table, as
-the renderer's conditional pass already did. A table from the start is simpler and cost deep balanced
-nesting up to a third more, one table per level; this way nesting costs what it did, which is still
-super-linear — see below. The comment strip and the config scan are `indexOf`
-loops. The directive value ends at its last non-blank character instead of growing lazily, the tag
-pattern takes one whitespace character where two runs used to trade them, and a config key starts only
-where a word does — each matching exactly what it matched before.
-Output is byte-identical to the code before: 4.3 million generated strings through `parse`, `render`
-(three rng strategies, with and without post-process), `validate`, `analyze`, `extract` and the plural
-scan — exhaustive over alphabets aimed at each rewritten scan, plus random soup — with all twelve
-control mutations caught first.
+Brackets are paired once for the whole text, and the plural scan and the renderer's conditional pass use
+the same tables — the deep-nesting note below says how a construct is read now. The comment strip and the
+config scan are `indexOf` loops. The directive value ends at its last non-blank character instead of
+growing lazily, the tag pattern takes one whitespace character where two runs used to trade them, and a
+config key starts only where a word does — each matching exactly what it matched before. Output is
+byte-identical to the code before: 4.3 million generated strings through `parse`, `render` (three rng
+strategies, with and without post-process), `validate`, `analyze`, `extract` and the plural scan —
+exhaustive over alphabets aimed at each rewritten scan, plus random soup — with all twelve control
+mutations caught first.
 
-**Still super-linear: balanced nesting — and since 0.7.0, macros reach it.** #68 kept deep nesting
-super-linear on the ground that depth costs source: at the hosted 8 KB cap, 4 000 levels answered in
-about a second. The re-read took that ground away. `{%o15%x%c15%|y}` over fifteen `#set` doublings of
-`{` and of `}` is 700 bytes, and it hands the parser 32 768 levels: 31 s, in 0.7.0 and now alike, four
-times that per doubling up to the expansion budget (found by the Codex gate). Every level of the parser
-still reads its whole subtree — the forward count, the top-level split, a conditional's pipe, a config's
-end, the closing-tag test — and the renderer joins each permutation level's output again, so closing it
-takes frames that are offsets into one indexed text, in the parser and the renderer both, or a family
-rule. The PHP engines are no linear reference to copy: both resolve innermost-first with a full-text pass
-per level and stop at 10 000 levels with an exception — in `spintax/core`, 8 192 nested permutations took
-5.9 s and 32 768 nested enumerations threw. Not in this change: it needs that decision.
+**Deep nesting is linear too — and the re-read had made it a live denial of service.** #68 kept nesting
+super-linear on the ground that depth costs source: at the hosted 8 KB cap, 4 000 levels answered in about
+a second. 0.7.0's re-read took that ground away, because a construct re-read as text hands the parser
+whatever its macros spell (found by the Codex gate):
+
+| input (Node 22, the two measured side by side) | 0.7.0 | now |
+|---|---|---|
+| 705 bytes: `{%o15%x%c15%\|y}` over fifteen `#set` doublings of `{` and of `}` — render | 40 s | 0.14 s |
+| a `#def` rolling those 32 768 levels, referenced once — render | 40 s | 0.28 s |
+| `{a…x…b}` 16 384 levels deep, every level adding text — render | 19 s | 0.14 s |
+| `[a\|…x…]` 16 384 levels deep — render | 20 s | 0.24 s |
+| `{a%u%…x…}` 8 192 levels, each marked for the re-read by an undefined reference — render | 20 s | 0.10 s |
+| 20 000 nested conditionals naming a `#def` of 2^17 form feeds — render | 13 s | 0.30 s |
+| `{` 100 000 levels deep — parse | > 90 s | 0.21 s |
+
+Four costs were paid once per level, and each is gone:
+
+- **The parser read every construct's content in full** — to find its closer, to split it on top-level
+  pipes, to find a conditional's pipe, a config's end, a closing tag, a trailing separator — and handed its
+  children copies. A construct's children are spans of one text now, and every one of those questions is
+  answered for a span from tables built once over the text (`internal/text-index.ts`): bracket pairs; the
+  top-level pipes grouped by the brace and bracket totals in front of them, since `split_top_level`'s two
+  signed counters split exactly where both totals equal the ones at the span's start; a conditional's pipe
+  by jumping each opener to where one stack of both bracket kinds closes it, which is what the clamped
+  counter counts; the quote parity of every `>`; every closing tag by name; every `<` and `>`.
+- **The walk joined each frame's output into a new string**, copying a construct's text once for every
+  level above it. Frames hand fragments up instead — joins, and windows for a trimmed permutation element,
+  every join knowing how many PHP trim characters sit at its ends — and the text is made once.
+- **A construct marked for the re-read ran both conditional passes and the fixpoint over its body to find
+  nothing to change**, once per marked level. The index answers first: the body can change only if it holds
+  a conditional the pass would resolve — a well-formed head whose brace closes inside it — or a reference
+  expansion would substitute, a name the variable map defines while the budget lasts. When neither, the
+  splice returns what it always returned. The conditional pass finds its heads once, too, instead of
+  searching the text again from the start of every span.
+- **Truthiness scanned a value's leading whitespace at every conditional**; it is computed once per
+  variable map.
+
+Output is byte-identical to the code before this change: the 4.3 million alphabet strings above again, and
+20 000 generated documents — long outputs, padded and empty elements, constructs marked for the re-read
+with defined, undefined and budget-starved references, conditionals in bodies, count slots and `#def`
+rolls, nests up to 300 deep — through eight probes each (`parse`, `validate`, `analyze`, four rng
+strategies with and without post-process, and a pre-parsed `Ast`), with the control mutations caught first:
+a join that stops counting trim characters after its first piece, one that never counts them at its end, a
+trim window a character late, a re-read check that forgets conditionals or inverted heads or compares names
+case-sensitively, one truthiness cache for every map, a conditional pass that skips a head at a span's start,
+top-level pipes grouped by one depth, a flipped quote parity, a closing tag on the span's end counted
+outside it. The PHP engines are no linear reference here: both resolve innermost-first with a
+full-text pass per level and stop at 10 000 levels with an exception — in `spintax/core`, 8 192 nested
+permutations took 5.9 s and 32 768 nested enumerations threw. Real templates did not pay for any of this —
+the render cost note below has the numbers. An `Ast` copied out of the process (it is not a serialization
+format) loses the side table the index lives in, and renders the same text by reading bodies as before.
 
 **Two costs bounded by the source, recorded rather than changed.** The same gate found `validate()`
 formatting a large definition cycle in quadratic time — each name walks the cycle to count what its
@@ -261,9 +315,12 @@ The same generated documents without any of the changed shapes — 600 of them, 
 `validate`/`analyze`/`extract` — are byte-identical, and the harness caught all three deliberate control
 mutations first.
 
-**Render cost.** A construct re-read because it holds a conditional is parsed again on every render:
-1 000 renders of that payment FAQ take 165 ms against 92 ms, about 0.17 ms a render. A template 0.7.0
-already re-read (a reference in a branch) moves 7%, plain prose not at all.
+**Render cost.** A construct re-read because it holds a conditional is parsed again on every render, so
+the payment FAQ whose list gates one item behind a flag is the one real template that got slower: 1 000
+renders take 120 ms against 0.7.0's 86. Everything else measured got faster once the index answered most
+re-reads without reading, the walk stopped copying and the post-process lost its per-call overhead: the FAQ
+with a providers gate four times over, 513 ms against 1 322; plain prose, 145 against 198; all 1 262
+construct-bearing literals of the production host's migrations, rendered once each, 178 ms against 262.
 
 **Recorded, not closed** — in the conformance README, under the known divergences. A value carrying an
 unbalanced bracket (`[a|{%L%}]` with `L = "x}|y"`) re-cuts the enclosing construct in PHP and only its
