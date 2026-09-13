@@ -715,5 +715,16 @@
     "expect": {
       "output": "<p>\u01c5ivot</p>"
     }
+  },
+  {
+    "id": "postprocess/punycode-tld-folds-long-s-and-kelvin",
+    "note": "The punycode TLD is caseless as PHP reads it under /i, and PCRE2 caseless [a-z] also takes U+017F LONG S and U+212A KELVIN SIGN. With a mixed-case prefix (xN--, Xn--) no one-case letter reading can stand in for it, so these two TLDs are domains only if the punycode class folds exactly that far. Guards an engine that drops the case-insensitive flag and spells the class out.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see site.xN--\u017fA and site.Xn--\u212a1 today",
+    "postProcess": true,
+    "expect": {
+      "output": "See site.xN--\u017fA and site.Xn--\u212a1 today"
+    }
   }
 ]

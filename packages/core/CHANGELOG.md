@@ -27,14 +27,15 @@ All notable changes to `@spintax/core` are documented here. This project adheres
 
 ### Corpus
 
-Nine cases in `render-postprocess.json`, every expectation taken from both PHP engines with the rule
+Nine new cases in `render-postprocess.json`, every expectation taken from both PHP engines with the rule
 applied: `postprocess/title-case-tld-is-a-sentence` (`compact.Game`), `postprocess/mixed-case-tld-is-not-a-domain`
 (`cOM` — one case means the whole label), `postprocess/title-case-email-tld-is-not-shielded` (the cost,
 pinned so nobody files it), the negatives `postprocess/uppercase-tld-is-a-domain`,
-`postprocess/uppercase-email-domain-is-shielded`, `postprocess/caseless-script-tld-is-a-domain` and
-`postprocess/uppercase-punycode-tld-is-a-domain`, and `postprocess/titlecase-letter-after-block-tag-is-kept`.
-`postprocess/glued-cyrillic-sentence-is-a-domain` becomes `postprocess/glued-cyrillic-sentence-is-spaced`:
-it pinned the reading before #79, and its note said deciding #79 would move it.
+`postprocess/uppercase-email-domain-is-shielded`, `postprocess/caseless-script-tld-is-a-domain`,
+`postprocess/uppercase-punycode-tld-is-a-domain` and `postprocess/punycode-tld-folds-long-s-and-kelvin`, and
+`postprocess/titlecase-letter-after-block-tag-is-kept`. `postprocess/glued-cyrillic-sentence-is-a-domain`
+becomes `postprocess/glued-cyrillic-sentence-is-spaced`: it pinned the reading before #79, and its note said
+deciding #79 would move it.
 
 ### Notes
 
@@ -48,11 +49,20 @@ and U+212A included, as PCRE2's caseless `[a-z]` takes them.
 TLDs and a titlecase digraph added, plus dotted chains whose TLD candidate is lower, upper, title, mixed or
 caseless, in prose and in emails — through both PHP engines with the rule applied: they agree with each other
 everywhere, this engine differs on none but the recorded final `trim`, and 0.8.0 on 4 552. Control mutations:
-`i` restored on either shield, the caseless letters dropped from one branch or both, the any-case TLD
-restored — each turns the suite red. Dropping U+017F and U+212A from the punycode class is output-equivalent,
-not caught: a TLD that needs them always has the shorter `xn--` reading from the same start, and the
-unshielded rest is text no later pass rewrites. Post-process cost is unchanged — 1 000 prose calls 18 ms
-against 19, HTML blocks 27 against 26, a 756 KB shield-heavy text 147 ms against 154.
+`i` restored on either shield, the caseless letters dropped from one branch or both, the any-case TLD restored,
+U+017F and U+212A dropped from the punycode class — each turns the suite red. The last one first looked
+output-equivalent here, because a lower-case `xn--` prefix always has a one-case letter reading from the same
+start; a mixed-case prefix has none (`site.xN--ſA`, found by the Codex gate), and
+`postprocess/punycode-tld-folds-long-s-and-kelvin` pins it. Post-process cost is unchanged — 1 000 prose calls
+18 ms against 19, HTML blocks 27 against 26, a 756 KB shield-heavy text 147 ms against 154.
+
+**The PHP engines skip what they cannot shield.** Rejecting `Game` made `a.a.…a.Game` — one domain from its
+first start before — a chain PCRE retried from every label: 4 000 labels took 48 ms where they had taken
+0.7 (found by the Codex gate). Both PHP shields now take a run or a chain they cannot shield and
+`(*SKIP)(*FAIL)` past it — the skips this engine's scanners already prove output-neutral — which also
+removes the older retry on a chain whose last label is too short to be a TLD: 2 000 labels, 39 ms before,
+0.1 ms now. Ordinary text costs 2–4 % more there. JavaScript has no backtracking verbs, which is why this
+engine's shields are scanners.
 
 ## 0.8.0 — 2026-09-13
 
