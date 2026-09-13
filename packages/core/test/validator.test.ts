@@ -370,3 +370,30 @@ describe('validator — the circular-reference walk (emission shape + the prune 
     });
   });
 });
+
+// The scans a template goes through before any verdict. Each read to the end of the text once per opener
+// or per start, and took seconds at a few dozen kilobytes. The rewrites are proven output-identical by a
+// differential kept outside the repo; these pin that they stay linear. The bound is loose on purpose.
+describe('validate — no scan restarts from every opener', () => {
+  const N = 400_000;
+  const within = (fn: () => void): void => {
+    const started = Date.now();
+    fn();
+    expect(Date.now() - started).toBeLessThan(2_000);
+  };
+
+  test('permutation configs: an unclosed `[<`, and a key run that no `=` follows', () => {
+    within(() => validate('[<'.repeat(N / 2)));
+    within(() => validate(`[<${'a'.repeat(N)}>x]`));
+    within(() => validate(`[<a=1;${'b'.repeat(N)}>x]`));
+  });
+
+  test('plural blocks that never close', () => {
+    within(() => validate('{plural 1:'.repeat(N / 10), { locale: 'en' }));
+  });
+
+  test('comments that never close, and a directive value with a long whitespace run inside', () => {
+    within(() => validate('/#a'.repeat(N / 3)));
+    within(() => validate(`#set %a% = x${' '.repeat(N)}y\n%a%`));
+  });
+});

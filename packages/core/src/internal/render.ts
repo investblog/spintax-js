@@ -28,6 +28,7 @@
 import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { UCP_SPACE } from './charclass';
 import { IncludeResolverError } from './errors';
+import { BRACE_CLOSE, BRACE_OPEN, matchPairs } from './pairs';
 import { parseSequence, parseTemplate, phpTrim, recognizeConditional } from './parser';
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
@@ -494,13 +495,13 @@ function renderConditional(node: ConditionalNode, opts: RenderInternalOptions): 
  * taken branch made `render()` throw `RangeError` at ~9000 levels of nesting —
  * §9.2 says render never throws on content, and the parsers were made iterative
  * for this exact reason — and re-scanning per `{?` was quadratic (see
- * {@link matchBraces}). Both are reachable from template text through the live
+ * {@link matchPairs}). Both are reachable from template text through the live
  * public Worker.
  */
 function resolveConditionalsInText(text: string, opts: RenderInternalOptions): string {
   if (!text.includes('{?')) return text;
 
-  const close = matchBraces(text);
+  const close = matchPairs(text, BRACE_OPEN, BRACE_CLOSE);
   const out: string[] = [];
   // Spans of `text` still to emit, in order. A taken branch is a SPAN of the same
   // string, never a copy, and the untaken one is skipped — so every character is
@@ -546,33 +547,6 @@ function resolveConditionalsInText(text: string, opts: RenderInternalOptions): s
   }
 
   return out.join('');
-}
-
-/**
- * Match `{` to `}` across the whole string in ONE pass — index of the closing
- * brace for every opening one, or -1.
- *
- * Equivalent to calling `findMatchingClose` per `{`, and that is the point: the
- * per-brace call rescans to the end of the string every time it fails to match,
- * so an unbalanced count slot (legal — only the whole `{plural …}` block has to
- * balance, and the slot is cut at the first `:`) made this pass quadratic. A
- * 78 KB slot took 3 seconds, and the public Worker renders untrusted templates.
- */
-function matchBraces(text: string): Int32Array {
-  const close = new Int32Array(text.length).fill(-1);
-  const opens: number[] = [];
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (ch === '{') {
-      opens.push(i);
-    } else if (ch === '}') {
-      const open = opens.pop();
-      if (open !== undefined) close[open] = i;
-    }
-  }
-
-  return close;
 }
 
 /**

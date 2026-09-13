@@ -87,6 +87,15 @@ Minor rather than patch when it ships: rendered text changes for every template 
   letter after it (20 000 of `\n` plus a space: 4 s in 0.7.0). Each now starts a match only where the
   run starts — the same matches, checked over 500 000 generated strings — and all of these take
   milliseconds.
+- **`parse()` and `render()` no longer throw on a long tag-shaped permutation config.** Whether
+  `[<name>…]` opens with an HTML tag was decided by compiling `</name\s*>` from the name itself, and V8
+  will not compile that past about 7.8 KB of name: `SyntaxError: Invalid regular expression … Stack
+  overflow`, straight out of `parse()`. A 7.8 KB source was enough — under the reference Worker's 8 KB
+  cap — and so were 333 bytes of `#set` doubling a letter inside a re-read config, which spell the name
+  at render time. §9.2 says the engine never throws on content; 0.7.0 threw on both.
+  The closing tag is found by a scan now, matching exactly what the pattern matched: any case, and the
+  two non-ASCII letters `iu` folds into ASCII (U+017F, U+212A). Found by the scaling probe behind the
+  note on template scans below.
 
 ### Changed, visibly
 
@@ -157,11 +166,38 @@ alphabets aimed at each pass, plus random soup — with every real control mutat
 post-process differential against both PHP engines unchanged at zero. Those macro templates now render
 half a megabyte to a megabyte in 0.1–0.2 s, and the scaling bench is no slower on prose.
 
-**What is still super-linear, and was in 0.7.0: the template-level scans.** Reading a template, not
-post-processing a render: `[<` repeated (render 1.9 s at 32 KB, validate 0.35 s), `[<li>` repeated
-(0.8 s), `[<sep="` repeated (0.8 s), an unclosed `{?a?` repeated (render 1.1 s), `{plural 1:` repeated
-(render 0.4 s, validate 0.26 s). The hosted surfaces cap a source at 8 KB, where these cost a tenth of
-that; they are next, in their own change.
+**Reading a template is linear too — and part of that was live the same way.** The template scans had
+the post-process's flaw. The parser matched each `{` and `[` by counting forward to its closer, which
+for an opener that never closes is the end of the text, from every such opener; the plural scan did the
+same for `{plural …}`, and the validator ran `/\[<([^>]*?)>/` from every `[<`. Lazy or overlapping
+patterns restarted from every character of a run in four more places: a `/# … #/` comment that never
+closes, a `#set`/`#def` value with a long whitespace run inside, a tag-shaped config holding a quoted
+`>`, and the validator's config-key test on a long word. The re-read of a construct hands the parser
+whatever its macros spell, so the parser's half was reachable from a few hundred bytes:
+
+| input (Node 22) | 0.7.0 | now |
+|---|---|---|
+| 333–341 bytes of `#set` spelling `[<`, `{?a?`, `[<li>`, `[<sep="` or `{plural 1:` inside `{…}` — render | 1.3–6.2 s, ×4 per doubling | 63–117 ms |
+| 387 bytes spelling form feeds into a tag-shaped config that holds a quoted `>` — render | 8.6 s, ×4 per doubling | 117 ms |
+| `[<` repeated, 32 KB — render / validate | 1.4 s / 0.27 s | 29 ms / 23 ms |
+| `{plural 1:` repeated, 32 KB — render / validate | 0.32 s / 0.20 s | 41 ms / 17 ms |
+| `/#a` repeated, 32 KB — parse / validate | 0.14 s / 0.14 s | 10 ms / 12 ms |
+| a `#set` value holding 32 KB of spaces — parse / validate | 2.8 s / 11.8 s | 4 ms / 14 ms |
+| `[<a`, 32 KB of spaces, a quoted `>` — parse | 2.0 s | 10 ms |
+| `[<` and a 32 KB word `>` — validate | 0.9 s | 10 ms |
+
+The parser still counts forward, and only once an opener turns out never to close does its frame build
+a table of pairs in one pass, which answers every later opener; the plural scan uses the same table, as
+the renderer's conditional pass already did. A table from the start is simpler and cost deep balanced
+nesting up to a third more, one table per level — this way nesting costs what it did, and stays
+super-linear by the decision recorded for #68. The comment strip and the config scan are `indexOf`
+loops. The directive value ends at its last non-blank character instead of growing lazily, the tag
+pattern takes one whitespace character where two runs used to trade them, and a config key starts only
+where a word does — each matching exactly what it matched before.
+Output is byte-identical to the code before: 4.3 million generated strings through `parse`, `render`
+(three rng strategies, with and without post-process), `validate`, `analyze`, `extract` and the plural
+scan — exhaustive over alphabets aimed at each rewritten scan, plus random soup — with all twelve
+control mutations caught first.
 
 **Two PHP builds differ at the margin.** PCRE2 10.43 made non-spacing marks and connector punctuation
 word characters, so PHP 8.3 sees a boundary between `x` and U+0301 that PHP 8.4 does not. The corpus

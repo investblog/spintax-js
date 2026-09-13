@@ -304,10 +304,66 @@ describe('parseTemplate — lenient on malformed markup', () => {
   });
 });
 
+describe('parseTemplate — a tag-shaped config is scanned for its closing tag, never compiled', () => {
+  const configOf = (src: string): unknown => (nodes(src)[0] as { config?: unknown }).config;
+
+  test('a config name of any length parses', () => {
+    // The closing tag was looked for with `</name\s*>` built from the name itself: V8 would not compile
+    // that past about 7.8 KB and parse() threw SyntaxError — render() too, from 333 bytes of macros
+    // spelling the name inside a re-read config. §9.2: the engine never throws on content.
+    const name = 'a'.repeat(64_000);
+    expect(configOf(`[<${name}>x|y]`)).toEqual({ minsize: null, maxsize: null, sep: name, lastsep: name });
+    expect(configOf(`[<${name}>x|y</${name}>]`)).toEqual(DEF_CFG);
+  });
+
+  test('the closing tag matches as `iu` matched it — any case, and the two letters that fold into ASCII', () => {
+    const LONG_S = String.fromCharCode(0x17f);
+    const KELVIN = String.fromCharCode(0x212a);
+    expect(configOf('[<Li>a|b</lI >]')).toEqual(DEF_CFG);
+    expect(configOf(`[<sk>a|b</${LONG_S}${KELVIN}>]`)).toEqual(DEF_CFG);
+    expect(configOf('[<li>a|b</lix>]')).toEqual({ minsize: null, maxsize: null, sep: 'li', lastsep: 'li' });
+  });
+});
+
 describe('stripComments', () => {
   test('removes /# ... #/ across the run', () => {
     expect(stripComments('a/# note #/b')).toBe('ab');
     expect(stripComments('x/# multi\nline #/y')).toBe('xy');
+  });
+
+  test('a comment closes at the first #/ after its own /#, and an unclosed one stays text', () => {
+    expect(stripComments('a/#/b')).toBe('a/#/b');
+    expect(stripComments('a/#/#/b')).toBe('ab');
+    expect(stripComments('a/# x #/ b /# y')).toBe('a b /# y');
+  });
+});
+
+// Each shape took seconds to minutes when a scan per opener, or a lazy pattern per start, read to the end
+// of the text — and the parser also reads the megabyte a few hundred bytes of macros spell inside a
+// re-read construct. The rewrites are proven output-identical by a differential kept outside the repo;
+// these pin that they stay linear. The bound is loose on purpose.
+describe('parser — no scan restarts from every opener', () => {
+  const N = 400_000;
+  const within = (fn: () => void): void => {
+    const started = Date.now();
+    fn();
+    expect(Date.now() - started).toBeLessThan(2_000);
+  };
+
+  test('openers that never close', () => {
+    within(() => parseTemplate('[<'.repeat(N / 2)));
+    within(() => parseTemplate('{plural 1:'.repeat(N / 10)));
+    within(() => parseTemplate('{?a?'.repeat(N / 4)));
+    within(() => parseTemplate('['.repeat(N)));
+  });
+
+  test('comments that never close, and a directive value with a long whitespace run inside', () => {
+    within(() => parseTemplate('/#a'.repeat(N / 3)));
+    within(() => parseTemplate(`#set %a% = x${' '.repeat(N)}y\n%a%`));
+  });
+
+  test('a tag-shaped config holding a quoted >', () => {
+    within(() => parseTemplate(`[<a${' '.repeat(N)}">"b>x|y]`));
   });
 });
 

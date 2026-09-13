@@ -16,15 +16,21 @@
  */
 import { AST_VERSION, type Node, type ParsedAst, type PermConfig } from './ast';
 import { stripSentinels } from './neutralize';
+import { BRACE_CLOSE, BRACE_OPEN, BRACKET_CLOSE, BRACKET_OPEN, matchPairs } from './pairs';
 
 const VARIABLE_RE = /^%(\w+)%/;
 // `\r?` before the multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
 /**
  * The one grammar for `#set` and `#def`. Whitespace is `[ \t]` (not `\s`) so a directive is a
- * single line, and the value group is `(.*?)` so an empty value is legal. `\r?` before the
- * multiline `$` so a CRLF line strips cleanly (JS `.` excludes \r).
+ * single line, and the value group may be empty. `\r?` before the multiline `$` so a CRLF line
+ * strips cleanly (JS `.` excludes \r).
+ *
+ * The value is the rest of the line up to its last character that is not a space, a tab or a line
+ * terminator — what a lazy `(.*?)[ \t]*` captured, and the same match. Lazy, every character of a
+ * whitespace run inside the value retried `[ \t]*` over the rest of that run: a directive line with
+ * 16 KB of spaces in its value cost `parse()` 0.7 s and `validate()` 2.8 s, ×4 per doubling.
  */
-export const DIRECTIVE_RE = /^[ \t]*#(set|def)[ \t]+%(\w+)%[ \t]*=[ \t]*(.*?)[ \t]*\r?$/gmu;
+export const DIRECTIVE_RE = /^[ \t]*#(set|def)[ \t]+%(\w+)%[ \t]*=[ \t]*((?:.*[^ \t\n\r\u2028\u2029])?)[ \t]*\r?$/gmu;
 const CONDITIONAL_NAME_RE = /[A-Za-z_]\w*/y;
 const PLURAL_PREFIX = 'plural ';
 
@@ -109,9 +115,23 @@ export function extractDirectives(text: string): {
   return { body: stripped.replace(/\n{3,}/gu, '\n\n'), setDefs, defDefs, occurrences };
 }
 
-/** Remove `/# … #/` block comments (non-greedy, spans newlines). */
+/**
+ * Remove `/# … #/` block comments (non-greedy, spans newlines): each `/#` to the first `#/` after it,
+ * what `/\/#[\s\S]*?#\//g` removed — without retrying that lazy run from every `/#` once no `#/` is
+ * left, which read to the end of the text from each of them.
+ */
 export function stripComments(text: string): string {
-  return text.replace(/\/#[\s\S]*?#\//g, '');
+  let out = '';
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf('/#', from);
+    if (open === -1) break;
+    const close = text.indexOf('#/', open + 2);
+    if (close === -1) break;
+    out += text.slice(from, open);
+    from = close + 2;
+  }
+  return from === 0 ? text : out + text.slice(from);
 }
 
 /** Parse a run of text into a node sequence (construct parsing only — no comment
@@ -125,9 +145,21 @@ export function parseSequence(text: string): Node[] {
     /** The construct whose children this frame is collecting, if any. */
     plan: ChildPlan | null;
     parts: Node[][];
+    /** Matching closers of this frame's text, built once an opener of that kind turns out never to close. */
+    braces: Int32Array | null;
+    brackets: Int32Array | null;
   }
 
-  const frame = (t: string): Frame => ({ text: t, i: 0, literal: '', nodes: [], plan: null, parts: [] });
+  const frame = (t: string): Frame => ({
+    text: t,
+    i: 0,
+    literal: '',
+    nodes: [],
+    plan: null,
+    parts: [],
+    braces: null,
+    brackets: null,
+  });
   const stack: Frame[] = [frame(text)];
 
   while (stack.length > 0) {
@@ -157,8 +189,7 @@ export function parseSequence(text: string): Node[] {
       const ch = f.text.charAt(f.i);
 
       if (ch === '{' || ch === '[') {
-        const close = ch === '{' ? '}' : ']';
-        const end = findMatchingClose(f.text, f.i, ch, close);
+        const end = closerOf(f, ch);
         if (end === -1) {
           f.literal += ch;
           f.i += 1;
@@ -200,6 +231,41 @@ export function parseSequence(text: string): Node[] {
   }
 
   return [];
+}
+
+/**
+ * Index of the closer matching the `{` or `[` at `f.i` — depth of that bracket pair only — or -1.
+ *
+ * Counted forward from the opener while every opener so far has closed: a balanced construct costs its
+ * own length, and the walk then skips past it. The count for an opener that never closes runs to the
+ * end of the text, though, and a run of them ran it from each one — `[<` or `{plural 1:` repeated, which
+ * macros spell inside a re-read construct: 1.3 and 6.2 s from 333 and 341 bytes, four times that per
+ * doubling. So the first such opener builds a table of the frame's pairs in one pass
+ * ({@link matchPairs}), and every later opener of its kind is answered from it. Not a table from the
+ * start: that cost deep balanced nesting — still super-linear by decision (#68) — up to a third more,
+ * one table per level.
+ */
+function closerOf(
+  f: { text: string; i: number; braces: Int32Array | null; brackets: Int32Array | null },
+  open: '{' | '[',
+): number {
+  const table = open === '{' ? f.braces : f.brackets;
+  if (table !== null) return table[f.i] as number;
+
+  const close = open === '{' ? '}' : ']';
+  let depth = 0;
+  for (let i = f.i; i < f.text.length; i += 1) {
+    const ch = f.text.charAt(i);
+    if (ch === open) {
+      depth += 1;
+    } else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  if (open === '{') f.braces = matchPairs(f.text, BRACE_OPEN, BRACE_CLOSE);
+  else f.brackets = matchPairs(f.text, BRACKET_OPEN, BRACKET_CLOSE);
+  return -1;
 }
 
 /**
@@ -411,8 +477,16 @@ const MINSIZE_RE = /minsize[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*(\d+)/i;
 const MAXSIZE_RE = /maxsize[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*(\d+)/i;
 const SEP_RE = /(?<!last)sep[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*"([^"]*)"/i; // negative lookbehind excludes "lastsep"
 const LASTSEP_RE = /lastsep[ \t\n\x0B\f\r]*=[ \t\n\x0B\f\r]*"([^"]*)"/i;
-const HTML_TAG_RE = /^([a-zA-Z][a-zA-Z0-9-]*)(?:[ \t\n\x0B\f\r]+[^>]*)?\/?$/;
+// One whitespace character, not a run: `[^>]*` takes whitespace too, so the same strings match — and
+// `[ws]+[^>]*` let the two runs trade characters, every split retried when a quoted `>` in the config
+// makes `$` fail. Quadratic in the config, which a macro can make a megabyte long.
+const HTML_TAG_RE = /^([a-zA-Z][a-zA-Z0-9-]*)(?:[ \t\n\x0B\f\r][^>]*)?\/?$/;
 const PER_ELEM_HTML_RE = /^[a-zA-Z][a-zA-Z0-9]*[ \t\n\x0B\f\r]/;
+/**
+ * Every `</name>` in a text, with the name read as the tag-name pattern reads one. Under `iu` the
+ * class also takes U+017F and U+212A — they fold to `s` and `k` — which {@link foldTagName} maps back.
+ */
+const CLOSING_TAG_RE = /<\/([a-z][a-z0-9-]*)[ \t\n\x0B\f\r]*>/giu;
 
 function defaultPermConfig(): PermConfig {
   return { minsize: null, maxsize: null, sep: ' ', lastsep: null };
@@ -467,8 +541,23 @@ function looksLikeHtmlStartTag(tagText: string, remaining: string): boolean {
   if (!m) return false;
   if (trimmed.endsWith('/')) return true; // self-closing
   const tagName = (m[1] ?? '').toLowerCase();
-  return new RegExp(`</${escapeRegExp(tagName)}[ \\t\\n\\x0B\\f\\r]*>`, 'iu').test(remaining);
+  // A scan for closing tags, not a pattern built from this one's name: the pattern carried the whole
+  // name, V8 could not compile it past about 7.8 KB, and parse() threw `SyntaxError` — render() too,
+  // from a 333-byte template once macros spelled the name inside a re-read config.
+  for (const closing of remaining.matchAll(CLOSING_TAG_RE)) {
+    if (foldTagName(closing[1] ?? '') === tagName) return true;
+  }
+  return false;
 }
+
+/**
+ * A tag name as `iu` compares it. U+212A KELVIN SIGN lower-cases to `k` on its own; U+017F LATIN SMALL
+ * LETTER LONG S is lower case already, so it is mapped by hand.
+ */
+function foldTagName(name: string): string {
+  return name.toLowerCase().split(LONG_S).join('s');
+}
+const LONG_S = String.fromCharCode(0x17f);
 
 /**
  * Turn raw split parts into elements, moving a trailing `<sep>` on part[i] to be
@@ -533,9 +622,6 @@ function intGroup(m: RegExpExecArray | null): number | null {
 function strGroup(m: RegExpExecArray | null): string | null {
   return m && m[1] !== undefined ? m[1] : null;
 }
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-}
 
 // PHP trim strips only [ \t\n\r\0\x0B] — NOT the full JS Unicode whitespace set —
 // so use these for byte-exact parity wherever the plugin trims (permutation
@@ -559,24 +645,6 @@ function phpRtrim(s: string): string {
   let end = s.length;
   while (end > 0 && isPhpTrimChar(s.charCodeAt(end - 1))) end -= 1;
   return end === s.length ? s : s.slice(0, end);
-}
-
-/**
- * Index of the `close` that matches the `open` at `openPos`, tracking depth of
- * this bracket pair only. Returns -1 if unmatched.
- */
-function findMatchingClose(text: string, openPos: number, open: string, close: string): number {
-  let depth = 0;
-  for (let i = openPos; i < text.length; i += 1) {
-    const ch = text.charAt(i);
-    if (ch === open) {
-      depth += 1;
-    } else if (ch === close) {
-      depth -= 1;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
 }
 
 /**

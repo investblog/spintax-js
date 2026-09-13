@@ -175,6 +175,12 @@ function checkDirectives(text: string, out: Diagnostic[]): void {
   }
 }
 
+// A key is a whole word run: `(?<!\w)` lets a match start only where one begins. `\w+` without it was
+// retried from every character of a run that no `=` follows, and the config is everything between
+// `[<` and the next `>` — as long as the template.
+const CONFIG_KEY_PRESENT_RE = /(?<!\w)\w+[ \t\n\x0B\f\r]*=/;
+const CONFIG_KEYS_RE = /(?<!\w)(\w+)[ \t\n\x0B\f\r]*=/gu;
+
 /**
  * `[<config>]` prefixes: known keys only, minsize/maxsize must be digit runs.
  *
@@ -183,12 +189,19 @@ function checkDirectives(text: string, out: Diagnostic[]): void {
  * and no config at all to PHP's, a verdict apart (./charclass).
  */
 function checkPermutationConfigs(text: string, idx: LineIndex, out: Diagnostic[]): void {
-  for (const m of text.matchAll(/\[<([^>]*?)>/gu)) {
-    const configStr = m[1] ?? '';
-    if (!/\w+[ \t\n\x0B\f\r]*=/.test(configStr)) continue; // not a key=value config
-    const configBase = (m.index ?? 0) + 2; // offset of configStr in text (past "[<")
+  // Every `[<` up to the first `>` after it — what `/\[<([^>]*?)>/g` matched, without retrying the
+  // lazy run from every `[<`: with no `>` left, each one read to the end of the text.
+  for (let from = 0; ; ) {
+    const open = text.indexOf('[<', from);
+    if (open === -1) break;
+    const configBase = open + 2; // offset of configStr in text (past "[<")
+    const gt = text.indexOf('>', configBase);
+    if (gt === -1) break;
+    from = gt + 1;
+    const configStr = text.slice(configBase, gt);
+    if (!CONFIG_KEY_PRESENT_RE.test(configStr)) continue; // not a key=value config
 
-    for (const km of configStr.matchAll(/(\w+)[ \t\n\x0B\f\r]*=/gu)) {
+    for (const km of configStr.matchAll(CONFIG_KEYS_RE)) {
       const key = (km[1] ?? '').toLowerCase();
       if (!KNOWN_CONFIG_KEYS.has(key)) {
         out.push(err('permutation.unknown-key', `Unknown permutation config key: '${km[1]}'.`,

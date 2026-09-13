@@ -2,6 +2,7 @@
  * Locale plural rules — ported from the plugin's `Plurals` (parity item §3.1).
  * Shared by the validator (arity check, PR-12) and the renderer (bucket pick, M2).
  */
+import { BRACE_CLOSE, BRACE_OPEN, matchPairs } from './pairs';
 
 const PLURAL_PREFIX = '{plural ';
 
@@ -22,23 +23,17 @@ export interface PluralBlock {
  */
 export function findPluralBlocks(text: string): PluralBlock[] {
   const blocks: PluralBlock[] = [];
+  // The closing brace of every block from one table: a depth scan per `{plural ` ran to the end of the
+  // text for each one left open, which made a run of them quadratic.
+  let close: Int32Array | null = null;
   let i = 0;
   while (i < text.length) {
     const start = text.indexOf(PLURAL_PREFIX, i);
     if (start === -1) break;
 
-    let depth = 1;
-    let j = start + PLURAL_PREFIX.length;
-    while (j < text.length) {
-      const ch = text.charAt(j);
-      if (ch === '{') depth += 1;
-      else if (ch === '}') {
-        depth -= 1;
-        if (depth === 0) break;
-      }
-      j += 1;
-    }
-    if (depth !== 0) {
+    close ??= matchPairs(text, BRACE_OPEN, BRACE_CLOSE);
+    const j = close[start] as number;
+    if (j === -1) {
       i = start + PLURAL_PREFIX.length; // unmatched opening — skip past prefix
       continue;
     }

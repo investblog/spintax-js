@@ -452,6 +452,32 @@ describe('render — the re-read covers a whole <config> and every conditional i
     }
   });
 
+  test('a few hundred bytes of macros cannot buy a quadratic parse of the construct they are spliced into', () => {
+    // The re-read hands the parser the megabyte a doubling macro spells. An unclosed opener per unit
+    // sent the parser to the end of the text from each — 5 to 28 s from under 350 bytes — a quoted `>`
+    // in a tag-shaped config was quadratic in the config, and a long name there made render() throw.
+    const doubled = (unit: string, body: string, levels: number): string => {
+      let template = `#set %l0% = ${unit}\n`;
+      for (let i = 1; i <= levels; i += 1) template += `#set %l${i}% = %l${i - 1}%%l${i - 1}%\n`;
+      return template + body.replace('X', `%l${levels}%`);
+    };
+    const shapes: [string, string, number][] = [
+      ['[<', '{aXb|c}', 16],
+      ['{plural 1:', '{aXb|c}', 16],
+      ['{?a?', '{aXb|c}', 16],
+      ['[<sep="', '{aXb|c}', 16],
+      // A form feed, not a space: a directive value loses its edge spaces, and the tag pattern's
+      // whitespace class takes \f as well.
+      ['\f', '[<a X">"b>x|y]', 18],
+      ['a', '[<X>x|y]', 16],
+    ];
+    for (const [unit, body, levels] of shapes) {
+      const started = Date.now();
+      expect(() => publicRender(doubled(unit, body, levels), { seed: 1 })).not.toThrow();
+      expect(Date.now() - started).toBeLessThan(3_000);
+    }
+  });
+
   test('a padded element is trimmed in linear time — whitespace from a value is not seconds (review)', () => {
     // Trimming every assembled element with an end-anchored regex went quadratic on a long run inside
     // the text: 51 000 spaces took 3 s, and the expansion budget allows a megabyte.
