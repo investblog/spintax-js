@@ -95,6 +95,12 @@ describe('postProcess — no pass rescans a long run from every start', () => {
     within(() => postProcess(`${'<p>'.repeat(N / 3)}1`));
     within(() => postProcess('\n<'.repeat(N / 2)));
   });
+
+  test('the restore of a text carrying U+0000, which takes the reference loop’s reading (#54)', () => {
+    // One split/join per placeholder: 100 000 decimals after a NUL would be 100 000 scans of the text.
+    within(() => postProcess(`\x00${'1.1,'.repeat(N / 4)}`));
+    within(() => postProcess(`\x00${'NUM_0\x00a.io '.repeat(N / 12)}`));
+  });
 });
 
 // Every pattern of the cosmetic stage carries /u in PHP — the decimal shield alone does not — and /u

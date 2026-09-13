@@ -322,14 +322,60 @@ const RESTORE_RE = new RegExp(`\\x00(?:${SHIELD_PREFIXES.join('|')})_\\d+\\x00`,
  * `\x00` and every other shield class is letters/digits/dots, so no match can span a
  * placeholder (spintax-js#53). The property is worth stating because it is the one an
  * ordering change could quietly take away.
+ *
+ * The loop is not run as a loop, though: one scan of the text per placeholder is quadratic, and
+ * one `\x00` in a template buys it — a few hundred bytes of macros doubling `\x00` and a decimal
+ * took 2 s at 16 000 decimals, four times that per doubling. {@link restoreAsTheLoopDoes} computes
+ * the loop's result in one pass.
  */
 function restore(text: string, input: string, placeholders: Map<string, string>): string {
   if (!input.includes('\x00')) {
     return text.replace(RESTORE_RE, (key) => placeholders.get(key) ?? key);
   }
-  let out = text;
-  for (const [key, value] of placeholders) {
-    out = out.split(key).join(value);
+  return restoreAsTheLoopDoes(text, placeholders);
+}
+
+/**
+ * What `for (const [key, value] of placeholders) text = text.split(key).join(value)` returns, in
+ * linear time.
+ *
+ * Every key is `\x00NAME\x00`, so an occurrence of one is a stretch between two `\x00`s whose content
+ * is that NAME — a "gap". Replacing it removes both delimiters and puts a value there, and that can
+ * never form a new occurrence: no value holds a `\x00` (see {@link restore}), and none is a piece of
+ * a key name either — a URL keeps its `://`, an email its `@`, a domain, decimal or abbreviation its
+ * `.`, and a URI cut back to its scheme (`tel:.` stores `tel`) is no substring of `URL_7` or
+ * `EMAIL_7`. So the only occurrences the loop can ever meet are gaps of the original text, and the
+ * only effect one replacement has on another is taking a shared delimiter from a neighbour. The loop
+ * takes the keys in insertion order and each `split` scans left to right, so visiting candidate gaps
+ * in that order — each replaced only while both its delimiters survive — is the loop.
+ */
+function restoreAsTheLoopDoes(text: string, placeholders: Map<string, string>): string {
+  const gaps = text.split('\x00'); // gaps[j] lies between delimiter j - 1 and delimiter j
+  const rank = new Map<string, number>();
+  for (const key of placeholders.keys()) rank.set(key, rank.size);
+
+  const byRank: number[][] = [];
+  for (let j = 1; j < gaps.length - 1; j += 1) {
+    const r = rank.get(`\x00${gaps[j]}\x00`);
+    if (r !== undefined) (byRank[r] ??= []).push(j);
+  }
+
+  const taken = new Uint8Array(gaps.length); // delimiter j, between gaps[j] and gaps[j + 1]
+  const replaced = new Uint8Array(gaps.length);
+  for (const candidates of byRank) {
+    for (const j of candidates ?? []) {
+      if (taken[j - 1] === 1 || taken[j] === 1) continue;
+      taken[j - 1] = 1;
+      taken[j] = 1;
+      replaced[j] = 1;
+    }
+  }
+
+  let out = gaps[0] as string;
+  for (let j = 1; j < gaps.length; j += 1) {
+    if (taken[j - 1] !== 1) out += '\x00';
+    const gap = gaps[j] as string;
+    out += replaced[j] === 1 ? (placeholders.get(`\x00${gap}\x00`) as string) : gap;
   }
   return out;
 }

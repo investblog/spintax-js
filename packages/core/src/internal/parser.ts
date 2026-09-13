@@ -242,8 +242,8 @@ export function parseSequence(text: string): Node[] {
  * macros spell inside a re-read construct: 1.3 and 6.2 s from 333 and 341 bytes, four times that per
  * doubling. So the first such opener builds a table of the frame's pairs in one pass
  * ({@link matchPairs}), and every later opener of its kind is answered from it. Not a table from the
- * start: that cost deep balanced nesting — still super-linear by decision (#68) — up to a third more,
- * one table per level.
+ * start: that cost deep balanced nesting up to a third more, one table per level, and nesting is
+ * super-linear either way — each level still reads its whole subtree in the steps below (#68).
  */
 function closerOf(
   f: { text: string; i: number; braces: Int32Array | null; brackets: Int32Array | null },

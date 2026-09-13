@@ -153,7 +153,10 @@ runs needs a long template: 336 bytes of `#set` doubling one letter expand to 13
 post-process took 25 s, and the dotted, mark and tag units ran longer — so any host rendering untrusted
 templates with post-process on, the reference Worker and the hosted MCP server among them, could be held
 for as long as its CPU limit allowed. The expansion budget bounded the size of that text, never the time
-to post-process it.
+to post-process it. One more stage was quadratic on its own terms (found by the Codex gate): the restore
+of a text that carries U+0000, where #54 keeps the reference loop's reading — one `split`/`join` per
+placeholder — so a few hundred bytes doubling a NUL and a decimal took 2.1 s at 16 000 decimals, four
+times that per doubling.
 
 The shields and the capitalizers are scanners now. They run the plugin's own patterns at the same starts,
 in the same order, and skip only starts that provably fail: every start inside one run of email-local
@@ -166,7 +169,14 @@ alphabets aimed at each pass, plus random soup — with every real control mutat
 post-process differential against both PHP engines unchanged at zero. Those macro templates now render
 half a megabyte to a megabyte in 0.1–0.2 s, and the scaling bench is no slower on prose.
 
-**Reading a template is linear too — and part of that was live the same way.** The template scans had
+The NUL-path restore computes the loop's result in one pass. An occurrence of a key is always a stretch
+of the original text between two `\x00`s — no stored value holds a `\x00` or any piece of a key name — so
+the only way one replacement touches another is by taking a delimiter they share, and visiting the
+candidates in the loop's key order, each only while both its delimiters survive, is the loop. 1.9 million
+NUL-carrying strings come out identical, three control mutations were caught, and the 16 000-decimal case
+takes 130 ms.
+
+**Reading a template is linear too, balanced nesting aside — and part of it was live the same way.** The template scans had
 the post-process's flaw. The parser matched each `{` and `[` by counting forward to its closer, which
 for an opener that never closes is the end of the text, from every such opener; the plural scan did the
 same for `{plural …}`, and the validator ran `/\[<([^>]*?)>/` from every `[<`. Lazy or overlapping
@@ -189,8 +199,8 @@ whatever its macros spell, so the parser's half was reachable from a few hundred
 The parser still counts forward, and only once an opener turns out never to close does its frame build
 a table of pairs in one pass, which answers every later opener; the plural scan uses the same table, as
 the renderer's conditional pass already did. A table from the start is simpler and cost deep balanced
-nesting up to a third more, one table per level — this way nesting costs what it did, and stays
-super-linear by the decision recorded for #68. The comment strip and the config scan are `indexOf`
+nesting up to a third more, one table per level; this way nesting costs what it did, which is still
+super-linear — see below. The comment strip and the config scan are `indexOf`
 loops. The directive value ends at its last non-blank character instead of growing lazily, the tag
 pattern takes one whitespace character where two runs used to trade them, and a config key starts only
 where a word does — each matching exactly what it matched before.
@@ -198,6 +208,24 @@ Output is byte-identical to the code before: 4.3 million generated strings throu
 (three rng strategies, with and without post-process), `validate`, `analyze`, `extract` and the plural
 scan — exhaustive over alphabets aimed at each rewritten scan, plus random soup — with all twelve
 control mutations caught first.
+
+**Still super-linear: balanced nesting — and since 0.7.0, macros reach it.** #68 kept deep nesting
+super-linear on the ground that depth costs source: at the hosted 8 KB cap, 4 000 levels answered in
+about a second. The re-read took that ground away. `{%o15%x%c15%|y}` over fifteen `#set` doublings of
+`{` and of `}` is 700 bytes, and it hands the parser 32 768 levels: 31 s, in 0.7.0 and now alike, four
+times that per doubling up to the expansion budget (found by the Codex gate). Every level of the parser
+still reads its whole subtree — the forward count, the top-level split, a conditional's pipe, a config's
+end, the closing-tag test — and the renderer joins each permutation level's output again, so closing it
+takes frames that are offsets into one indexed text, in the parser and the renderer both, or a family
+rule. The PHP engines are no linear reference to copy: both resolve innermost-first with a full-text pass
+per level and stop at 10 000 levels with an exception — in `spintax/core`, 8 192 nested permutations took
+5.9 s and 32 768 nested enumerations threw. Not in this change: it needs that decision.
+
+**Two costs bounded by the source, recorded rather than changed.** The same gate found `validate()`
+formatting a large definition cycle in quadratic time — each name walks the cycle to count what its
+printed route leaves out: 8 000 names 6.5 s, the 320 that fit in 8 KB 23 ms — and `render()` ordering
+`#def`s in quadratic-to-cubic time: 1 600 in a chain 2 s, 400 in 90 ms. A macro cannot spell either,
+both were so in 0.7.0, and the hosted surfaces cap a source at 8 KB.
 
 **Two PHP builds differ at the margin.** PCRE2 10.43 made non-spacing marks and connector punctuation
 word characters, so PHP 8.3 sees a boundary between `x` and U+0301 that PHP 8.4 does not. The corpus
