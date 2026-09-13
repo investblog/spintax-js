@@ -64,6 +64,18 @@ removes the older retry on a chain whose last label is too short to be a TLD: 2 
 0.1 ms now. Ordinary text costs 2–4 % more there. JavaScript has no backtracking verbs, which is why this
 engine's shields are scanners.
 
+**The two costs bounded by the source are gone** — 0.8.0's notes recorded them as left alone.
+`validate()` formatted a capped circular-reference message by walking the rest of the cycle again for each
+of its names: one cycle of 8 000 names took 6 s, now 68 ms, because the route lengths are measured once for
+all names. `render()` ordered `#def`s by rescanning every pending name each round and handed every roll a
+fresh copy of the map of rolled values: a 1 600-definition chain took 1.6 s and 6 400 independent
+definitions 4.1 s, now 6 ms and 24 ms. The order is counted round by round in source order, and every roll
+reads one map that grows by each rolled value, dropping the truthiness a conditional cached for it after
+each write. Output is byte-identical over 3 000 generated definition-graph documents — chains, cycles with
+tails long enough for a capped message, shadowed globals, outranked definitions, conditionals on definition
+names — through `validate`, `analyze` and five renders, with three control mutations caught first: a round
+left unsorted, the truthiness cache kept across a write, a route one name longer.
+
 ## 0.8.0 — 2026-09-13
 
 Two defects found by the ports while they mirrored 0.7.0, both places where this engine read a

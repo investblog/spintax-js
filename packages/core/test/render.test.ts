@@ -582,6 +582,30 @@ describe('render — the splice under review (0.7.0, findings from the Codex gat
   });
 });
 
+describe('render — rolling definitions does not pay for every definition again', () => {
+  const within = (fn: () => void): void => {
+    const started = Date.now();
+    fn();
+    expect(Date.now() - started).toBeLessThan(3_000);
+  };
+
+  test('thousands of definitions, in a chain or side by side, roll in linear time', () => {
+    // Ordering rescanned every pending name each round, and each roll copied the map of what was rolled:
+    // a 1 600-definition chain took 1.6 s, 6 400 independent definitions 3.9 s.
+    const chain = Array.from({ length: 3200 }, (_, i) => `#def %d${i}% = ${i ? `%d${i - 1}%` : 'x'}`).join('\n');
+    within(() => expect(publicRender(`${chain}\n%d3199%`, { postProcess: false }).endsWith('x')).toBe(true));
+    const sideBySide = Array.from({ length: 12_800 }, (_, i) => `#def %d${i}% = {a|b}`).join('\n');
+    within(() => expect(['a', 'b']).toContain(publicRender(`${sideBySide}\n%d0%`, { seed: 1, postProcess: false }).trim()));
+  });
+
+  test('a conditional in a later definition sees a value rolled after an earlier one asked', () => {
+    // One map grows through the roll; the truthiness a conditional cached for it must not outlive a write.
+    expect(publicRender('#def %a% = {?b?yes|no}\n#def %b% = 1\n#def %c% = {?b?yes|no}\n%a% %c%', { postProcess: false })).toBe(
+      '\n\nno yes',
+    );
+  });
+});
+
 describe('render — plural slots share the 51-hop arithmetic and the freeze (0.7.0, review)', () => {
   test('a 51-deep alias chain in the count slot reaches its number, as it does in the plugin', () => {
     // The slots used to run a flat 50 passes: the count stopped at %a51%, non-numeric, erased.

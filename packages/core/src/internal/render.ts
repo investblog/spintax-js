@@ -241,41 +241,70 @@ export function rollDefinitions(
     aliases[name] = value;
   }
 
+  // Every roll reads one map that grows by each rolled value. A copy per definition — what the roll
+  // used to hand each render — made n definitions cost n copies of a map of up to n names: 6 400
+  // independent definitions took 3.9 s. A render only reads the map; the one thing that remembers it
+  // is the truthiness a conditional cached for it, so that is dropped after every write.
+  const visible = nameMap(vars);
   for (const name of orderDefinitions(definitions, aliases)) {
     if (outranked.has(name)) continue;
-    const value = definitions[name] ?? '';
-    rolled[name] = renderNodes(parseSequence(value), { ...opts, vars: nameMap(vars, rolled) });
+    const value = renderNodes(parseSequence(definitions[name] ?? ''), { ...opts, vars: visible });
+    rolled[name] = value;
+    visible[name] = value;
+    truthinessByVars.delete(visible);
   }
 
   return rolled;
 }
 
-/** Definition names, dependencies first. A cycle cannot be ordered, so its members come last. */
+/**
+ * Definition names, dependencies first, in rounds: a round takes every name whose dependencies are all
+ * placed, in source order. A cycle cannot be ordered, so its members come last, in source order.
+ *
+ * Counted rather than rescanned: each name keeps how many of its dependencies are still unplaced, and
+ * placing a name counts down the names that wait on it. Rescanning every pending name's dependencies
+ * against every pending name each round made a 1 600-definition chain take 1.6 s.
+ */
 function orderDefinitions(
   defDefs: Readonly<Record<string, string>>,
   aliases: Readonly<Record<string, string>>,
 ): string[] {
   const names = Object.keys(defDefs);
-  const blocked = new Map<string, Set<string>>();
+  const position = new Map(names.map((name, i) => [name, i]));
+  const unplaced = new Map<string, number>();
+  const waitingOn = new Map<string, string[]>();
 
   for (const name of names) {
-    const reached = referencedNames(defDefs[name] ?? '', aliases);
-    blocked.set(name, new Set(names.filter((candidate) => reached.has(candidate))));
+    let count = 0;
+    for (const dep of referencedNames(defDefs[name] ?? '', aliases)) {
+      if (dep === name || !position.has(dep)) continue;
+      count += 1;
+      const waiting = waitingOn.get(dep);
+      if (waiting === undefined) waitingOn.set(dep, [name]);
+      else waiting.push(name);
+    }
+    unplaced.set(name, count);
   }
 
   const ordered: string[] = [];
-  let pending = names;
-
-  while (pending.length > 0) {
-    const ready = pending.filter((name) => {
-      const deps = blocked.get(name);
-      return !deps || ![...deps].some((dep) => dep !== name && pending.includes(dep));
-    });
-    if (ready.length === 0) return [...ordered, ...pending];
-    ordered.push(...ready);
-    pending = pending.filter((name) => !ready.includes(name));
+  let round = names.filter((name) => unplaced.get(name) === 0);
+  while (round.length > 0) {
+    const next: string[] = [];
+    for (const name of round) {
+      ordered.push(name);
+      for (const waiting of waitingOn.get(name) ?? []) {
+        const left = (unplaced.get(waiting) as number) - 1;
+        unplaced.set(waiting, left);
+        if (left === 0) next.push(waiting);
+      }
+    }
+    round = next.sort((a, b) => (position.get(a) as number) - (position.get(b) as number));
   }
 
+  if (ordered.length < names.length) {
+    const placed = new Set(ordered);
+    for (const name of names) if (!placed.has(name)) ordered.push(name);
+  }
   return ordered;
 }
 
@@ -284,12 +313,13 @@ function referencedNames(value: string, aliases: Readonly<Record<string, string>
   const seen = new Set<string>();
   const queue = directReferences(value);
 
-  while (queue.length > 0) {
-    const name = queue.shift() as string;
+  // An index, not `shift()`: shifting a long queue moves every element each time.
+  for (let i = 0; i < queue.length; i += 1) {
+    const name = queue[i] as string;
     if (seen.has(name)) continue;
     seen.add(name);
     const alias = aliases[name];
-    if (alias !== undefined) queue.push(...directReferences(alias));
+    if (alias !== undefined) for (const ref of directReferences(alias)) queue.push(ref);
   }
 
   return seen;

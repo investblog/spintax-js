@@ -329,6 +329,22 @@ describe('validator — the circular-reference walk (emission shape + the prune 
     expect(diags[0]?.message).toContain('(1992 more)');
   });
 
+  test('a capped route counts what it leaves out from one measurement, not a walk per name', () => {
+    // Counting per message walked the whole cycle again for each of its names: 8 000 names took 6 s.
+    const cycle = Array.from({ length: 8000 }, (_, i) => `#set %n${i}% = %n${(i + 1) % 8000}%`).join('\n');
+    const started = Date.now();
+    expect(circular(cycle)).toHaveLength(8000);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    // A route that runs down a tail into its cycle counts the tail as well.
+    const rho = [
+      ...Array.from({ length: 5 }, (_, k) => `#set %t${k}% = %${k < 4 ? `t${k + 1}` : 'c0'}%`),
+      ...Array.from({ length: 10 }, (_, k) => `#set %c${k}% = %c${(k + 1) % 10}%`),
+    ].join('\n');
+    const messages = circular(rho).map((d) => d.message);
+    expect(messages[0]).toBe('Circular variable reference: t0 → t1 → t2 → t3 → t4 → c0 → c1 → c2 → … (7 more).');
+    expect(messages[5]).toBe('Circular variable reference: c0 → c1 → c2 → c3 → c4 → c5 → c6 → c7 → … (2 more).');
+  });
+
   test('an acyclic chain is silent and fast — the prune must not invent or lose a report', () => {
     // Pre-rewrite this shape was O(n³)-ish: 2000 definitions took tens of seconds and
     // would trip the suite timeout; the walk now skips subtrees that reach no cycle.

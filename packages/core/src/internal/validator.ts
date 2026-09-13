@@ -599,9 +599,10 @@ function checkVariableReferences(text: string, idx: LineIndex, known: readonly s
   // decision #59 was holding, and per-path cannot be kept, because re-walking every route
   // IS the emission.
   const { reaches: reachesCycle, via } = namesThatReachACycle(defs, refsOf);
+  const lengths = routeLengths(via);
   for (const name of defs.keys()) {
     if (!reachesCycle.has(name)) continue;
-    out.push(err('variable.circular-reference', `Circular variable reference: ${cyclePath(name, via)}.`,
+    out.push(err('variable.circular-reference', `Circular variable reference: ${cyclePath(name, via, lengths)}.`,
       { ...(defPos.get(name) ?? somewhere), data: { name } }));
   }
 
@@ -696,7 +697,7 @@ const CYCLE_PATH_LIMIT = 8;
  * cycle carried 29 MB of message text. Past a handful of names the route stops being
  * something a human reads, so it becomes a count.
  */
-function cyclePath(name: string, via: Map<string, string>): string {
+function cyclePath(name: string, via: Map<string, string>, lengths: Map<string, number>): string {
   const seen = new Set<string>([name]);
   const shown: string[] = [name];
   let current = name;
@@ -709,17 +710,8 @@ function cyclePath(name: string, via: Map<string, string>): string {
       return shown.join(' → ');
     }
     if (shown.length >= CYCLE_PATH_LIMIT) {
-      // Count what is left rather than print it — integer steps, no string building.
-      let more = 0;
-      let walk = next;
-      while (!seen.has(walk)) {
-        seen.add(walk);
-        more += 1;
-        const step = via.get(walk);
-        if (step === undefined) break;
-        walk = step;
-      }
-      return `${shown.join(' → ')} → … (${more} more)`;
+      // What is left is the route's length less what is shown.
+      return `${shown.join(' → ')} → … (${(lengths.get(name) as number) - shown.length} more)`;
     }
     seen.add(next);
     shown.push(next);
@@ -727,6 +719,44 @@ function cyclePath(name: string, via: Map<string, string>): string {
   }
 
   return shown.join(' → ');
+}
+
+/**
+ * How many names the route from each name visits before it repeats one — what a capped message counts.
+ *
+ * `via` gives every name one successor, so a route runs down a tail into a cycle: a name on a cycle visits
+ * the cycle, and a name on a tail visits one more than its successor. One walk per name not yet measured,
+ * and every walk stops at the first name that is: counting per message walked a whole cycle again for each
+ * of its names, and one cycle of 8 000 names took 6 s.
+ */
+function routeLengths(via: Map<string, string>): Map<string, number> {
+  const lengths = new Map<string, number>();
+  for (const start of via.keys()) {
+    if (lengths.has(start)) continue;
+    const walk: string[] = [];
+    const onWalk = new Map<string, number>();
+    let node: string | undefined = start;
+    while (node !== undefined && !lengths.has(node) && !onWalk.has(node)) {
+      onWalk.set(node, walk.length);
+      walk.push(node);
+      node = via.get(node);
+    }
+    let tailEnd = walk.length;
+    // A walk that runs out of successors counts only its last name; one that meets a measured name adds to
+    // its length; one that meets itself has closed a cycle, and every name from there on lies on it.
+    let length = node === undefined ? 0 : (lengths.get(node) ?? 0);
+    if (node !== undefined && onWalk.has(node)) {
+      const from = onWalk.get(node) as number;
+      length = walk.length - from;
+      for (let k = from; k < walk.length; k += 1) lengths.set(walk[k] as string, length);
+      tailEnd = from;
+    }
+    for (let k = tailEnd - 1; k >= 0; k -= 1) {
+      length += 1;
+      lengths.set(walk[k] as string, length);
+    }
+  }
+  return lengths;
 }
 
 /** Unknown `#include` targets — only when a slug list is supplied. Raw `/m` scan. */
