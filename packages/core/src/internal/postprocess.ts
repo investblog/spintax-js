@@ -341,9 +341,9 @@ function restore(text: string, input: string, placeholders: Map<string, string>)
  *
  * Every key is `\x00NAME\x00`, so an occurrence of one is a stretch between two `\x00`s whose content
  * is that NAME — a "gap". Replacing it removes both delimiters and puts a value there, and that can
- * never form a new occurrence: no value holds a `\x00` (see {@link restore}), and none is a piece of
- * a key name either — a URL keeps its `://`, an email its `@`, a domain, decimal or abbreviation its
- * `.`, and a URI cut back to its scheme (`tel:.` stores `tel`) is no substring of `URL_7` or
+ * never form a new occurrence: no value holds a `\x00` (see {@link restore}), and no whole value fits
+ * inside a key name either — a URL keeps its `://`, an email its `@`, a domain, decimal or abbreviation
+ * its `.`, and a URI cut back to its scheme (`tel:.` stores `tel`) is no substring of `URL_7` or
  * `EMAIL_7`. So the only occurrences the loop can ever meet are gaps of the original text, and the
  * only effect one replacement has on another is taking a shared delimiter from a neighbour. The loop
  * takes the keys in insertion order and each `split` scans left to right, so visiting candidate gaps

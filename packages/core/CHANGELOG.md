@@ -170,14 +170,14 @@ post-process differential against both PHP engines unchanged at zero. Those macr
 half a megabyte to a megabyte in 0.1–0.2 s, and the scaling bench is no slower on prose.
 
 The NUL-path restore computes the loop's result in one pass. An occurrence of a key is always a stretch
-of the original text between two `\x00`s — no stored value holds a `\x00` or any piece of a key name — so
-the only way one replacement touches another is by taking a delimiter they share, and visiting the
-candidates in the loop's key order, each only while both its delimiters survive, is the loop. 1.9 million
-NUL-carrying strings come out identical, three control mutations were caught, and the 16 000-decimal case
-takes 130 ms.
+of the original text between two `\x00`s — no stored value holds a `\x00`, and no whole stored value
+fits inside a key name — so the only way one replacement touches another is by taking a delimiter they
+share, and visiting the candidates in the loop's key order, each only while both its delimiters survive,
+is the loop. 1.9 million NUL-carrying strings come out identical, three control mutations were caught,
+and the 16 000-decimal case takes 130 ms.
 
-**Reading a template is linear too, balanced nesting aside — and part of it was live the same way.** The template scans had
-the post-process's flaw. The parser matched each `{` and `[` by counting forward to its closer, which
+**The template scans are linear too — and part of that was live the same way.** They had the
+post-process's flaw. The parser matched each `{` and `[` by counting forward to its closer, which
 for an opener that never closes is the end of the text, from every such opener; the plural scan did the
 same for `{plural …}`, and the validator ran `/\[<([^>]*?)>/` from every `[<`. Lazy or overlapping
 patterns restarted from every character of a run in four more places: a `/# … #/` comment that never

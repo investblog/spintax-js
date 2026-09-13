@@ -156,11 +156,12 @@ describe('postProcess — character classes are PHP’s /u classes (UCP)', () =>
   });
 });
 
-// The restore step (12) has two implementations behind one guard: a single left-to-right pass
-// when the input carries no \x00, and the original per-key split/join loop when it does. The
-// loop is O(text × placeholders) and cost 39 s on a 950 KB render (spintax-js#52); the single
-// pass is ~100× faster but only agrees with the loop when no \x00 came in from the caller.
-// Nothing pinned the \x00 behaviour before, which is why dropping the guard would land unnoticed.
+// The restore step (12) has two readings behind one guard: a single left-to-right token pass when
+// the input carries no \x00, and the result of the per-key split/join loop when it does. Run as a
+// loop that is O(text × placeholders) — 39 s on a 950 KB render (spintax-js#52) — so the \x00 path
+// computes the loop's result in one pass instead; the token pass only agrees with the loop when no
+// \x00 came in from the caller. Nothing pinned the \x00 behaviour before, which is why dropping the
+// guard would land unnoticed.
 describe('postProcess — placeholder restore (spintax-js#52)', () => {
   test('shield-heavy text round-trips through the fast path', () => {
     expect(
@@ -173,7 +174,7 @@ describe('postProcess — placeholder restore (spintax-js#52)', () => {
     );
   });
 
-  test('a literal \\x00 in the input keeps the per-key loop, quirks and all', () => {
+  test('a literal \\x00 in the input keeps the per-key loop’s result, quirks and all', () => {
     // split(key).join(value) replaces EVERY occurrence of a key — including one the caller's
     // own text happened to spell. A single pass would leave the caller's copy alone.
     expect(postProcess(`see ${NUL}URL_0${NUL} and https://example.com now`)).toBe(
