@@ -57,6 +57,19 @@ The parity contract is not a promise — it is a job. [`php-parity`](.github/wor
 corpus in this repository against **both** PHP engines on every pull request, so a fixture cannot
 land here unless the engines it binds already satisfy it.
 
+### Agent skills
+
+Three [Agent Skills](https://agentskills.io) teach an agent to write spintax, debug the syntax and wire an
+engine into an application. They install into Claude Code, Codex, Cursor and the other agents the
+[`skills`](https://github.com/vercel-labs/skills) command supports:
+
+```sh
+npx skills add https://spintax.net      # straight from the site
+npx skills add investblog/spintax-js    # from this repository
+```
+
+The files are in [`skills/`](./skills/).
+
 ## Spintax syntax (at a glance)
 
 - `{a|b|c}` — enumeration (pick one), nestable `{a|{b|c}}`
@@ -77,6 +90,7 @@ packages/
 examples/
   worker/            # Cloudflare Worker — HTTP API (validate/render/extract/analyze); deployed
   telegram-bot/      # Telegram bot @spintaxnetbot — validate + preview + AI /draft; deployed
+skills/              # Agent Skills — copies of the ones spintax.net publishes
 docs/spec-npm-engine.md  # governing spec (design source of truth)
 LICENSE              # MIT
 ```
