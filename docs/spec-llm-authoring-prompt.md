@@ -59,7 +59,7 @@ header of `src/index.ts`). The website *renders* it; it is not the source.
   core). The engine must not grow authoring opinions.
 - Same shape as the golden corpus: one language-neutral source of truth, many consumers. *The
   corpus is the engine's contract; the prompt is the authoring contract.*
-- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"4"`; it moves when the text changes in a way
+- Ships a `promptVersion` (`PROMPT_VERSION`, currently `"5"`; it moves when the text changes in a way
   that can change model output, independently of the package version), emitted by consumers
   alongside output, so any generated template is traceable to the prompt that produced it.
 
@@ -77,8 +77,13 @@ Sections, in order:
    `{a|b}` · `[a|b]` · `%var%` · `{?VAR?then|else}` · `{plural %n%: one|few|many}`
 4. **Hard rules** — grammar-safe branches (all options must agree in the surrounding sentence);
    variables only from the supplied allow-list; **no unsupported syntax invented**; no nesting
-   deeper than needed; and (v3) **`#def` / `#set` start their own line** — the grammar is
-   line-anchored, and a mid-line directive is the one authoring defect no validator reports.
+   deeper than needed; (v3) **`#def` / `#set` start their own line** — the grammar is
+   line-anchored, and a mid-line directive is the one authoring defect no validator reports; and (v5)
+   **an address never ends a sentence, and its domain ending is lower case** — right after an address
+   the post-process cannot always tell where it ends, so a glued sentence becomes part of it, and since
+   spintax-js#79 a capitalised ending splits it. Both validate clean; an any-case TLD for the email
+   shield was measured and declined, because it still glued a sentence to a capitalised address and
+   left domains and URLs as they were.
 5. **Output contract** — return the template and nothing else: no prose, no quotes, no code fences.
 6. **Self-check** — before answering: mentally render ~5 variants; if any reads awkwardly or breaks
    agreement, fix the branch, not the sentence.

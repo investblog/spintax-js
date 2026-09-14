@@ -15,7 +15,7 @@
 import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 
 /** Bump when the prompt text changes in a way that can change model output. */
-export const PROMPT_VERSION = '4';
+export const PROMPT_VERSION = '5';
 
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
 
@@ -359,7 +359,12 @@ const RULES = `HARD RULES
 5. Do not spin proper nouns, brand names, prices, URLs, or legal wording. Vary the copy AROUND them.
 6. Directives. #def and #set must START THEIR OWN LINE, one per line, above the copy that uses them.
    A directive written mid-sentence is NOT a directive: it stays literal text and gets printed to
-   the reader, and nothing downstream reports it as an error.`;
+   the reader, and nothing downstream reports it as an error.
+7. Addresses. Never end a sentence with an email address, a URL or a domain; put it inside the
+   sentence: "Write to info@example.com and we will reply within a day." Right after an address the
+   formatter cannot always tell where the address ends and the next sentence begins, so a sentence
+   glued on can be printed as part of the address. Write the domain ending in lower case: a
+   capitalised ending such as "example.Com" can be split into "example. Com".`;
 
 const OUTPUT = `OUTPUT CONTRACT
 Return the template and NOTHING else — no explanation, no quotes, no code fences, no "Template:"
@@ -372,6 +377,7 @@ const SELF_CHECK = `SELF-CHECK — do this before you answer
 - Check every [ … ] has a sep and really holds equal-weight items.
 - Check every count goes through {plural …}.
 - Check every #def and #set is alone on its own line, not buried in a sentence.
+- Check no sentence ends with an email address, a URL or a domain, and every domain ending is lower case.
 - Check you returned ONE block, with no heading, list or markup of any kind.`;
 
 /**

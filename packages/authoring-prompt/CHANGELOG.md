@@ -8,6 +8,28 @@ the prompt TEXT changes in a way that can change model output — it is what a c
 against, and what a conformance report is filed under. The package version follows semver over
 the exported API.
 
+## Unreleased
+
+`PROMPT_VERSION` `'4'` → `'5'`. No API change. Hard rule 7, with its self-check line: **an address never
+ends a sentence, and its domain ending is lower case.**
+
+Right after an email address, a URL or a domain, the engine's cosmetic post-process cannot always tell where
+the address ends. A sentence glued on — a permutation opened straight after the period is the usual way —
+becomes part of the address, because a lower-case word after a dot reads as a domain ending:
+`Write to info@example.com.[<sep=" ">the team replies|we answer fast].` renders
+`info@example.com.the team replies …`, and a URL takes `page.the` the same way. From `@spintax/core`'s next
+minor a capitalised ending also splits the address itself: `info@example.Com` renders `info@example. Com`
+(spintax-js#79). Both templates validate clean, so no repair round can report either — the prompt is where
+the rule can live, and the test keeps the engine evidence executable. The rule is worded so it also holds on
+0.8.0, where a capitalised ending is not split yet.
+
+An engine-side answer was measured first and declined (2026-09-14): giving the email shield an any-case TLD
+kept `info@example.Com` whole in TS and both PHP engines, but a sentence glued to a capitalised address stayed
+glued, and bare domains and URLs were untouched. An author who never ends a sentence on an address meets none
+of it.
+
+The v4 conformance report no longer describes the text; no v5 run is filed yet.
+
 ## 0.3.0 — 2026-08-23
 
 New export, `authoringRules({ locale?, variationLevel? })`. `PROMPT_VERSION` is unchanged at `'4'`:

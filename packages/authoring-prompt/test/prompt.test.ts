@@ -135,6 +135,24 @@ describe('buildAuthoringPrompt', () => {
     expect(systemPrompt).toContain('Check every #def and #set is alone on its own line');
   });
 
+  // Right after an address the cosmetic post-process cannot always tell the address from what follows it: a
+  // sentence glued on — a permutation opened straight after the period is the usual way — becomes part of the
+  // address, because a lower-case word after a dot reads as a domain ending. And since #79 a capitalised domain
+  // ending splits the address itself. Both templates validate clean, so no repair round can see either; the prompt
+  // is the only place the rule can live. The engine assertions are the evidence, kept executable: the day these
+  // render intact, this test says the rule can be relaxed.
+  test('keeps addresses off the end of a sentence, with a lower-case domain ending', () => {
+    const glued = 'Write to info@example.com.[<sep=" ">the team replies|we answer fast].';
+    expect(errorsIn(glued, 'en')).toEqual([]); // valid, and still broken
+    expect(render(glued, { seed: 1 })).toMatch(/info@example\.com\.(?:the|we) /u);
+    expect(render('See https://example.com/page.the site is fast.', { seed: 1 })).toContain('page.the site');
+    expect(render('Mail info@example.Com today.', { seed: 1 })).toContain('info@example. Com');
+
+    const { systemPrompt } = buildAuthoringPrompt({ brief: 'x' });
+    expect(systemPrompt).toContain('Never end a sentence with an email address, a URL or a domain');
+    expect(systemPrompt).toContain('Check no sentence ends with an email address, a URL or a domain');
+  });
+
   // `{?VAR?then}` is what a host actually wants for a detail that disappears when the data is
   // missing; taught only the two-branch form, a model invents filler for the else half.
   test('teaches the one-branch conditional, not just {?VAR?then|else}', () => {

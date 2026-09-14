@@ -248,7 +248,7 @@ describe('spintax_authoring_guide', () => {
     const out = callTool('spintax_authoring_guide', {}, CAPPED);
     expect(out.kind).toBe('ok');
     expect(out.kind === 'ok' && (out.structured.rules as string).length).toBeGreaterThan(1000);
-    expect(out.kind === 'ok' && out.structured.promptVersion).toBe('4');
+    expect(out.kind === 'ok' && out.structured.promptVersion).toBe('5');
   });
 
   it('carries the case rules for an inflected locale — most of the value is locale-gated', () => {
