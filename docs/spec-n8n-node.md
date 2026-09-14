@@ -418,8 +418,8 @@ their own LLM node (OpenAI / Anthropic / Gemini / local). Provider-agnostic by c
 }
 ```
 
-`promptVersion` is the package's exported `PROMPT_VERSION` (currently `'2'`), never a literal in
-the node. `spintaxMeta` keeps the *full* variable specs (`{ name, case?, note? }`, not bare
+`promptVersion` is the package's exported `PROMPT_VERSION` (the `"2"` above is illustrative — the value
+moves with the prompt text), never a literal in the node. `spintaxMeta` keeps the *full* variable specs (`{ name, case?, note? }`, not bare
 names) and the locale, because Validate / Repair / Render downstream need exactly those to check
 and teach the same rules the authoring prompt taught.
 
