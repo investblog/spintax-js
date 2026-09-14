@@ -41,7 +41,8 @@ deciding #79 would move it.
 
 **One JavaScript trap behind both.** Under `i`, a JavaScript `\p{Ll}` matches capitals and a `\p{Lu}`
 matches lower case; PCRE2 leaves a property alone under `/i`. PHP can also switch `i` off for one
-alternative with `(?-i:…)`, which JavaScript lacks on every runtime this engine supports. So the domain
+alternative with `(?-i:…)`, which JavaScript has only from ES2025 — Node 24, not the Node 18–22 this engine
+still supports. So the domain
 patterns carry no `i` and spell out the one part that is caseless, the punycode prefix and class — U+017F
 and U+212A included, as PCRE2's caseless `[a-z]` takes them.
 

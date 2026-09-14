@@ -44,9 +44,10 @@ const LABEL = `(?:${XN})?[\\p{L}\\p{N}]+(?:-[\\p{L}\\p{N}]+)*`;
 /**
  * A TLD is a label in ONE case: `example.com` and `ASP.NET` are domains, `compact.Game` is a sentence glued to the
  * next one, and so is `конец.Начало` (#79). Letters without case (`\p{Lo}`, `\p{Lm}` — CJK, Arabic, Thai)
- * fit either reading, so `例子.中国` stays a domain. PHP writes this alternative under `(?-i:…)`; JavaScript has no
- * inline modifier on the runtimes this engine supports, and under `i` a `\p{Ll}` matches capitals as well —
- * so the domain patterns drop `i` and spell out the one part that is case-insensitive, the punycode form.
+ * fit either reading, so `例子.中国` stays a domain. PHP writes this alternative under `(?-i:…)`; JavaScript has
+ * inline modifiers only from ES2025 (Node 24, not Node 22) while this engine runs on Node 18, and under `i` a
+ * `\p{Ll}` matches capitals as well — so the domain patterns drop `i` and spell out the one part that is
+ * case-insensitive, the punycode form.
  */
 const TLD_LOWER = '\\p{Ll}\\p{Lm}\\p{Lo}';
 const TLD_UPPER = '\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}';

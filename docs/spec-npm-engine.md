@@ -288,8 +288,8 @@ Order matters — mis-sequencing corrupts domains/emails. Port the plugin's orde
    (`\p{Lo}`, `\p{Lm}`) fitting either, and the punycode form `xn--…` in any case. So `example.com`,
    `ASP.NET`, `info@Example.COM` and `例子.中国` are shielded, while `compact.Game` and `конец.Начало` are
    sentences glued together and get their space — and so do `Yandex.Money` and `info@example.Com`,
-   the accepted cost. PHP writes the letter branch under `(?-i:…)`; a JavaScript port cannot (no inline
-   modifiers before ES2025, and `\p{Ll}` under `i` matches capitals), so it drops `i` from the domain
+   the accepted cost. PHP writes the letter branch under `(?-i:…)`; a JavaScript engine on Node 18–22 cannot
+   (no inline modifiers before ES2025, and `\p{Ll}` under `i` matches capitals), so it drops `i` from the domain
    patterns and spells the punycode prefix and class out, U+017F and U+212A included
 2. Collapse duplicate spaces/tabs
 3. Remove whitespace before punctuation
