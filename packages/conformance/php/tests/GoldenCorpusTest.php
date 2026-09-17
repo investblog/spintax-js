@@ -122,6 +122,14 @@ final class GoldenCorpusTest extends TestCase
             $this->assertSameSet($expect['sets'], $sets, "sets for {$c['id']}");
             $asserted = true;
         }
+        // #def names are their own bucket, never folded into `sets`: the two directives differ in
+        // semantics, so a consumer that lints one has to be able to tell them apart. Both engines
+        // already return them from extract_directives(), so this asserts, it does not port.
+        if (array_key_exists('defs', $expect)) {
+            $defs = array_keys($parser->extract_directives($text)['def']);
+            $this->assertSameSet($expect['defs'], $defs, "defs for {$c['id']}");
+            $asserted = true;
+        }
         if (array_key_exists('includes', $expect)) {
             $includes = array_map(
                 static fn(array $d): string => $d['slug'],
@@ -133,6 +141,10 @@ final class GoldenCorpusTest extends TestCase
         if (array_key_exists('refs', $expect)) {
             // Refs aren't a public engine API; replicate the Validator regexes
             // (%(\w+)% + {?[!]VAR?}) over the #set-stripped body.
+            //
+            // NOT what @spintax/core and spintax-core scan: they strip the #set/#def left-hand
+            // side only and keep the value, while this drops the whole #set line and keeps the
+            // whole #def one. No fixture separates the two rules; which is contract is #83.
             $body = $parser->extract_set_directives($text)['body'];
             $this->assertSameSet($expect['refs'], $this->extractRefs($body), "refs for {$c['id']}");
             $asserted = true;

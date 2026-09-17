@@ -20,12 +20,8 @@
   },
   {
     "id": "extract/defs-alongside-sets",
-    "note": "#def names are their own bucket, never folded into `sets` — the two directives differ in semantics, so a consumer that lints one must be able to tell them apart. Arrays are order-normalized. Tagged ts+py because the PHP runner does not assert `defs` yet; it can drop the tag once it does (its Parser already returns them).",
+    "note": "#def names are their own bucket, never folded into `sets` — the two directives differ in semantics, so a consumer that lints one must be able to tell them apart. Arrays are order-normalized. Asserted by every engine since both PHP runners started checking `defs`; before that they were tagged ts+py, because a runner that does not look at a key cannot gate it.",
     "kind": "deterministic",
-    "engines": [
-      "ts",
-      "py"
-    ],
     "op": "extract",
     "template": "#set %a% = {x|y}\n#def %b% = {x|y}\n%a% %b% %c%",
     "expect": {
