@@ -8,7 +8,7 @@ the prompt TEXT changes in a way that can change model output — it is what a c
 against, and what a conformance report is filed under. The package version follows semver over
 the exported API.
 
-## Unreleased
+## 0.3.1 — 2026-09-17
 
 `PROMPT_VERSION` `'4'` → `'5'`. No API change. Hard rule 7, with its self-check line: **an address never
 ends a sentence, and its domain ending is lower case.**
