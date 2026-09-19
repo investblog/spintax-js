@@ -347,6 +347,19 @@ describe('sentence punctuation runs', () => {
   test('a single mark still gets its space', () => {
     expect(postProcess('a.b')).toBe('A. B');
   });
+
+  // The closer rule itself is corpus contract (postprocess/closing-* and the guards after them); this
+  // pins only its cost. The lookahead reads the run of quotes after a mark once per mark run.
+  test('a long run of quotes after the marks is read once', () => {
+    const within = (fn: () => void): void => {
+      const started = Date.now();
+      fn();
+      expect(Date.now() - started).toBeLessThan(2_000);
+    };
+    within(() => postProcess(`${'?'.repeat(200_000)}${'"'.repeat(200_000)}a`));
+    within(() => postProcess(`${','.repeat(200_000)}${'"'.repeat(200_000)}a`));
+    within(() => postProcess(',""a'.repeat(100_000)));
+  });
 });
 
 describe('render — postProcess is on by default, off with postProcess:false', () => {

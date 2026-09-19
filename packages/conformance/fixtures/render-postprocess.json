@@ -726,5 +726,218 @@
     "expect": {
       "output": "See site.xN--\u017fA and site.Xn--\u212a1 today"
     }
+  },
+  {
+    "id": "postprocess/closing-quote-after-question",
+    "note": "The field report (a landing lead quoting a question-shaped keyword): the space after a sentence mark went between the mark and the quote that closes it, so every engine rendered '\"is it audited? \", the figure'. A quote run followed by a comma is a closer, and no space goes in front of it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "when someone asks \"is it audited?\", the figure moves",
+    "postProcess": true,
+    "expect": {
+      "output": "When someone asks \"is it audited?\", the figure moves"
+    }
+  },
+  {
+    "id": "postprocess/closing-quote-before-space",
+    "note": "The closer followed by whitespace — the commonest shape, and the one the old rule broke most visibly: 'the question \"is it audited? \" starts here'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "the question \"is it audited?\" starts here",
+    "postProcess": true,
+    "expect": {
+      "output": "The question \"is it audited?\" starts here"
+    }
+  },
+  {
+    "id": "postprocess/closing-typographic-quote-after-exclamation",
+    "note": "A typographic closing quote (U+201D) after '!'. Quotes are read by what follows them, not by shape, so the curly form closes exactly as the straight one does.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "he said “wait!” and left",
+    "postProcess": true,
+    "expect": {
+      "output": "He said “wait!” and left"
+    }
+  },
+  {
+    "id": "postprocess/closing-single-quote",
+    "note": "A straight single quote closes too. It is also an apostrophe, which is why the rule reads what follows the run rather than the mark itself.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "ask 'was it fair?' first",
+    "postProcess": true,
+    "expect": {
+      "output": "Ask 'was it fair?' first"
+    }
+  },
+  {
+    "id": "postprocess/closing-quote-after-period-at-end-of-text",
+    "note": "American English puts the period inside the quotes. At the end of the text the final trim cannot rescue it: the old rule left '\"the best. \"'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "he called it \"the best.\"",
+    "postProcess": true,
+    "expect": {
+      "output": "He called it \"the best.\""
+    }
+  },
+  {
+    "id": "postprocess/closing-quote-after-comma",
+    "note": "The comma pass has the same closer rule as the sentence pass: '\"yes,\" and left' used to become '\"yes, \" and left'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "she said \"yes,\" and left",
+    "postProcess": true,
+    "expect": {
+      "output": "She said \"yes,\" and left"
+    }
+  },
+  {
+    "id": "postprocess/closing-guillemet-ru",
+    "note": "Russian keeps '?' and '!' inside the guillemets and the comma outside: '«как дела?»,' was '«как дела? »,'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "он спросил «как дела?», и ушёл",
+    "postProcess": true,
+    "expect": {
+      "output": "Он спросил «как дела?», и ушёл"
+    }
+  },
+  {
+    "id": "postprocess/closing-quote-followers",
+    "note": "The quote set and the follower list, one character at a time with the next case: ’ before a dash, › before ';', ” before ':' and before ')', German “ and ‘ (closers there) before a space, ” before '…'. A one-character omission in an engine's quote set or follower list fails here or there. The '…' is kept last because the capitalizer treats it as a sentence end.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "he said ‘wait!’—and ‹why?›; then “no.”: fine (“yes!”) — er sagte „ja!“ und ‚nein?‘ dann “really?”…",
+    "postProcess": true,
+    "expect": {
+      "output": "He said ‘wait!’—and ‹why?›; then “no.”: fine (“yes!”) — er sagte „ja!“ und ‚nein?‘ dann “really?”…"
+    }
+  },
+  {
+    "id": "postprocess/closing-reversed-quotes-and-more-followers",
+    "note": "The reversed guillemets close too (Danish and German '»ja!«', '›nein?‹'), and the followers the case above leaves out: '–', '.', '?' and '!' after a closing quote. The capitalizer still fires after a run that ends a sentence ('‹. Was', '”? Stop').",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "er sagte »ja!«–und ›nein?‹. was it “why?”? stop saying “maybe.”!",
+    "postProcess": true,
+    "expect": {
+      "output": "Er sagte »ja!«–und ›nein?‹. Was it “why?”? Stop saying “maybe.”!"
+    }
+  },
+  {
+    "id": "postprocess/closing-quote-ends-attribute",
+    "note": "A quote that closes an HTML attribute is followed by the end of its tag, '>' or '/>': 'title=\"really? \"' and 'value=\"yes, \"' before, in both passes.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "<span title=\"really?\">x</span> <input value=\"yes,\"/>",
+    "postProcess": true,
+    "expect": {
+      "output": "<span title=\"really?\">X</span> <input value=\"yes,\"/>"
+    }
+  },
+  {
+    "id": "postprocess/closing-bracket",
+    "note": "A closing bracket is a closer as well: '(really? )' and '(apples, pears, etc. )' before. The abbreviation shield does not take 'etc.' here — its lookahead wants a space, the end or a tag — so the sentence pass is what used to split it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "fruit (apples, pears, etc.) and nuts (really?) here",
+    "postProcess": true,
+    "expect": {
+      "output": "Fruit (apples, pears, etc.) and nuts (really?) here"
+    }
+  },
+  {
+    "id": "postprocess/closing-quote-before-tag",
+    "note": "A quote followed by a tag closes, as one followed by the end of the text does.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "<p>he asked \"why?\"</p>",
+    "postProcess": true,
+    "expect": {
+      "output": "<p>He asked \"why?\"</p>"
+    }
+  },
+  {
+    "id": "postprocess/closing-run-of-nested-quotes",
+    "note": "Nested quotes close as one RUN: the single quote is followed by the double one, which is followed by a space. Reading one mark at a time would take the inner quote for an opener, because the character after it is not on the list.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "he asked \"did she say 'why?'\" and left",
+    "postProcess": true,
+    "expect": {
+      "output": "He asked \"did she say 'why?'\" and left"
+    }
+  },
+  {
+    "id": "postprocess/opening-quote-after-sentence-keeps-space",
+    "note": "Negative guard: a quote that opens the next sentence is untouched, and a quote glued to the mark but followed by a letter or a digit OPENS — it gets its space, exactly as before the closer rule. So does a glued RUN of quotes before a letter ('\"'nested'): every shorter run ends at another quote, which is not on the list, so no prefix of it closes. Guards a rule that stops looking past the first quote.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "is it honest? \"next\" comes. is it?\"next\" one, and?\"3 apples\" two, a,\"b\" c, or?\"'nested'\" d",
+    "postProcess": true,
+    "expect": {
+      "output": "Is it honest? \"next\" comes. Is it? \"next\" one, and? \"3 apples\" two, a, \"b\" c, or? \"'nested'\" d"
+    }
+  },
+  {
+    "id": "postprocess/quote-before-anything-else-keeps-its-space",
+    "note": "The rule lists what follows a CLOSING quote — whitespace, the end, a tag, .,;:!?…, ')' or a dash — rather than excluding what follows an opening one. So a glued quote before anything off the list keeps the space the old rule gave it: '(', '$'. Guards an engine that flips the test to 'not a letter or a digit', which drops these spaces.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "is it?\"(really)\" one. is it?\"$5\" two",
+    "postProcess": true,
+    "expect": {
+      "output": "Is it? \"(really)\" one. Is it? \"$5\" two"
+    }
+  },
+  {
+    "id": "postprocess/glued-opener-before-a-follower-reads-as-closer",
+    "note": "The accepted cost, pinned so nobody files it: a quote followed by a tag, a dash or an ellipsis is read as a closer, because '\"why?\"</p>' and '\"Why?\"—he asked' are correct text, while an opening quote glued to the mark before it is a typo. That typo loses the space the old rule gave it. ('…' also ends a sentence for the capitalizer, hence 'Maybe'.)",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "is it?\"<em>yes</em>\" one. is it?\"—no\" two. is it?\"…maybe\" three",
+    "postProcess": true,
+    "expect": {
+      "output": "Is it?\"<em>yes</em>\" one. Is it?\"—no\" two. Is it?\"…Maybe\" three"
+    }
+  },
+  {
+    "id": "postprocess/bracket-always-closes",
+    "note": "')' never opens, so it closes even where a quote in its place would open: glued to a letter, or glued to an opening quote. Only quotes are read by what follows them. The old rule put its space inside the bracket here too ('(really? )yes'); what follows the bracket is the author's text and stays as written.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "(really?)yes and (is it?)\"no\"",
+    "postProcess": true,
+    "expect": {
+      "output": "(really?)yes and (is it?)\"no\""
+    }
+  },
+  {
+    "id": "postprocess/closing-square-bracket",
+    "note": "A stray ']' is literal — in a value, as here, or in a template, where validate() reports it and render() keeps it — so it reaches this stage and closes as ')' does: 'really? ]' before. A quote before it closes too.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "it was %a% and %b% ok",
+    "context": {
+      "a": "really?]",
+      "b": "\"why?\"]"
+    },
+    "postProcess": true,
+    "expect": {
+      "output": "It was really?] and \"why?\"] ok"
+    }
+  },
+  {
+    "id": "postprocess/quote-before-shielded-value-opens",
+    "note": "A shield placeholder is not on the list of what follows a closing quote, so a quote before a shielded domain opens, as one before a word does. Guards an engine whose follower test takes its placeholder delimiter for whitespace or punctuation.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "he asked \"why?\"example.com now",
+    "postProcess": true,
+    "expect": {
+      "output": "He asked \"why? \"example.com now"
+    }
   }
 ]

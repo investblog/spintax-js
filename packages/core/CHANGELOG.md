@@ -3,6 +3,57 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- **No space between a punctuation mark and the quote or bracket that closes it.** The spacing passes
+  put their space after `.!?` and `,;:` whenever the next character was not a space, a digit, a tag or
+  the end — so a closing quote or bracket got one in front of it: `"Is it audited? ", the figure`,
+  `He called it "the best. "`, `She said "yes, " and left`, `«Как дела? », и ушёл`, `(really? )`,
+  `(apples, pears, etc. )`. Found in a landing lead that quotes a question-shaped keyword; every engine
+  in the family did the same. Now no space goes between the mark and a closer, and what follows the
+  closer is left as written. `)` and `]` always close (a stray `]` stays literal). A quote is read by
+  what follows its run, because its shape says nothing — `“` opens English and closes German, `"` and `'`
+  do both: whitespace, the end, a tag, the end of a tag (`title="Really?">`), `.,;:!?…`, `)`, `]` or a
+  dash make it a closer. Anything else keeps the space it always got — a word or a number
+  (`Is it?"Next"` → `Is it? "Next"`), `(`, `$`, a shielded value. The accepted cost: an opening quote
+  glued to the mark whose text starts with a follower (`is it?"—no"`, `is it?"<em>yes</em>"`) reads as a
+  closer and loses that space. Both PHP engines take the same rule.
+
+### Corpus
+
+Nineteen new cases in `render-postprocess.json`, every expectation taken from both PHP engines with the
+rule applied: the reported shapes (`postprocess/closing-quote-after-question`, `closing-quote-before-space`,
+`closing-typographic-quote-after-exclamation`, `closing-single-quote`), the rest of the class
+(`closing-quote-after-period-at-end-of-text`, `closing-quote-after-comma`, `closing-guillemet-ru`,
+`closing-quote-ends-attribute`, `closing-bracket`, `closing-square-bracket`, `closing-quote-before-tag`,
+`closing-run-of-nested-quotes`, `bracket-always-closes`), `closing-quote-followers` and
+`closing-reversed-quotes-and-more-followers` (between them every quote as a closer and every follower),
+the cost `glued-opener-before-a-follower-reads-as-closer`, and three guards —
+`opening-quote-after-sentence-keeps-space` (a quote or a run of quotes before a letter or a digit still
+opens), `quote-before-anything-else-keeps-its-space` (`(`, `$`) and `quote-before-shielded-value-opens`.
+
+### Notes
+
+**The list names what follows a CLOSING quote.** The first version of the rule excluded instead — any
+quote run not followed by a letter, a digit or a placeholder closed. That also took the space from an
+opening quote glued to the mark before `(`, `$` or an emoji (`is it?"(really)"`), which the old rule had
+repaired (found by the Codex gate, as were the attribute case and the stray `]`). A list changes output
+only where the quote is known to close, and an unnamed shape keeps the old output. Left as it was: a
+bracket that arrives through `neutralize()` is a sentinel during this stage and is restored after it, so a
+neutralized `[sic.]` still renders `[sic. ]`.
+
+**Verified.** 143 968 generated post-process inputs — random soup over letters, digits, whitespace,
+`.,;:!?…`, every quote and bracket, tags and shieldable values, plus an exhaustive grid of mark × quote run
+× follower — through this engine and both patched PHP engines: identical everywhere. The three agreed
+before the change as well, and every one of the 66 988 outputs that moved differs from the old output only
+by a deleted space between a mark and a closer. Thirty control mutations, one per character of the rule —
+each quote dropped, each follower dropped (including whitespace, the end, a tag, `/>` and `>`), `)` or `]`
+no longer closing, the comma pass left alone, and the first version's letter-or-digit rule — each turn the
+differential red (363 to 25 905 inputs) and fail at least one fixture. Cost unchanged here and in PHP:
+200 000 marks before 200 000 quotes take single-digit milliseconds in all three.
+
 ## 0.9.0 — 2026-09-17
 
 ### Changed, visibly

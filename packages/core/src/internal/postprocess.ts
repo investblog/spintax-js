@@ -195,6 +195,26 @@ const SENTENCE_OPENERS = '¿¡';
  */
 const LEAD = `(?:<[^>]+>|[${SENTENCE_OPENERS}]|${S})*`;
 
+/**
+ * CLOSERS — what closes the quotation or aside a punctuation mark ends inside: `"Is it audited?", the
+ * figure`, `(see above.)`, `«Как дела?», и ушёл`, `"Yes," he said`. The spacing passes below insert no
+ * space between a mark and a closer — they used to, in every engine: `"Is it audited? ",`. What follows
+ * the closer is left as the author wrote it.
+ *
+ * `)` and `]` never open, so they always close — a stray `]` stays literal, from a template or a
+ * value. A quote is not read by its shape — `“` opens English and closes German, `»` closes Russian and
+ * opens Danish, `"` and `'` do both everywhere — but by what follows the run: whitespace, the end, a tag,
+ * the end of a tag (`title="Really?">`), `.,;:!?…`, `)`, `]` or a dash follow a closing quote. A quote
+ * followed by anything else keeps the space it always got: a word or a number (`Is it?"Next"` →
+ * `Is it? "Next"`), and also `(`, `$`, a shielded value. The list names what a closing quote is followed
+ * by instead of excluding what an opening one is, so a shape it does not name keeps the old output. The
+ * cost is an opening quote glued to the mark whose text starts with a follower (`is it?"—no"`,
+ * `is it?"<em>yes</em>"`): it reads as a closer and loses that space. Every shorter run ends at another
+ * quote, which is not on the list, so a run is only ever read whole.
+ */
+const QUOTES = `"'«»‹›“”‘’`;
+const CLOSER = `[)\\]]|[${QUOTES}]+(?=${S}|$|<|\\/?>|[.,;:!?…)\\]—–])`;
+
 // Spacing + capitalization. PHP's `\s` and `\d` here are UCP: `\d` is any decimal digit (\p{Nd}).
 //
 // A match may start only where a whitespace run starts (`(?<!${S})`). Same matches — every start
@@ -202,7 +222,7 @@ const LEAD = `(?:<[^>]+>|[${SENTENCE_OPENERS}]|${S})*`;
 // none — but a run NOT followed by punctuation is scanned once instead of once per character: 100 000
 // form feeds took 10 s without the guard, and the UCP class made NBSP and U+3000 runs do the same.
 const SPACE_BEFORE_PUNCT_RE = new RegExp(`(?<!${S})${S}+([,;:!?.])`, 'gu');
-const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
+const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\p{Nd})(?!${S}|$|<|${CLOSER})`, 'gu');
 // A run of sentence punctuation is ONE sentence end, not several: "..." and "?!" have to survive
 // intact, so the space goes after the whole run. `(?![.!?])` is what completes the run — a greedy
 // `+` on its own still backtracks INTO it to satisfy the lookaheads, turning "Wow!!!" into
@@ -210,7 +230,7 @@ const SPACE_AFTER_COMMA_RE = new RegExp(`([,;:])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
 // And a match starts only where the run starts (`(?<![.!?])`): every start inside a run reaches the
 // same end and the same lookaheads, so a run followed by a digit or a space was otherwise rejected once
 // per mark — 32 000 dots before a digit took 5 s.
-const SPACE_AFTER_SENTENCE_RE = new RegExp(`(?<![.!?])([.!?]+)(?![.!?])(?!\\p{Nd})(?!${S}|$|<)`, 'gu');
+const SPACE_AFTER_SENTENCE_RE = new RegExp(`(?<![.!?])([.!?]+)(?![.!?])(?!\\p{Nd})(?!${S}|$|<|${CLOSER})`, 'gu');
 // An opener binds to the word it opens: "¿ qué tal ?" → "¿qué tal?". MUST run before the
 // capitalization passes, so they see the real first letter instead of a space.
 const SPACE_AFTER_OPENER_RE = new RegExp(`([${SENTENCE_OPENERS}])${S}+`, 'gu');
@@ -485,8 +505,8 @@ export function postProcess(input: string): string {
   // 6: collapse duplicate spaces/tabs.
   text = text.replace(/[ \t]{2,}/gu, ' ');
 
-  // 7: punctuation spacing. Remove whitespace before punctuation, then add a
-  // space after ,;: and after a RUN of .!? unless followed by a digit / space / end / tag.
+  // 7: punctuation spacing. Remove whitespace before punctuation, then add a space after ,;:
+  // and after a RUN of .!? unless followed by a digit / space / end / tag / closing mark.
   text = text.replace(SPACE_BEFORE_PUNCT_RE, '$1');
   text = text.replace(SPACE_AFTER_COMMA_RE, '$1 ');
   text = text.replace(SPACE_AFTER_SENTENCE_RE, '$1 ');

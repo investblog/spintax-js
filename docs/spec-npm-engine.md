@@ -293,7 +293,16 @@ Order matters — mis-sequencing corrupts domains/emails. Port the plugin's orde
    patterns and spells the punycode prefix and class out, U+017F and U+212A included
 2. Collapse duplicate spaces/tabs
 3. Remove whitespace before punctuation
-4. Add space after `,;:` and `.!?` where missing
+4. Add space after `,;:` and `.!?` where missing — but never between the mark and a **closer**:
+   `"Is it audited?", the figure`, `«Как дела?», и ушёл`, `(see above.)`, `"Yes," he said`. What follows
+   the closer is left as written. `)` and `]` always close. A quote (`"'«»‹›“”‘’`) is read by what
+   follows its run, not by its shape — `“` opens English and closes German: the run closes when
+   whitespace, the end, a tag, the end of a tag (`>`, `/>`), `.,;:!?…`, `)`, `]` or a dash (`—`, `–`)
+   follows it. Anything else — a letter, a digit, `(`, `$`, a shielded value — keeps the space the rule
+   always gave (`Is it?"Next"` → `Is it? "Next"`). The list names what follows a closing quote rather
+   than excluding what follows an opening one, so an unnamed shape keeps the old output. The accepted
+   cost: an opening quote glued to the mark whose text starts with a follower (`is it?"—no"`,
+   `is it?"<em>yes</em>"`) reads as a closer
 5. Capitalize first letter (skip leading HTML tags)
 6. Capitalize after `.!?…` (through HTML tags)
 7. Capitalize after block-level HTML tags (`<p>`, `<h1>`–`<h6>`, `<li>`, `<div>`, …)
