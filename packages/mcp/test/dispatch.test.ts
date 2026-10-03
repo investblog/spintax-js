@@ -301,6 +301,95 @@ describe('tools/call', () => {
     ]);
   });
 
+  // #86: the hosted server took `variables` for `context`, ignored it and rendered
+  // "It comes in %n%." with isError:false — the plural silently gone.
+  it('refuses an argument its schema does not list, naming it and the accepted ones', async () => {
+    const r = result(
+      await make().dispatch(
+        modern('tools/call', {
+          name: 'render_spintax',
+          arguments: {
+            template: 'It comes in %n% {plural %n%: color|colors}.',
+            count: 1,
+            seed: 1,
+            variables: { n: '4' },
+          },
+        }),
+      ),
+    );
+    expect(r.isError).toBe(true);
+    expect(r).not.toHaveProperty('structuredContent');
+    const text = (r.content as { text: string }[])[0]!.text;
+    expect(text).toMatch(/^Unknown argument "variables"; render_spintax accepts: template, /);
+    expect(text).toContain('context');
+  });
+
+  it('refuses unknown arguments on every listed tool, and names all of them', async () => {
+    const tools = buildTools({ maxVariants: 20, maxTemplateChars: 8192 });
+    for (const tool of tools) {
+      const r = result(
+        await make({ tools }).dispatch(
+          // the authoring guide takes no template — it is asked before there is one
+          modern('tools/call', {
+            name: tool.name,
+            arguments: {
+              ...(tool.name === 'spintax_authoring_guide' ? {} : { template: 'a' }),
+              bogus: true,
+              other: 1,
+            },
+          }),
+        ),
+      );
+      expect(r.isError, tool.name).toBe(true);
+      const text = (r.content as { text: string }[])[0]!.text;
+      expect(text, tool.name).toMatch(/^Unknown arguments "bogus", "other"; /);
+    }
+  });
+
+  it('refuses arguments that are not an object, and treats omitted or null as {}', async () => {
+    for (const bad of [[], ['x'], 0, false, '', 'abc']) {
+      const r = result(
+        await make().dispatch(modern('tools/call', { name: 'spintax_authoring_guide', arguments: bad })),
+      );
+      expect(r.isError, JSON.stringify(bad)).toBe(true);
+      expect(r.content).toEqual([
+        { type: 'text', text: 'spintax_authoring_guide takes its arguments as an object.' },
+      ]);
+    }
+    for (const fine of [undefined, null]) {
+      const r = result(
+        await make().dispatch(modern('tools/call', { name: 'spintax_authoring_guide', arguments: fine })),
+      );
+      expect(r.isError, String(fine)).toBe(false);
+    }
+    // the shape check stays on the known-tool path: an unknown tool never gets this message
+    const r = await make().dispatch(modern('tools/call', { name: 'nope', arguments: [] }));
+    expect(JSON.stringify(r)).not.toContain('takes its arguments as an object');
+  });
+
+  it('accepts every argument its schema lists', async () => {
+    const tools = buildTools({ maxVariants: 20, maxTemplateChars: 8192 });
+    const render = tools.find(t => t.name === 'render_spintax')!;
+    const keys = Object.keys(render.inputSchema.properties as Record<string, unknown>);
+    expect(keys).toContain('context');
+    const r = result(
+      await make({ tools }).dispatch(
+        modern('tools/call', {
+          name: 'render_spintax',
+          arguments: {
+            template: 'It comes in %n% {plural %n%: color|colors}.',
+            count: 1,
+            seed: 1,
+            context: { n: '4' },
+            locale: 'en',
+          },
+        }),
+      ),
+    );
+    expect(r.isError).toBe(false);
+    expect(r.structuredContent).toEqual({ variants: ['It comes in 4 colors.'] });
+  });
+
   it('reports an unknown tool as -32602', async () => {
     const e = error(
       await make().dispatch(modern('tools/call', { name: 'nope', arguments: { template: 'a' } })),

@@ -243,6 +243,41 @@ export function createDispatcher(cfg: DispatcherConfig): Dispatcher {
           return rpcError(id, -32602, 'tools/call requires a "name" parameter.');
         }
         const args = (params.arguments ?? {}) as Record<string, unknown>;
+        // Every inputSchema says additionalProperties:false, and the server has to mean it:
+        // an ignored `variables` (for `context`) rendered fluent text with the plural erased
+        // and isError:false (#86). Checked against the schema THIS server listed, so the
+        // refusal agrees with what the client saw. A tool error, not -32602: the spec puts
+        // input validation in the result so the model can read it and retry.
+        const listed = cfg.tools.find(t => t.name === params.name);
+        // `[]`, `0` and `""` have no keys to refuse, and a string's keys are its indices — so the
+        // shape is checked first. An omitted or null `arguments` stays `{}`, as it always was.
+        const raw = params.arguments as unknown;
+        if (listed && raw != null && (typeof raw !== 'object' || Array.isArray(raw))) {
+          return ok(id, {
+            resultType: 'complete',
+            content: [{ type: 'text', text: `${listed.name} takes its arguments as an object.` }],
+            isError: true,
+          });
+        }
+        if (listed) {
+          const allowed = Object.keys((listed.inputSchema.properties ?? {}) as Record<string, unknown>);
+          const unknown = Object.keys(args).filter(k => !allowed.includes(k));
+          if (unknown.length > 0) {
+            const names = unknown.map(k => JSON.stringify(k)).join(', ');
+            return ok(id, {
+              resultType: 'complete',
+              content: [
+                {
+                  type: 'text',
+                  text:
+                    `Unknown argument${unknown.length > 1 ? 's' : ''} ${names}; ` +
+                    `${listed.name} accepts: ${allowed.join(', ')}.`,
+                },
+              ],
+              isError: true,
+            });
+          }
+        }
         const outcome = callTool(params.name, args, callOpts);
         if (outcome.kind === 'unknown-tool') {
           return rpcError(id, -32602, `Unknown tool: ${outcome.name}`);
