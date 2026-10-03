@@ -3,6 +3,25 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 — 2026-10-03
+
+- **An argument the tool's schema does not list is refused (#86).** Every `inputSchema` has said
+  `additionalProperties: false` since 0.1.0, and the server did not enforce it: it ignored the key and
+  answered as if it were absent. An agent that passed `variables` where the schema says `context` got
+  `It comes in %n%.` with `isError: false` — fluent text with the plural erased, nothing to retry on.
+  Now the call returns `isError: true` naming every unknown key and listing the ones the tool takes
+  (`Unknown argument "variables"; render_spintax accepts: template, count, seed, locale, context.`). It
+  is a tool error, not a JSON-RPC `-32602`, because the MCP spec files input validation there so the
+  model reads it and retries. The check reads the schema this server listed in `tools/list`, so the
+  refusal can never disagree with what the client was shown. A minor, not a patch: a call
+  that used to succeed now fails — by design, since it used to succeed wrongly.
+- Depends on `@spintax/core` **^0.10.0** (0.3.2 named `^0.8.0`), so `render_spintax` returns
+  the text of the engine's last two releases: a TLD is a label in one case
+  (`compact.Game` gets its space, `ASP.NET` does not), a block tag's first letter is capitalized
+  correctly, and no space goes between a punctuation mark and the quote or bracket that closes it
+  (`asks "is it audited?", the figure` stays as written). The engine's notes: `@spintax/core` 0.9.0
+  and 0.10.0 in its CHANGELOG.
+
 ## 0.3.2 — 2026-09-13
 
 Depends on `@spintax/core` **^0.8.0**, which reads a template the way both PHP engines do in three
