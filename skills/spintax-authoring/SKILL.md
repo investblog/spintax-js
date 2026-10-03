@@ -30,7 +30,9 @@ Go back through the finished text and replace what can genuinely vary:
 - facts that differ per site or per product → `%variables%`
 - lists whose order does not matter → `[a|b|c]` with a separator config
 - sentences that only apply under a condition → `{?VAR?…}`
-- anything counted → `{plural %n%: …}`
+- anything counted → `{plural %n%: …}` — as many forms as the locale takes: two in English, three in
+  Russian, six in Arabic (zero|one|two|few|many|other, where the one and two forms carry the number
+  in the word itself, so `%n%` goes inside the forms that print it)
 
 Two habits keep the result clean:
 
@@ -95,7 +97,8 @@ Guide: <https://spintax.net/docs/template-composition.md>
 Render tens of variants and read them, not one. Specifically check:
 
 - every conditional branch, both truthy and falsy
-- every plural form, including the numbers that select the rarely-hit form (in Russian: 1, 2, 5, 11, 21)
+- every plural form, including the numbers that select the rarely-hit form (in Russian: 1, 2, 5, 11, 21;
+  in Arabic: 0, 1, 2, 3, 11, 100)
 - the shortest and longest permutation outcomes, for separator and spacing artefacts
 - that no two rolls of the same `#set` variable were meant to agree with each other
 
