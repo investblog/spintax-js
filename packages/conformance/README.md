@@ -312,6 +312,31 @@ sees a `\b` between `x` and U+0301, PHP 8.4.23 (10.44) does not. The corpus runs
 beside a shielded domain, email or abbreviation reaches it; what would move it into work is a host on
 an older PHP rendering such text through the plugin and comparing.
 
+**`#def` values are rolled in a different ORDER, and ordinary output sees it only through the RNG.** `@spintax/core` and
+`spintax-core` place whole rounds (Kahn, source order inside a round); both PHP engines sweep the
+pending names left to right and place each one whose dependencies are placed, so a name unblocked
+earlier in the same sweep goes immediately. Read from the engines (`orderDefinitions` in
+`internal/render.ts`, py's `_order_definitions`, PHP's public `Parser::order_definitions()`),
+2026-09-17:
+
+| definitions, in source order | `@spintax/core` / `spintax-core` | both PHP engines |
+|---|---|---|
+| `a`, `b = %a%`, `c` | `a, c, b` | `a, b, c` |
+| `a`, `b = %a%`, `c = %b%`, `d` | `a, d, b, c` | `a, b, c, d` |
+| `a = %b%`, `b = %c%`, `c` · `a = %c%`, `b`, `c` · `a`, `b = %a%`, `c = %a%`, `d = %b%%c%` | same | same |
+
+Both differing shapes are one case: an independent definition written after a dependent one. A
+definition with a choice in it draws from the RNG, so the order decides which definition gets which
+draw. Outside that it shows only at the edges: the rolls share one expansion budget, so when a
+definition exhausts it the order decides which of the others still got expanded (Codex, 2026-10-03:
+`a = %blank%`, `b = %a%`, an independent `c` over the cap — `b` stays `%a%` under rounds and freezes
+empty under the sweep), and a plural-error observer sees its calls in roll order. With a first-choice
+RNG and no cap reached every order renders the same text, so no `deterministic` case can pin it, and RNG sequences across engines are a non-goal (§3; locked decision 2). Decided 2026-10-03
+(spintax-js#82), not only deferred: aligning either side moves the seeded output of that engine's
+existing users, for a property the contract says not to compare. What would move it into work is a
+consumer that needs the same seed to render the same text through two engines, which would first
+mean making cross-engine RNG parity a goal.
+
 **What would move any of these into work:** someone rendering the same template through two engines
 and getting output they cannot explain. Then the fix is worth its cost — and these notes are the
 starting measurement.
