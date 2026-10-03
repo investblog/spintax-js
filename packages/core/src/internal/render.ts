@@ -854,11 +854,20 @@ function joinWithSeparators(elements: readonly Element[], globalSep: string, glo
   return joinFragments(pieces);
 }
 
-/** Purely-alphabetic separators get space-padded; others pass through (plugin). */
+const UNSPACED_SCRIPT_RE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ーｰ]+$/u;
+
+/**
+ * Purely-alphabetic separators get space-padded; others pass through (plugin).
+ *
+ * Except when every letter belongs to a script written without spaces between words (#87):
+ * `和`, `および`, `と` join bare, so `[<lastsep="和">A|B]` is `A和B`, not `A 和 B`. CJK only —
+ * Han, Hiragana, Katakana, plus the two prolonged-sound marks, which are Script=Common. Hangul
+ * keeps the padding (Korean spaces its words), and a mixed separator such as `and和` is padded.
+ */
 function padSeparator(sep: string): string {
   const trimmed = phpTrim(sep);
   if (trimmed === '') return sep;
-  if (/^\p{L}+$/u.test(trimmed)) return ` ${trimmed} `;
+  if (/^\p{L}+$/u.test(trimmed) && !UNSPACED_SCRIPT_RE.test(trimmed)) return ` ${trimmed} `;
   return sep;
 }
 

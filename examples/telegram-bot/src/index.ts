@@ -109,7 +109,7 @@ const SYNTAX_ROWS: readonly (readonly [code: string, note: string])[] = [
   ['%name%', 'variable <i>(can nest inside another variable)</i>'],
   ['[<sep=", ";lastsep=" and ">a|b|c]', 'shuffle &amp; join equal-weight parts — <i>lastsep gives “a, b and c”</i>'],
   ['{?flag?yes|no}', 'conditional'],
-  ['{plural %n%: item|items}', `plural agreement <i>(${LOCALE} takes 2 forms; ru/uk/be and sr/hr/bs take 3)</i>`],
+  ['{plural %n%: item|items}', `plural agreement <i>(${LOCALE} takes 2 forms; ru/uk/be and sr/hr/bs take 3, ar takes 6)</i>`],
 ];
 
 /** Every spintax snippet the help shows. The test suite runs each one through the engine. */
@@ -280,7 +280,7 @@ function handleTemplate(src: string, startSeed = 1): { text: string; nextSeed?: 
     if (errors.some((e) => e.code === 'plural.arity')) {
       reply +=
         `\n\nℹ️ This bot renders with locale “${LOCALE}”, which takes 2 plural forms — ` +
-        '{plural %n%: item|items}. Languages like ru/uk/be and sr/hr/bs take 3.';
+        '{plural %n%: item|items}. Languages like ru/uk/be and sr/hr/bs take 3, and ar takes 6.';
     }
     // The 0.3.0 trap: a plural counter defined with #set is re-picked at every reference, so the
     // printed number and the form it agrees with are two independent draws. #def rolls it once.

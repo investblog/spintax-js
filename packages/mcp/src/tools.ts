@@ -94,7 +94,7 @@ const includeReportSchema = (): Schema => ({
 const localeProp = (): Schema => ({
   type: 'string',
   description:
-    'Locale for {plural …} arity, e.g. "en" (2-form) or "ru" (3-form: ru/uk/be/sr/hr/bs). Omit for the 2-form default.',
+    'Locale for {plural …} arity, e.g. "en" (2-form), "ru" (3-form: ru/uk/be/sr/hr/bs) or "ar" (6-form). Omit for the 2-form default.',
 });
 
 /**
@@ -263,7 +263,8 @@ export function buildTools(opts: ToolBuildOptions): ToolDef[] {
         'guide the whole spintax toolchain is written against, not a tutorial. Pass the locale ' +
         'you will author in: for ru/uk/be and sr/hr/bs it carries the agreement and case rules ' +
         'that decide whether the variants read as human writing, which is the hard part and the ' +
-        'part a valid template can still get wrong. Returns text to read, not a template.',
+        'part a valid template can still get wrong; for ar, the six plural forms and their order. ' +
+        'Returns text to read, not a template.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -1082,5 +1082,51 @@
         "variable.undefined": 1
       }
     }
+  },
+  {
+    "id": "validate/plural-ar-six-forms-valid",
+    "note": "#88: ar takes six forms.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "expect": {
+      "verdict": "valid",
+      "diagnostics": []
+    }
+  },
+  {
+    "id": "validate/plural-ar-two-forms-invalid",
+    "note": "#88: the arity is strict. A two-form ar block is an error like a two-form ru block — accepting it would keep the silent ungrammatical English rule.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|many}",
+    "locale": "ar",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/plural-ar-three-forms-invalid",
+    "note": "#88: nor does the Slavic shape fit.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "{plural 2: one|few|many}",
+    "locale": "ar-SA",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "plural.arity",
+          "severity": "error"
+        }
+      ]
+    }
   }
 ]

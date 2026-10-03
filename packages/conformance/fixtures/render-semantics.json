@@ -1585,5 +1585,307 @@
     "expect": {
       "output": "%__proto__%"
     }
+  },
+  {
+    "id": "plural/ar-zero-0",
+    "note": "ar (#88): six forms in CLDR order zero|one|two|few|many|other. 0 ⇒ zero. The forms are bucket labels so a wrong pick names itself.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 0: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "zero"
+    }
+  },
+  {
+    "id": "plural/ar-one-1",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 1: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "one"
+    }
+  },
+  {
+    "id": "plural/ar-two-2",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 2: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "two"
+    }
+  },
+  {
+    "id": "plural/ar-few-3",
+    "note": "n%100 in 3..10 ⇒ few.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 3: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "few"
+    }
+  },
+  {
+    "id": "plural/ar-few-10",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 10: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "few"
+    }
+  },
+  {
+    "id": "plural/ar-many-11",
+    "note": "n%100 in 11..99 ⇒ many.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 11: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "many"
+    }
+  },
+  {
+    "id": "plural/ar-many-99",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 99: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "many"
+    }
+  },
+  {
+    "id": "plural/ar-other-100",
+    "note": "n%100 = 0 ⇒ other: the bucket the two-form rule never had.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 100: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "other"
+    }
+  },
+  {
+    "id": "plural/ar-other-102",
+    "note": "n%100 = 2, but only n = 2 itself is \"two\" — 102 is other.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 102: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "other"
+    }
+  },
+  {
+    "id": "plural/ar-few-103",
+    "note": "n%100 = 3 ⇒ few again, above 100.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 103: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "few"
+    }
+  },
+  {
+    "id": "plural/ar-many-111",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 111: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "many"
+    }
+  },
+  {
+    "id": "plural/ar-few-neg3",
+    "note": "A negative count uses abs(), as every locale does.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural -3: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "few"
+    }
+  },
+  {
+    "id": "plural/ar-real-noun",
+    "note": "The same rule over a real noun, كتاب (book), from #88.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 11: كتاب|كتاب|كتابان|كتب|كتابًا|كتاب}",
+    "locale": "ar-EG",
+    "postProcess": false,
+    "expect": {
+      "output": "كتابًا"
+    }
+  },
+  {
+    "id": "plural/ar-two-forms-falls-back",
+    "note": "A two-form block under ar is the arity mismatch every locale has: fullwidth fallback, no silent English rule.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 3: book|books}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "｛plural 3: book|books｝"
+    }
+  },
+  {
+    "id": "perm/sep-han-not-padded",
+    "note": "#87: a letter-only separator is space-padded, unless every letter is Han, Hiragana or Katakana — scripts written without spaces between words. last ⇒ no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"和\">SSO|告警]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "SSO和告警"
+    }
+  },
+  {
+    "id": "perm/sep-kana-not-padded",
+    "note": "#87: Hiragana joins bare too.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"および\">SSO|監視]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "SSOおよび監視"
+    }
+  },
+  {
+    "id": "perm/sep-katakana-prolonged-mark-not-padded",
+    "note": "#87: ー (U+30FC) is Script=Common, but it is written inside Katakana words, so it belongs to the unpadded set.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\"、\";lastsep=\"ルー\">A|B|C]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "A、BルーC"
+    }
+  },
+  {
+    "id": "perm/sep-hangul-padded",
+    "note": "#87: Hangul keeps the padding — Korean puts spaces between words.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"및\">SSO|알림]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "SSO 및 알림"
+    }
+  },
+  {
+    "id": "perm/sep-mixed-script-padded",
+    "note": "#87: a separator that mixes scripts keeps the padding. Letters only on purpose: and/和 is not letter-only and was never padded at all.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"and和\">A|B]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "A and和 B"
+    }
+  },
+  {
+    "id": "def/digits-only-name",
+    "note": "#84: the name class is [A-Za-z0-9_]+, so a digits-only name is an ordinary name. PHP coerced the array key to an int and lost the rolled value.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %7% = rolled\n%7%",
+    "postProcess": false,
+    "expect": {
+      "output": "\nrolled"
+    }
+  },
+  {
+    "id": "def/digits-only-name-referenced-by-another",
+    "note": "#84: the rolled value reaches a later definition under the same name.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %7% = A\n#def %b% = %7%B\n%b%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\nAB"
+    }
+  },
+  {
+    "id": "def/digits-only-names-chained",
+    "note": "#84: two digits-only names in a chain. PHP printed a fragment fifty times here before 0.9.0, because the name it wrote and the name it read were different keys.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %1% = one\n#def %2% = %1%two\n%1% %2%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\none onetwo"
+    }
+  },
+  {
+    "id": "set/digits-only-name",
+    "note": "#84: the macro half.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %7% = S\n%7%",
+    "postProcess": false,
+    "expect": {
+      "output": "\nS"
+    }
+  },
+  {
+    "id": "def/digits-name-zero-and-leading-zero",
+    "note": "#84 controls: 0 and 07. PHP only coerces a canonical integer key, so 07 was always fine and 0 too — pinned so a fix cannot break them.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#def %0% = zero\n#def %07% = lz\n%0% %07%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n\nzero lz"
+    }
+  },
+  {
+    "id": "plural/ar-other-101",
+    "note": "#88: 101 is other. n%100 = 1, but only n = 1 itself is \"one\" — an engine that tests n%100 === 1 picks one here.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural 101: zero|one|two|few|many|other}",
+    "locale": "ar",
+    "postProcess": false,
+    "expect": {
+      "output": "other"
+    }
+  },
+  {
+    "id": "perm/sep-halfwidth-katakana-not-padded",
+    "note": "#87: halfwidth Katakana with the halfwidth prolonged-sound mark U+FF70, which is Script=Common like U+30FC and belongs to the unpadded set for the same reason.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"ｱｰ\">A|B]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "AｱｰB"
+    }
   }
 ]

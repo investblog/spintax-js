@@ -42,9 +42,10 @@ print and the number the plural form reads, so they disagree. The engine reports
 `plural.count-macro`. Details: <https://spintax.net/docs/variables.md>
 
 **Plural arity is per locale and is not what you would guess.** `ru`, `uk`, `be`, `sr`, `hr`
-and `bs` take **three** forms; every other locale takes **two** — including `pl` (despite being
-linguistically three-form) and `zh`/`ja`/`ko` (which get two, not one). Supplying the wrong
-count of forms is an error, not a silent fallback.
+and `bs` take **three** forms; `ar` takes **six**, in the order zero|one|two|few|many|other;
+every other locale takes **two** — including `pl` (despite being linguistically three-form) and
+`zh`/`ja`/`ko` (which get two, not one). Supplying the wrong count of forms is an error, not a
+silent fallback.
 Details: <https://spintax.net/docs/plural-spintax.md>
 
 **Conditional truthiness is stricter than JavaScript's.** Undeclared, empty and

@@ -165,5 +165,90 @@
         "hero"
       ]
     }
+  },
+  {
+    "id": "extract/ref-inside-set-value",
+    "note": "#83: a reference written in a #set VALUE is a reference — only the directive's own name (its left-hand side) is stripped. A runner that drops the whole #set line misses b.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#set %a% = %b%\nplain",
+    "expect": {
+      "refs": [
+        "b"
+      ],
+      "sets": [
+        "a"
+      ],
+      "defs": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/ref-inside-def-value",
+    "note": "#83: the same for #def — and the #def's own name is not a reference unless the body uses it.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#def %a% = %b%\nplain",
+    "expect": {
+      "refs": [
+        "b"
+      ],
+      "sets": [],
+      "defs": [
+        "a"
+      ],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/def-name-not-a-phantom-ref",
+    "note": "#83: a #def whose name appears nowhere else. A runner that leaves the #def line in the body reports b as a phantom reference.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#def %b% = x\n%a%",
+    "expect": {
+      "refs": [
+        "a"
+      ],
+      "sets": [],
+      "defs": [
+        "b"
+      ],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/conditional-ref-inside-set-value",
+    "note": "#83: a conditional's variable inside a directive value is collected too.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#set %a% = {?flag?y|n}\nplain",
+    "expect": {
+      "refs": [
+        "flag"
+      ],
+      "sets": [
+        "a"
+      ],
+      "defs": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/definition-lhs-after-line-separator",
+    "note": "#83: a U+2028 LINE SEPARATOR ends a line for the anchors, so the #set after it is a directive: its left-hand side is stripped and the reference in its value counts. PCRE's /m breaks on LF only, so a PHP runner has to spell the line start out.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "x\u2028#set %a% = %b%",
+    "expect": {
+      "refs": [
+        "b"
+      ],
+      "sets": [
+        "a"
+      ],
+      "defs": [],
+      "includes": []
+    }
   }
 ]

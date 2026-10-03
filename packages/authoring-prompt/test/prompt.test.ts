@@ -27,7 +27,15 @@ const errorsIn = (src: string, locale: string) =>
 //                     (which `locale.slice(0, 2)` did, reading `srp` as `sr`).
 //   hr / bs         — same profile and arity as sr, so they should behave identically. Asserted
 //                     rather than assumed: this loop is what validates each locale's own examples.
-const LOCALES = ['en', 'ru', 'sr', 'sr-Latn', 'sr_RS', 'srp', 'hr', 'bs'] as const;
+//   ar / ar-EG      — six forms (#88): the only arity that is neither 2 nor 3, so the branch an
+//                     `=== 3` test would silently send down the two-form path.
+const LOCALES = ['en', 'ru', 'sr', 'sr-Latn', 'sr_RS', 'srp', 'hr', 'bs', 'ar', 'ar-EG'] as const;
+
+const SHAPE_BY_ARITY: Readonly<Record<number, string>> = {
+  2: '{plural %n%: one|many}',
+  3: '{plural %n%: one|few|many}',
+  6: '{plural %n%: zero|one|two|few|many|other}',
+};
 
 describe.each(LOCALES)('the prompt must not teach invalid syntax [locale=%s]', (locale) => {
   const examples = Object.entries(promptExamples(locale));
@@ -58,13 +66,13 @@ describe.each(LOCALES)('the prompt must not teach invalid syntax [locale=%s]', (
   test('the taught plural arity matches what the engine accepts for this locale', () => {
     const { systemPrompt } = buildAuthoringPrompt({ brief: 'x', locale });
     const forms = pluralArity(locale);
-    expect(systemPrompt).toContain(
-      forms === 3 ? '{plural %n%: one|few|many}' : '{plural %n%: one|many}',
-    );
-    // and the counter-shape must NOT be taught
-    expect(systemPrompt).not.toContain(
-      forms === 3 ? '{plural %n%: one|many}\n' : '{plural %n%: one|few|many}',
-    );
+    expect(SHAPE_BY_ARITY[forms]).toBeDefined();
+    expect(systemPrompt).toContain(SHAPE_BY_ARITY[forms]);
+    // and no counter-shape may be taught
+    for (const [arity, shape] of Object.entries(SHAPE_BY_ARITY)) {
+      if (Number(arity) === forms) continue;
+      expect(systemPrompt).not.toContain(`${shape}\n`);
+    }
   });
 
   test('#def picks once, which is the whole reason the prompt teaches it', () => {

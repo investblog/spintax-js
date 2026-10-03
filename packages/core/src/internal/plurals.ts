@@ -57,14 +57,20 @@ export function normalizeBaseLang(locale: string): string {
 }
 
 /**
- * Expected number of plural forms: 3 for the Slavic one/few/other family
- * (East Slavic ru/uk/be + BCS sr/hr/bs), else 2 (EN-style).
+ * Expected number of plural forms: 6 for Arabic (CLDR zero/one/two/few/many/other),
+ * 3 for the Slavic one/few/other family (East Slavic ru/uk/be + BCS sr/hr/bs), else
+ * 2 (EN-style).
  *
  * BCS shares the East-Slavic integer rule exactly, so it reuses that bucket; CLDR
  * names the third slot "other" rather than "many", positionally the same.
+ *
+ * Arabic is strict like the others (#88): a two-form `ar` block is `plural.arity`,
+ * because accepting it would keep the silent ungrammatical output the rule exists to stop.
  */
 export function pluralArity(baseLang: string): number {
   switch (baseLang) {
+    case 'ar':
+      return 6;
     case 'ru':
     case 'uk':
     case 'be':
@@ -90,10 +96,13 @@ export const DEFAULT_PLURAL_ARITY = pluralArity('');
  * Pick the plural form for a count by the locale's grammar.
  * - Slavic 3-form (ru/uk/be + sr/hr/bs): one (1,21,31… not 11), few (2-4,22-24…
  *   not 12-14), many (rest, incl. 0).
+ * - Arabic, CLDR order: zero (0), one (1), two (2), few (n%100 in 3..10), many
+ *   (n%100 in 11..99), other (rest: 100–102, 200–202, …).
  * - EN-style: one (n=1), many (rest). Negative counts use abs().
  *
  * Counts are integers here (§3.1 erases a non-numeric slot), so the BCS/East-Slavic
- * split on fractions — CLDR gives BCS a fraction-digit rule — cannot be reached.
+ * split on fractions — CLDR gives BCS a fraction-digit rule — cannot be reached, and
+ * neither can Arabic's fraction rules.
  */
 export function pluralFor(baseLang: string, n: number, forms: readonly string[]): string {
   const abs = Math.abs(n);
@@ -101,6 +110,13 @@ export function pluralFor(baseLang: string, n: number, forms: readonly string[])
   const mod100 = abs % 100;
 
   switch (baseLang) {
+    case 'ar':
+      if (abs === 0) return forms[0] ?? '';
+      if (abs === 1) return forms[1] ?? '';
+      if (abs === 2) return forms[2] ?? '';
+      if (mod100 >= 3 && mod100 <= 10) return forms[3] ?? '';
+      if (mod100 >= 11) return forms[4] ?? '';
+      return forms[5] ?? '';
     case 'ru':
     case 'uk':
     case 'be':

@@ -15,7 +15,7 @@
 import { normalizeBaseLang, pluralArity, type Diagnostic } from '@spintax/core';
 
 /** Bump when the prompt text changes in a way that can change model output. */
-export const PROMPT_VERSION = '5';
+export const PROMPT_VERSION = '6';
 
 export type VariationLevel = 'conservative' | 'balanced' | 'aggressive';
 
@@ -257,7 +257,7 @@ export interface PromptExamples {
  */
 export function promptExamples(locale?: string): PromptExamples {
   const russian = teachingProfile(locale) === 'east-slavic';
-  const threeForm = pluralArity(locale) === 3;
+  const arity = pluralArity(locale);
   return {
     def: [
       '#def %product% = {course|training}',
@@ -275,9 +275,13 @@ export function promptExamples(locale?: string): PromptExamples {
     conditional: '{?discount?Save %discount% today|Get started in minutes}',
     plural: russian
       ? 'У вас %n% {plural %n%: товар|товара|товаров} в корзине.'
-      : threeForm
-        ? 'The sale ends in %n% {plural %n%: sat|sata|sati}.'
-        : 'You have %n% {plural %n%: item|items} in your cart.',
+      : arity === 6
+        ? // Arabic (#88): six forms, and the one/two forms carry the number in the word itself
+          // (كتاب واحد, كتابان), so %n% goes INSIDE the forms that print it, not before the block.
+          'في سلتك {plural %n%: %n% كتاب|كتاب واحد|كتابان|%n% كتب|%n% كتابًا|%n% كتاب}.'
+        : arity === 3
+          ? 'The sale ends in %n% {plural %n%: sat|sata|sati}.'
+          : 'You have %n% {plural %n%: item|items} in your cart.',
   };
 }
 
@@ -289,7 +293,20 @@ function syntaxBlock(locale: string | undefined): string {
   // Genuinely arity — the SHAPE the engine will accept. Straight from the engine, so it cannot
   // disagree with the validator the drafted template is about to meet.
   const forms = pluralArity(locale);
-  const pluralForm = forms === 3 ? '{plural %n%: one|few|many}' : '{plural %n%: one|many}';
+  const pluralForm =
+    forms === 6
+      ? '{plural %n%: zero|one|two|few|many|other}'
+      : forms === 3
+        ? '{plural %n%: one|few|many}'
+        : '{plural %n%: one|many}';
+  // Six slots are not guessable from their names the way one|few|many is: say which counts land
+  // where, and that the number may live inside a form.
+  const slotOrder =
+    forms === 6
+      ? '\n    The six forms go in this order: zero (0), one (1), two (2), few (3–10, 103–110, …),\n' +
+        '    many (11–99, 111–199, …), other (100–102, 200–202, …). A form may carry the number\n' +
+        '    itself — write %n% inside the forms that print it and leave it out of the ones that do not.'
+      : '';
   // The conjunction belongs to the example LANGUAGE, not the arity: a Cyrillic "и" inside an
   // English sentence is what keying this on arity produced for Latin-script hr/bs.
   const and = teachingProfile(locale) === 'east-slavic' ? 'и' : 'and';
@@ -345,7 +362,7 @@ ${pluralForm}
     Plural agreement by count. This target language takes EXACTLY ${forms} forms —
     writing any other number of forms is a hard error, not a style choice. NEVER hand-roll counts
     as {item|items}:
-${indent(ex.plural)}`;
+${indent(ex.plural)}${slotOrder}`;
 }
 
 const RULES = `HARD RULES

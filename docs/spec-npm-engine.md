@@ -155,7 +155,9 @@ the line explicitly:
   *exists*, and only when the host passes a slug list; `Validator.php:43-45,401-417`). Cycle
   protection is a **render-time guard** (§4.1, `maxDepth`), not a `validate()` error.
 - **Plural grammar buckets.** Given the same locale + count, both engines pick the same
-  form slot (RU/UK/BE + SR/HR/BS 3-form one|few|many; EN-style 2-form; script subtags carry no
+  form slot (RU/UK/BE + SR/HR/BS 3-form one|few|many; AR 6-form zero|one|two|few|many|other in
+  CLDR order — few = n%100 in 3..10, many = n%100 in 11..99, other = the rest (#88); EN-style
+  2-form; every arity is strict, so a 2-form `ar` block is `plural.arity`; script subtags carry no
   plural grammar, so `sr-Latn` and `sr-Cyrl` both normalise to `sr`). Deterministic math, not RNG —
   must match exactly. Includes the edge rules: empty/non-numeric count **erases the block →
   `''`**, negative counts are `abs()`-normalized (`Plurals.php:224-228,271`). The `locale`
@@ -272,7 +274,9 @@ Port exactly (plugin key design decision): only `maxsize` set → `minsize = 1` 
 only `minsize` set → `maxsize = total`. **Clamp out-of-range values**:
 `minsize = max(1, min(minsize, total))`, `maxsize = max(minsize, min(maxsize, total))`
 (`Parser.php:572-573`). Auto-spacing: purely-alphabetic separators get padded with spaces;
-punctuation separators do not. The `[<…>…]` parse must first disambiguate a real `<config>`
+punctuation separators do not — and neither does a separator whose every letter is Han, Hiragana or
+Katakana (plus the prolonged-sound marks U+30FC/U+FF70), because those scripts are written without
+spaces between words (`和`, `および`; #87). Hangul and mixed-script separators are padded. The `[<…>…]` parse must first disambiguate a real `<config>`
 header from a leading HTML start tag (`looks_like_html_start_tag`) — a prime divergence
 site, so it earns heavy corpus coverage.
 
@@ -621,7 +625,7 @@ export const DEFAULT_MAX_DEPTH = 20         // RenderOptions.maxDepth default
 // authoring prompt). Both take a RAW locale and accept an absent one, like the `locale?`
 // on RenderOptions/ValidateOptions. NOT exported: findPluralBlocks — it returns byte
 // offsets, i.e. parser internals, for the same reason `Ast` is opaque.
-function pluralArity(locale?: string | null): number        // 3 for ru/uk/be + sr/hr/bs, else 2
+function pluralArity(locale?: string | null): number        // 6 for ar, 3 for ru/uk/be + sr/hr/bs, else 2
 function normalizeBaseLang(locale?: string | null): string  // 'pt-BR'→'pt'; no ISO-639-3
 
 class SpintaxError extends Error {}         // base for render() programmer-error throws

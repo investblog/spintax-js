@@ -140,18 +140,33 @@ final class GoldenCorpusTest extends TestCase
         }
         if (array_key_exists('refs', $expect)) {
             // Refs aren't a public engine API; replicate the Validator regexes
-            // (%(\w+)% + {?[!]VAR?}) over the #set-stripped body.
-            //
-            // NOT what @spintax/core and spintax-core scan: they strip the #set/#def left-hand
-            // side only and keep the value, while this drops the whole #set line and keeps the
-            // whole #def one. No fixture separates the two rules; which is contract is #83.
-            $body = $parser->extract_set_directives($text)['body'];
+            // (%(\w+)% + {?[!]VAR?}) over the body with each #set/#def LEFT-HAND SIDE stripped
+            // and its value kept — the rule @spintax/core and spintax-core implement (#83). This
+            // used to drop the whole #set line and keep the whole #def one; the
+            // extract/ref-inside-* fixtures are what separate the two rules.
+            $body = $this->stripDefinitionLhs($text);
             $this->assertSameSet($expect['refs'], $this->extractRefs($body), "refs for {$c['id']}");
             $asserted = true;
         }
         if (!$asserted) {
             $this->markTestSkipped("no PHP-checkable extract expectation for {$c['id']}");
         }
+    }
+
+    /**
+     * Drop each #set/#def … = left-hand side, keeping the value.
+     *
+     * Spelled out to match the reference's /^[ \t]*#(?:set|def)[ \t]+%\w+%[ \t]*=/gmu: a line
+     * starts after LF, CR, U+2028 or U+2029 (ECMAScript's /m; PCRE's breaks on LF only), and the
+     * name is ASCII (\w under /u is Unicode in PCRE).
+     */
+    private function stripDefinitionLhs(string $text): string
+    {
+        return (string) preg_replace(
+            '/(?:^|(?<=[\n\r\x{2028}\x{2029}]))[ \t]*#(?:set|def)[ \t]+%[A-Za-z0-9_]+%[ \t]*=/u',
+            '',
+            $text
+        );
     }
 
     /** @return string[] */
@@ -240,7 +255,7 @@ final class GoldenCorpusTest extends TestCase
         foreach ($context as $k => $v) {
             $runtime[strtolower((string) $k)] = $v;
         }
-        $vars = array_merge($setVars, $runtime);
+        $vars = array_replace($setVars, $runtime);
 
         // Stage 5b: roll #def values ONCE, against the merged context. A #set value is left raw —
         // it is a macro, substituted at every reference, and its brackets re-roll each time.
@@ -249,7 +264,7 @@ final class GoldenCorpusTest extends TestCase
         // host-bound class (the plugin's Renderer needs get_locale/wp_kses_post), which is exactly
         // why this file drives the WP-free primitives. That makes it a third place the stage order
         // is written down — keep it in step with both engines when the order changes.
-        $vars = array_merge($vars, $this->rollDefinitions($extracted, $vars, $runtime, $locale, $parser, $conditionals, $plurals));
+        $vars = array_replace($vars, $this->rollDefinitions($extracted, $vars, $runtime, $locale, $parser, $conditionals, $plurals));
 
         // Stage 6a: conditionals, pre variable-expansion (:291)
         $text = $conditionals->apply($text, $vars);
@@ -309,7 +324,7 @@ final class GoldenCorpusTest extends TestCase
                 continue;
             }
 
-            $visible = array_merge($vars, $rolled);
+            $visible = array_replace($vars, $rolled);
             $value = $conditionals->apply($definitions[$name], $visible);
             $value = $parser->expand_variables($value, $visible);
             $value = $conditionals->apply($value, $visible);

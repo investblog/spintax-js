@@ -130,8 +130,8 @@ export function normalizeBaseLang(locale?: string | null): string {
 }
 
 /**
- * How many `{plural …}` forms this locale takes — 3 for the Slavic one/few/other
- * family (ru/uk/be + sr/hr/bs), 2 for everything else.
+ * How many `{plural …}` forms this locale takes — 6 for Arabic (zero/one/two/few/many/other),
+ * 3 for the Slavic one/few/other family (ru/uk/be + sr/hr/bs), 2 for everything else.
  *
  * Takes a RAW locale and normalizes internally, unlike the internal helper of the
  * same name: a public function that silently answered 2 for `sr-Latn` would be a

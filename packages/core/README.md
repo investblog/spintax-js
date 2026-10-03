@@ -19,7 +19,7 @@ parse, render, validate, extract, analyze, and neutralize spintax templates.
   [`spintax-core`](https://pypi.org/project/spintax-core/) (Python), an Object Pascal engine,
   [`Spintax.Core`](https://www.nuget.org/packages/Spintax.Core/) (.NET), and
   the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) are all held to the same
-  behavior contract by a **shared golden corpus of 258 fixtures** — deterministic verdicts, plural
+  behavior contract by a **shared golden corpus of 386 fixtures** — deterministic verdicts, plural
   buckets, conditionals, `#set`/`#def` semantics and post-processing agree everywhere, so a
   template is an asset you can move between runtimes, not a lock-in.
 - **MIT** licensed.
@@ -85,7 +85,7 @@ dedupe in the host and cap the retries: a template may simply not have N combina
 | Local set | `#set %v% = value` | define a macro — re-picked at every use |
 | Local def | `#def %v% = value` | define a value — picked once per render, held at every use |
 | Conditional | `{?VAR?then\|else}` | `then` if `VAR` is truthy, else `else` — inside `{…}`/`[…]` it resolves first, so a `\|` in the taken branch separates options and an empty one drops its element |
-| Plural | `{plural %n%: one\|few\|many}` | grammatical agreement by locale |
+| Plural | `{plural %n%: one\|few\|many}` | grammatical agreement by locale — 2 forms (en), 3 (ru/uk/be, sr/hr/bs), 6 (ar: zero\|one\|two\|few\|many\|other) |
 | Include | `#include "slug-or-id"` | embed another template (host-resolved) |
 | Comment | `/# … #/` | stripped before rendering |
 
@@ -103,7 +103,7 @@ capitalization, URL/email shielding) is **on by default**.
 render(input, {
   context?:         Record<string, string>,   // variable map
   seed?:            number | string,           // deterministic RNG; omit ⇒ random
-  locale?:          string,                     // plural buckets, e.g. 'ru' (3-form)
+  locale?:          string,                     // plural buckets: 'ru' 3-form, 'ar' 6-form
   includeResolver?: (ref: string) => string | null,  // host-injected, synchronous
   postProcess?:     boolean,                    // default true; false ⇒ raw pick
   maxDepth?:        number,                      // #include / nesting guard (default 20)
