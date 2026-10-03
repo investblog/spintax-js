@@ -3,6 +3,26 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.4
+
+Bundles `@spintax/core` **0.11.0** (from 0.8.0) and `@spintax/authoring-prompt` **0.3.2** (from 0.3.0).
+No change to the node's own parameters or outputs; Render, Render Many, Validate and Lint see the
+engine's text, and the two prompt operations its prompt:
+
+- **Arabic takes six plural forms** (core 0.11.0, spintax-js#88): zero, one, two, few, many, other in
+  CLDR order. A two-form `ar` block is now a `plural.arity` error in Validate and renders as the
+  fullwidth fallback — before, it rendered ungrammatical text for most counts.
+- **A Chinese or Japanese list separator joins bare** (core 0.11.0, #87): `[<lastsep="和">SSO|告警]`
+  renders `SSO和告警`, not `SSO 和 告警`. Korean and mixed-script separators keep their spaces.
+- **No space between a punctuation mark and the quote or bracket that closes it** (core 0.10.0, #85):
+  `«Как дела? », и ушёл` → `«Как дела?», и ушёл`, `(really? )` → `(really?)`.
+- **A TLD is a label in one case** (core 0.9.0, #79): `compact.Game` and `конец.Начало` get their space
+  and capital; `example.com`, `ASP.NET` and `info@Example.COM` stay whole. The accepted cost:
+  `Yandex.Money` renders `Yandex. Money`.
+- **Build Authoring Prompt / Build Repair Prompt** stamp `promptVersion` **6** (was 4): an address never
+  ends a sentence and its domain ending is lower case, and for `ar` the six-form shape with an Arabic
+  example.
+
 ## 0.3.3
 
 Bundles `@spintax/core` **0.8.0**, which reads a template the way both PHP engines do in three more
