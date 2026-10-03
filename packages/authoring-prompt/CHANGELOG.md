@@ -8,6 +8,22 @@ the prompt TEXT changes in a way that can change model output — it is what a c
 against, and what a conformance report is filed under. The package version follows semver over
 the exported API.
 
+## 0.3.2 — 2026-10-03
+
+`PROMPT_VERSION` `'5'` → `'6'`. No API change. **Arabic is taught its six plural forms** (spintax-js#88).
+
+The prompt asks the engine for arity, and branched on `pluralArity(locale) === 3`: anything else got
+the two-form shape and the two-form English example. With `@spintax/core` 0.11.0 answering 6 for `ar`,
+that branch would have taught Arabic `{plural %n%: one|many}` — a shape the engine now rejects. For a
+six-form locale the prompt now shows `{plural %n%: zero|one|two|few|many|other}`, says which counts land
+in which slot, and teaches from an Arabic example in which the one and two forms carry the number in the
+word itself (`كتاب واحد`, `كتابان`), so `%n%` sits inside the forms that print it:
+`في سلتك {plural %n%: %n% كتاب|كتاب واحد|كتابان|%n% كتب|%n% كتابًا|%n% كتاب}.` The text for every other
+locale is unchanged byte for byte. Under an older engine `ar` still answers 2 and gets the old prompt,
+which is what that engine accepts — the peer range is unchanged.
+
+The opt-in prompt-conformance run has not been repeated for v6 (it is paid; the owner's call).
+
 ## 0.3.1 — 2026-09-17
 
 `PROMPT_VERSION` `'4'` → `'5'`. No API change. Hard rule 7, with its self-check line: **an address never

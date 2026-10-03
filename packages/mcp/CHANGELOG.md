@@ -3,6 +3,19 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.1 — 2026-10-03
+
+Depends on `@spintax/core` **^0.11.0** and `@spintax/authoring-prompt` **^0.3.2**:
+
+- **Arabic takes six plural forms.** `validate_spintax` and `render_spintax` under `locale: "ar"` expect
+  `zero|one|two|few|many|other`; a two-form `ar` block is now `plural.arity` (it used to get the English
+  rule silently). `spintax_authoring_guide` for `ar` teaches the six-form shape and its slot order
+  (`promptVersion` 6).
+- **A Chinese or Japanese list separator joins without spaces:** `[<lastsep="和">SSO|告警]` renders
+  `SSO和告警`.
+- Tool descriptions name the new arity: the `locale` argument says `"ar" (6-form)`, and the authoring
+  guide says it carries the six forms for `ar`. The tool list, arguments and caps are otherwise unchanged.
+
 ## 0.4.0 — 2026-10-03
 
 - **An argument the tool's schema does not list is refused (#86).** Every `inputSchema` has said

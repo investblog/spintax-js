@@ -3,6 +3,46 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.11.0 — 2026-10-03
+
+A minor: one verdict changes (a two-form `ar` plural is now an error) and rendered text moves for
+Arabic plurals and for CJK list separators.
+
+### Added
+
+- **Arabic plurals (#88).** `pluralArity('ar')` is **6**, and `{plural …}` picks in CLDR order:
+  zero (0), one (1), two (2), few (n % 100 in 3..10), many (n % 100 in 11..99), other (everything
+  else — 100–102, 200–202, …). Negative counts use `abs()` as before; counts are integers, so CLDR's
+  fraction rules cannot be reached. Arabic used to get the English rule — `forms[0]` for 1,
+  `forms[1]` for everything else — which is ungrammatical for most counts, and a correct six-form
+  block was a `plural.arity` error, so there was no way to write one.
+  **The arity is strict, like every other locale's: a two-form `ar` block is now `plural.arity`**
+  and renders as the fullwidth fallback. Accepting two as a fallback would keep the silent
+  ungrammatical output. `DEFAULT_PLURAL_ARITY` (no locale) stays 2.
+
+### Fixed
+
+- **A Chinese or Japanese list separator joins without spaces (#87).** A separator made only of
+  letters is space-padded on join (`[<lastsep="and">A|B]` → `A and B`), and that was applied to
+  scripts written without spaces between words: `[<lastsep="和">SSO|告警]` printed `SSO 和 告警`. Now a
+  separator whose every letter is Han, Hiragana or Katakana — plus the prolonged-sound marks U+30FC
+  and U+FF70, which are Script=Common but written inside Katakana words — joins bare: `SSO和告警`,
+  `SSOおよび監視`. Hangul keeps the padding (Korean spaces its words), and so does a separator that
+  mixes scripts (`and和`). Thai, Lao, Khmer and Myanmar are also written without spaces and are left
+  as they were until a template in them shows up.
+
+### Corpus
+
+386 cases (+34). `plural/ar-*` at 0, 1, 2, 3, 10, 11, 99, 100, 101, 102, 103, 111 and −3, a real
+noun under `ar-EG`, and the two-form fallback; `validate/plural-ar-{six-forms-valid,two-forms-invalid,
+three-forms-invalid}`; `perm/sep-{han,kana,katakana-prolonged-mark,halfwidth-katakana}-not-padded`,
+`perm/sep-hangul-padded`, `perm/sep-mixed-script-padded`. Two more groups move no TS output and pin
+what other engines got wrong: digits-only definition names (`def/digits-only-*`, `set/digits-only-name`
+and the `%0%`/`%07%` controls — #84, PHP lost the value to integer-key coercion) and `extract`'s refs
+(`extract/ref-inside-{set,def}-value`, `extract/def-name-not-a-phantom-ref`,
+`extract/conditional-ref-inside-set-value`, `extract/definition-lhs-after-line-separator` — #83, the PHP runners scanned a different body). Every
+expectation was written by hand and checked against both PHP engines with their mirrors applied.
+
 ## 0.10.0 — 2026-09-19
 
 ### Fixed
