@@ -3,6 +3,18 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.5
+
+Bundles `@spintax/core` **0.12.0** (spintax-js#90). Render and Render Many join list separators the way
+the language writes them; nothing else moves:
+
+- **With Locale `ar`, the conjunction و (and ف) attaches to the next word:**
+  `[<sep="، ";lastsep="و">الكازينو|المراهنات|البث]` → `الكازينو، المراهنات والبث`. Before a word in another
+  script — a Latin brand — the space stays (`و Evolution`). Hebrew ו with `he` likewise. Persian and Urdu
+  keep the spaces, and so does the default `en`. An empty Locale takes the item's `spintaxMeta.locale`
+  first, as everywhere in the node, so an `ar` item from Build Authoring Prompt gets the Arabic rule.
+- **Thai, Lao, Khmer and Myanmar separators join without spaces,** like Chinese and Japanese since 0.3.4.
+
 ## 0.3.4
 
 Bundles `@spintax/core` **0.11.0** (from 0.8.0) and `@spintax/authoring-prompt` **0.3.2** (from 0.3.0).

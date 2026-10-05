@@ -3,6 +3,17 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.2 — 2026-10-06
+
+Depends on `@spintax/core` **^0.12.0** (spintax-js#90). `render_spintax` renders list separators the
+way the language writes them; the tool list, arguments and caps are unchanged:
+
+- **Under `locale: "ar"`, the conjunction و (and ف) attaches to the next word:**
+  `[<sep="، ";lastsep="و">الكازينو|المراهنات|البث]` → `الكازينو، المراهنات والبث`. Before a word in another
+  script — a Latin brand — the space stays (`و Evolution`). Hebrew ו under `"he"` likewise. Persian, Urdu
+  and no locale keep the spaces.
+- **Thai, Lao, Khmer and Myanmar separators join without spaces,** like Chinese and Japanese since 0.4.1.
+
 ## 0.4.1 — 2026-10-03
 
 Depends on `@spintax/core` **^0.11.0** and `@spintax/authoring-prompt` **^0.3.2**:
