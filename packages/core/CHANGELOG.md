@@ -3,6 +3,46 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.12.0 — 2026-10-06
+
+A minor: rendered text moves for permutation separators in Arabic, Hebrew, Thai and Lao. No verdict
+changes and no API change; `render()` already took the `locale` it now also reads here.
+
+### Fixed
+
+- **An Arabic list can be written (#90).** The conjunction و ("and") — and ف ("and then") — is written
+  attached to the next word: `الكازينو والبث`, never `الكازينو و البث`. A letter-only separator was always
+  padded on both sides, whatever spaces the author wrote, so no shape of `lastsep` could produce it. Now,
+  under `locale: 'ar'`, a separator that is exactly و or ف keeps the space before it and none after when
+  the next element starts with an Arabic letter: `[<sep="، ";lastsep="و">…]` renders
+  `الكازينو، المراهنات الرياضية والبث المباشر`. Before anything else — a Latin brand name, a digit — both
+  spaces stay: `و Evolution`. Hebrew ו under `locale: 'he'` works the same way. The rule is keyed by
+  LANGUAGE, not script: Persian and Urdu write the same letter و as a word of its own, so under `fa` and
+  `ur` it is padded as before, and so is every word conjunction (أو, ثم, או) and و with no locale.
+- **Thai and Lao separators join bare (#90),** as Han and kana have since 0.11.0: `[<lastsep="และ">แมว|สุนัข]`
+  renders `แมวและสุนัข`. Khmer and Myanmar take the same rule. A separator carrying a combining mark —
+  Thai `หรือ`, most Khmer and Myanmar words — is not all letters, so it was never padded and still renders
+  exactly as written, spaces included.
+
+No template in the family's stored content uses any of these separators (measured over casino-platform,
+content-gen, both sites and the plugin: the only hits were the probes that found the issue), so no
+existing text changes.
+
+### Corpus
+
+408 cases (+22), all in `render-semantics.json`. `perm/sep-arabic-*` (و and ف attached, the author's
+spaces, a regional locale, before a Latin word, a digit, an astral Arabic letter and U+0640, a word
+conjunction, the issue's whole list with the post-process on), `perm/sep-persian-waw-padded`,
+`perm/sep-urdu-waw-padded`, `perm/sep-waw-without-locale-padded`, `perm/sep-hebrew-*` (ו attached, before a Latin word, the word conjunction או), `perm/sep-thai-*`,
+`perm/sep-lao-not-padded`, `perm/sep-khmer-not-padded`, `perm/sep-myanmar-not-padded`, and
+`perm/sep-script-not-script-extensions`.
+
+That last one pins a divergence 0.11.0 shipped in both PHP engines without anyone seeing it: PCRE2 10.40
+and later read `\p{Han}` as Script_Extensions, so U+3006 〆, U+303C 〼, the kana repeat marks U+3031–3035
+and the halfwidth sound marks U+FF9E/FF9F joined bare there and were padded here and in every port. The
+PHP engines now exclude them, which is Script on any PCRE2 version. The same trap sat under the new Arabic
+test (U+0640, tatweel); the next element is read by code point, not by UTF-16 unit.
+
 ## 0.11.0 — 2026-10-03
 
 A minor: one verdict changes (a two-form `ar` plural is now an error) and rendered text moves for
