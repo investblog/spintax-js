@@ -337,6 +337,16 @@ existing users, for a property the contract says not to compare. What would move
 consumer that needs the same seed to render the same text through two engines, which would first
 mean making cross-engine RNG parity a goal.
 
+**The separator's script tests follow each engine's Unicode version.** Whether a separator joins bare
+(Han, kana, Thai, Lao, Khmer, Myanmar — #87, #90) and whether و attaches to the next element (an Arabic
+letter — #90) are script questions, and each engine answers them from its own tables: Node 24 is on
+Unicode 17, PHP 8.4's PCRE2 10.44 on 15, the ports on whatever their generated tables were built from.
+A letter assigned between those versions can join in one engine and be padded in another. Script versus
+Script_Extensions is NOT in this class — it is gated (`perm/sep-script-not-script-extensions`, and the
+U+0640 case) because PCRE2 10.40 changed what `\p{Han}` means and the PHP engines now exclude the
+difference. What would move the version gap into work: a real separator or list item in a script
+added after Unicode 15.
+
 **What would move any of these into work:** someone rendering the same template through two engines
 and getting output they cannot explain. Then the fix is worth its cost — and these notes are the
 starting measurement.

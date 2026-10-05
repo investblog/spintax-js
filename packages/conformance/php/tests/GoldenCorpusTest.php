@@ -277,7 +277,7 @@ final class GoldenCorpusTest extends TestCase
         // Stage 7: enumerations (:313)
         $text = $parser->resolve_enumerations($text);
         // Stage 8: permutations (:316)
-        $text = $parser->resolve_permutations($text);
+        $text = $parser->resolve_permutations($text, $locale); // the locale since #90 (proclitic separators); an older plugin ignores it
         // Stage 9: #include / [spintax] (:328) — host-injected; the corpus render cases
         //          don't require WP template lookups, so this stage is skipped.
         // Stage 10: post_process (:331) — the parity target, unless postProcess:false.
@@ -330,7 +330,7 @@ final class GoldenCorpusTest extends TestCase
             $value = $conditionals->apply($value, $visible);
             $value = $plurals->apply($value, $locale, ['lenient' => true]);
             $value = $parser->resolve_enumerations($value);
-            $rolled[$name] = $parser->resolve_permutations($value);
+            $rolled[$name] = $parser->resolve_permutations($value, $locale);
         }
 
         return $rolled;

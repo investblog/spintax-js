@@ -1887,5 +1887,283 @@
     "expect": {
       "output": "AｱｰB"
     }
+  },
+  {
+    "id": "perm/sep-arabic-waw-attaches",
+    "note": "#90: under ar, the conjunction و (and ف) is written attached to the next word — a space before it, none after. last ⇒ no swap.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|البث]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو والبث"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-waw-author-spaces-do-not-matter",
+    "note": "#90: the author's spaces around و change nothing, as they never changed the padding: ' و ' and ' و' join like 'و'.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<sep=\" و \";lastsep=\" و\">الكازينو|المراهنات|البث]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو والمراهنات والبث"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-fa-attaches",
+    "note": "#90: ف (\"and then\") is a proclitic like و.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"ف\">الكازينو|البث]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو فالبث"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-waw-region-locale",
+    "note": "#90: the rule is keyed by the BASE language — ar_SA and ar-EG are ar.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|البث]",
+    "locale": "ar_SA",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو والبث"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-waw-before-latin-keeps-space",
+    "note": "#90: و attaches only before a letter of the Arabic script. Before a Latin brand the space stays, as Arabic typesetting writes it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|Evolution]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو و Evolution"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-waw-before-digit-keeps-space",
+    "note": "#90: a digit is not a letter, Arabic-Indic digits included — the space stays. Decided, not derived: the rule attaches before a letter only.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|٥ ألعاب]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو و ٥ ألعاب"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-waw-before-astral-arabic-letter",
+    "note": "#90: the next element is read by CODE POINT. U+1EE00 (Arabic mathematical alef) is an astral letter of the Arabic script; an engine reading one UTF-16 unit would see a surrogate and pad.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|𞸀ب]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو و𞸀ب"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-word-conjunction-padded",
+    "note": "#90: أو (\"or\") is a word of its own, not a proclitic — padded as before.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"أو\">الكازينو|البث]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو أو البث"
+    }
+  },
+  {
+    "id": "perm/sep-persian-waw-padded",
+    "note": "#90: Persian writes the same letter و as a separate word, with spaces — the rule is keyed by language, not script.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">سگ|گربه]",
+    "locale": "fa",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "سگ و گربه"
+    }
+  },
+  {
+    "id": "perm/sep-urdu-waw-padded",
+    "note": "#90: Urdu likewise — the proclitic rule is ar and he only.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">کتاب|قلم]",
+    "locale": "ur",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "کتاب و قلم"
+    }
+  },
+  {
+    "id": "perm/sep-waw-without-locale-padded",
+    "note": "#90: with no locale the engine cannot know the language — و is padded as before.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|البث]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو و البث"
+    }
+  },
+  {
+    "id": "perm/sep-hebrew-vav-attaches",
+    "note": "#90: Hebrew ו (\"and\") is a proclitic like Arabic و.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"ו\">חתולים|כלבים]",
+    "locale": "he",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "חתולים וכלבים"
+    }
+  },
+  {
+    "id": "perm/sep-hebrew-word-conjunction-padded",
+    "note": "#90: או (\"or\") is a word of its own — padded as before.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"או\">חתולים|כלבים]",
+    "locale": "he",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "חתולים או כלבים"
+    }
+  },
+  {
+    "id": "perm/sep-thai-not-padded",
+    "note": "#90: Thai is written without spaces between words, like Han and kana (#87) — a letter-only Thai separator joins bare.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"และ\">แมว|สุนัข]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "แมวและสุนัข"
+    }
+  },
+  {
+    "id": "perm/sep-thai-with-mark-as-written",
+    "note": "#90: a separator carrying a combining mark (U+0E37 in หรือ) is not all letters, so it was never padded — it stays exactly as written, spaces included.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\" หรือ \">แมว|สุนัข]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "แมว หรือ สุนัข"
+    }
+  },
+  {
+    "id": "perm/sep-lao-not-padded",
+    "note": "#90: Lao, like Thai.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"ແລະ\">ແມວ|ໝາ]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "ແມວແລະໝາ"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-list-postprocessed",
+    "note": "#90: the issue's real path — an Arabic comma for the inner separators, و before the last, the default post-process on.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<minsize=3;maxsize=3;sep=\"، \";lastsep=\"و\">الكازينو|المراهنات الرياضية|البث المباشر]",
+    "locale": "ar",
+    "rng": "last",
+    "expect": {
+      "output": "الكازينو، المراهنات الرياضية والبث المباشر"
+    }
+  },
+  {
+    "id": "perm/sep-script-not-script-extensions",
+    "note": "#87/#90: the unspaced test reads Script. U+3006 (〆) is Script=Common with Han only in its Script_Extensions, so it is padded like any other letter. PCRE2 10.40+ reads \\p{Han} as Script_Extensions and would join it bare.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"〆\">A|B]",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "A 〆 B"
+    }
+  },
+  {
+    "id": "perm/sep-arabic-waw-before-tatweel-keeps-space",
+    "note": "#90: the next element is tested for a letter of Script=Arabic. U+0640 (tatweel) is Script=Common with Arabic only in its Script_Extensions, so و keeps both spaces before it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"و\">الكازينو|ـبث]",
+    "locale": "ar",
+    "rng": "last",
+    "postProcess": false,
+    "expect": {
+      "output": "الكازينو و ـبث"
+    }
+  },
+  {
+    "id": "perm/sep-khmer-not-padded",
+    "note": "#90: Khmer, like Thai — a letter-only Khmer separator (U+1780) joins bare. Most Khmer words carry a combining mark and were never padded; this pins the script itself.",
+    "kind": "deterministic",
+    "op": "render",
+    "rng": "last",
+    "postProcess": false,
+    "template": "[<lastsep=\"ក\">A|B]",
+    "expect": {
+      "output": "AកB"
+    }
+  },
+  {
+    "id": "perm/sep-myanmar-not-padded",
+    "note": "#90: Myanmar, like Thai — a letter-only Myanmar separator (U+1000) joins bare.",
+    "kind": "deterministic",
+    "op": "render",
+    "rng": "last",
+    "postProcess": false,
+    "template": "[<lastsep=\"က\">A|B]",
+    "expect": {
+      "output": "AကB"
+    }
+  },
+  {
+    "id": "perm/sep-hebrew-vav-before-latin-keeps-space",
+    "note": "#90: ו attaches only before a letter of the Hebrew script; before a Latin word both spaces stay.",
+    "kind": "deterministic",
+    "op": "render",
+    "rng": "last",
+    "postProcess": false,
+    "template": "[<lastsep=\"ו\">חתולים|Evolution]",
+    "locale": "he",
+    "expect": {
+      "output": "חתולים ו Evolution"
+    }
   }
 ]

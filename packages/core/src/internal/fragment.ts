@@ -109,6 +109,45 @@ export function trimFragment(fragment: Fragment): Fragment {
   return new Window(fragment, fragment.lead, fragment.length - fragment.trail);
 }
 
+/**
+ * The first code point of a fragment, or -1 when it is empty — read in place, without
+ * materializing the text. A permutation element is a window onto a join, and the separator in
+ * front of it looks only at its first character (#90).
+ */
+export function firstCodePointOf(fragment: Fragment): number {
+  const hi = charCodeAtOf(fragment, 0);
+  if (hi >= 0xd800 && hi <= 0xdbff) {
+    const lo = charCodeAtOf(fragment, 1);
+    if (lo >= 0xdc00 && lo <= 0xdfff) return (hi - 0xd800) * 0x400 + (lo - 0xdc00) + 0x10000;
+  }
+  return hi;
+}
+
+/** The UTF-16 unit at `index`, or -1 past the end; descends one piece per level. */
+function charCodeAtOf(fragment: Fragment, index: number): number {
+  let piece: Fragment = fragment;
+  let at = index;
+  for (;;) {
+    if (at < 0 || at >= lengthOf(piece)) return -1;
+    if (typeof piece === 'string') return piece.charCodeAt(at);
+    if (piece instanceof Window) {
+      at += piece.from;
+      piece = piece.base;
+      continue;
+    }
+    let offset = 0;
+    for (const child of piece.pieces) {
+      const length = lengthOf(child);
+      if (at < offset + length) {
+        piece = child;
+        at -= offset;
+        break;
+      }
+      offset += length;
+    }
+  }
+}
+
 /** The text of a fragment — one pass, no recursion, however deep the joins go. */
 export function flatten(fragment: Fragment): string {
   if (typeof fragment === 'string') return fragment;

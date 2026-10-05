@@ -28,7 +28,7 @@
 import type { Node, ParsedAst, EnumerationNode, PermutationNode, PluralNode, ConditionalNode } from './ast';
 import { UCP_SPACE } from './charclass';
 import { IncludeResolverError } from './errors';
-import { flatten, joinFragments, lengthOf, trimFragment, type Fragment } from './fragment';
+import { firstCodePointOf, flatten, joinFragments, lengthOf, trimFragment, type Fragment } from './fragment';
 import { nameMap } from './name-map';
 import { BRACE_CLOSE, BRACE_OPEN, matchAnyPairs, matchPairs } from './pairs';
 import { parseSequence, parseTemplate, phpTrim, recognizeConditional } from './parser';
@@ -827,7 +827,12 @@ function assemblePermutation(node: PermutationNode, rendered: Fragment[], opts: 
 
   const pick = randomInt(opts.rng, min, max);
   shuffle(elements, opts.rng);
-  return joinWithSeparators(elements.slice(0, pick), config.sep, config.lastsep ?? config.sep);
+  return joinWithSeparators(
+    elements.slice(0, pick),
+    config.sep,
+    config.lastsep ?? config.sep,
+    normalizeBaseLang(opts.locale),
+  );
 }
 
 /** Fisher-Yates, matching the plugin: i = n-1 … 1, j = randomInt(0, i), swap. */
@@ -840,7 +845,12 @@ function shuffle(arr: Element[], rng: Rng): void {
   }
 }
 
-function joinWithSeparators(elements: readonly Element[], globalSep: string, globalLastsep: string): Fragment {
+function joinWithSeparators(
+  elements: readonly Element[],
+  globalSep: string,
+  globalLastsep: string,
+  lang: string,
+): Fragment {
   const count = elements.length;
   if (count === 0) return '';
   if (count === 1) return (elements[0] as Element).text;
@@ -849,24 +859,48 @@ function joinWithSeparators(elements: readonly Element[], globalSep: string, glo
   for (let i = 1; i < count; i += 1) {
     const el = elements[i] as Element;
     const sep = el.sep ?? (i === count - 1 ? globalLastsep : globalSep);
-    pieces.push(padSeparator(sep), el.text);
+    pieces.push(padSeparator(sep, lang, el.text), el.text);
   }
   return joinFragments(pieces);
 }
 
-const UNSPACED_SCRIPT_RE = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ーｰ]+$/u;
+const UNSPACED_SCRIPT_RE =
+  /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ーｰ\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]+$/u;
+
+/**
+ * Conjunctions written attached to the next word, by base language (#90): Arabic و ("and") and
+ * ف ("and then"), Hebrew ו ("and"). Keyed by language, not script — Persian and Urdu write the
+ * same letter و as a word of its own, with spaces. Word conjunctions (أو, ثم, או) are not here.
+ */
+const PROCLITICS: ReadonlyMap<string, { readonly words: ReadonlySet<string>; readonly letter: RegExp }> = new Map([
+  ['ar', { words: new Set(['و', 'ف']), letter: /^(?=\p{L})\p{Script=Arabic}$/u }],
+  ['he', { words: new Set(['ו']), letter: /^(?=\p{L})\p{Script=Hebrew}$/u }],
+]);
 
 /**
  * Purely-alphabetic separators get space-padded; others pass through (plugin).
  *
- * Except when every letter belongs to a script written without spaces between words (#87):
- * `和`, `および`, `と` join bare, so `[<lastsep="和">A|B]` is `A和B`, not `A 和 B`. CJK only —
- * Han, Hiragana, Katakana, plus the two prolonged-sound marks, which are Script=Common. Hangul
- * keeps the padding (Korean spaces its words), and a mixed separator such as `and和` is padded.
+ * Except when every letter belongs to a script written without spaces between words: `和`,
+ * `および`, `と` (#87), Thai `และ`, Lao `ແລະ` (#90) join bare, so `[<lastsep="和">A|B]` is `A和B`,
+ * not `A 和 B`. Han, Hiragana, Katakana plus the two prolonged-sound marks (Script=Common), Thai,
+ * Lao, Khmer, Myanmar. Hangul keeps the padding (Korean spaces its words), and a mixed separator
+ * such as `and和` is padded. A separator carrying a combining mark (Thai `หรือ`) is not all
+ * letters, so it already passed through as written.
+ *
+ * And except a proclitic conjunction in its language (#90): `[<lastsep="و">…]` under `ar` keeps
+ * the space before و and none after it — `الكازينو والبث` — when the next element starts with a
+ * letter of that script. Before anything else, a Latin brand name say, the space stays:
+ * `و Evolution`. The author's own spaces around it do not change this, as they never changed
+ * the padding.
  */
-function padSeparator(sep: string): string {
+function padSeparator(sep: string, lang: string, next: Fragment): string {
   const trimmed = phpTrim(sep);
   if (trimmed === '') return sep;
+  const proclitic = PROCLITICS.get(lang);
+  if (proclitic !== undefined && proclitic.words.has(trimmed)) {
+    const first = firstCodePointOf(next);
+    return first >= 0 && proclitic.letter.test(String.fromCodePoint(first)) ? ` ${trimmed}` : ` ${trimmed} `;
+  }
   if (/^\p{L}+$/u.test(trimmed) && !UNSPACED_SCRIPT_RE.test(trimmed)) return ` ${trimmed} `;
   return sep;
 }

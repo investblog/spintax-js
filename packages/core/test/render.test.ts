@@ -654,3 +654,30 @@ describe('render — prototype names are ordinary names', () => {
     expect(analyze('#set %__proto__% = x\n#set %constructor% = y').constructs.set).toBe(2);
   });
 });
+
+describe('render — a proclitic separator reads the next element in place (#90)', () => {
+  // The corpus cases are short, and a short element is a plain string. These are the shapes
+  // `firstCodePointOf` walks instead: a long element is a join of pieces — the empty first option
+  // puts a zero-length piece in front — and one whose spaces arrive at render, from a %sp% inside a
+  // nested construct, is trimmed into a window onto that join. Spaces written in the template are cut
+  // by the parser, and a %sp% directly in the element is spliced as text first (#78).
+  const long = (ch: string): string => ch.repeat(200);
+  const tpl = (ch: string): string => `[<lastsep="و">الكازينو|${ch}{|}{${long(ch)}}]`;
+  const windowed = (ch: string): string => `[<lastsep="و">الكازينو|{%sp%|%sp%}{|}{${long(ch)}}{%sp%|%sp%}]`;
+
+  test('a joined element that starts with an Arabic letter takes و attached', () => {
+    expect(render(tpl('ب'), 'last', {}, 'ar')).toBe(`الكازينو وب${long('ب')}`);
+  });
+
+  test('a windowed element that starts with an Arabic letter takes و attached', () => {
+    expect(render(windowed('ب'), 'last', { sp: '  ' }, 'ar')).toBe(`الكازينو و${long('ب')}`);
+  });
+
+  test('a windowed element that starts with a Latin letter keeps both spaces', () => {
+    expect(render(windowed('E'), 'last', { sp: '  ' }, 'ar')).toBe(`الكازينو و ${long('E')}`);
+  });
+
+  test('without the locale the same element is padded', () => {
+    expect(render(windowed('ب'), 'last', { sp: '  ' }, '')).toBe(`الكازينو و ${long('ب')}`);
+  });
+});
