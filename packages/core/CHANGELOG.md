@@ -3,6 +3,44 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.13.0 — 2026-10-19
+
+A minor: the post-process moves rendered text for a token that starts with a dot, for a bare `//`
+scheme, and for a sentence opening on `i` under Turkish or Azerbaijani. No verdict changes and no API
+change; `render()` already took the `locale` the post-process now also reads.
+
+### Fixed
+
+- **A dot that starts a token is not a sentence end (#91).** `.NET`, a dotfile, a file extension were
+  taken for sentence punctuation: the space before the dot was removed, a space was inserted after it and
+  the token was capitalized — `and .NET` rendered `and. NET`, `the .apk file` rendered `the. Apk file`.
+  A token that begins with a dot — `.NET`, `.gitignore`, `.env.local`, `.tar.gz`, `.xlsx`, `.5` — is now
+  shielded like a domain or a URL when it follows the text start, whitespace, an opening bracket, a quote,
+  a tag or a path separator (`src/.env`, `dir\.env`); trailing punctuation stays outside it (`.NET.`).
+  Unchanged: `word .` → `Word.`, `end . Next` → `End. Next`, `end.Next`, `ASP.NET`, `3.5`, and an ellipsis
+  glued to a word (`see...and` → `See... And`). The cost: `end .Next` — a sentence typed with the space on
+  the wrong side of the dot — is no longer repaired.
+- **Turkish and Azerbaijani capital İ (#94).** Under `locale: 'tr'` or `'az'` (any region, `-` or `_`) a
+  sentence that opens on dotted `i` is capitalized to `İ`, not `I` — `istanbul` → `İstanbul`; dotless `ı`
+  still becomes `I`. An explicit mapping, not `toLocaleUpperCase`, so the result does not depend on the
+  host's ICU data. Other locales are unchanged.
+- **A bare `//` scheme is a URL.** Prose that names the protocol — `(https://)` — got a space after its
+  colon: `(https: //)`. A `//` scheme with no body is now shielded like a URL, in any case (`HTTPS://`).
+  `mailto:` and `tel:` still need a body, so `Tel: 555` opening a sentence is capitalized and spaced as
+  before.
+
+Measured before the change over the family's stored content (2 581 production templates in four
+languages, 163 more in ten): every changed document is a fix — 21 renders of a published article that
+read `the. Apk file`, 11 that read `(https: //)` — and nothing else moves.
+
+### Corpus
+
+424 cases (+16), all in `render-postprocess.json`: `postprocess/turkish-*`, `postprocess/azerbaijani-*`,
+`postprocess/turkic-locale-case-and-underscore`, `postprocess/dotted-capital-only-under-turkic-locales`,
+`postprocess/dot-token-*` (openers, punctuation, text and line start, a digit, UCP whitespace, both path
+separators, and the negatives with the accepted cost), `postprocess/bare-scheme-*` and
+`postprocess/bare-mailto-and-tel-are-not-uris`.
+
 ## 0.12.0 — 2026-10-06
 
 A minor: rendered text moves for permutation separators in Arabic, Hebrew, Thai and Lao. No verdict
