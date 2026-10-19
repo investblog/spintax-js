@@ -1,13 +1,13 @@
 ---
 type: decision
-status: proposed
+status: accepted
 tags: [syntax, parser, post-process, parity, interop]
 issues: ["#92"]
 ---
 
 # 0001 — A verbatim span: `/! … !/` stays in the output exactly as written
 
-**Date:** 2026-10-19. **Status:** proposed — the owner accepts or amends before the first fixture.
+**Date:** 2026-10-19. **Status:** accepted by the owner 2026-10-19, as written.
 
 ## Context
 

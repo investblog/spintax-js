@@ -1,13 +1,13 @@
 ---
 type: decision
-status: proposed
+status: accepted
 tags: [syntax, include, neutralize, render]
 issues: ["#93"]
 ---
 
 # 0002 — Where an `#include` line may come from
 
-**Date:** 2026-10-19. **Status:** proposed — needs the owner's choice between the options below.
+**Date:** 2026-10-19. **Status:** accepted by the owner 2026-10-19 — option B.
 
 ## Context
 
