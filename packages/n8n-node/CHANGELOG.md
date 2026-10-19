@@ -3,6 +3,18 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.6
+
+Bundles `@spintax/core` **0.13.0** (spintax-js#91, #94). Render and Render Many move in three places;
+nothing else does:
+
+- **A token that starts with a dot is not a sentence end:** `and .NET` stays `and .NET` (was `and. NET`),
+  likewise `.gitignore`, `.env.local`, `.xlsx`, `.5`, and after a bracket, a quote, a tag or a path
+  separator.
+- **With Locale `tr` or `az`, a sentence opening on `i` gets `İ`:** `istanbul` → `İstanbul`. An empty
+  Locale takes the item's `spintaxMeta.locale` first, as everywhere in the node.
+- **`(https://)` is kept as written** (was `(https: //)`).
+
 ## 0.3.5
 
 Bundles `@spintax/core` **0.12.0** (spintax-js#90). Render and Render Many join list separators the way

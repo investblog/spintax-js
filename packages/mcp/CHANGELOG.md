@@ -3,6 +3,17 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.3 — 2026-10-19
+
+Depends on `@spintax/core` **^0.13.0** (spintax-js#91, #94). `render_spintax` output moves in three
+places; the tool list, arguments and caps are unchanged:
+
+- **A token that starts with a dot is not a sentence end:** `and .NET` stays `and .NET` (was `and. NET`),
+  likewise `.gitignore`, `.env.local`, `.xlsx`, `.5`, and after a bracket, a quote, a tag or a path
+  separator.
+- **Under `locale: "tr"` or `"az"`, a sentence opening on `i` gets `İ`:** `istanbul` → `İstanbul`.
+- **`(https://)` is kept as written** (was `(https: //)`).
+
 ## 0.4.2 — 2026-10-06
 
 Depends on `@spintax/core` **^0.12.0** (spintax-js#90). `render_spintax` renders list separators the
