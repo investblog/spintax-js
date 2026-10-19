@@ -16,9 +16,9 @@
  */
 import { AST_VERSION, type Node, type ParsedAst, type PermConfig } from './ast';
 import { nameMap } from './name-map';
-import { stripSentinels } from './neutralize';
 import { BRACE_OPEN, BRACKET_OPEN } from './pairs';
 import { TextIndex, rereadSpans } from './text-index';
+import { projectSource } from './verbatim';
 
 /** A reference at a given offset (sticky), no `u`: the name is ASCII `\w`. */
 const VARIABLE_RE = /%(\w+)%/y;
@@ -43,11 +43,12 @@ const CONDITIONAL_NAME_RE = /[A-Za-z_]\w*/y;
 const PLURAL_PREFIX = 'plural ';
 
 /**
- * Parse a full template into an AST (sanitised + comments stripped + directives extracted first).
+ * Parse a full template into an AST (projected — comments removed, `/! … !/` spans encoded,
+ * reserved ranges stripped outside spans, see {@link projectSource} — then directives extracted).
  *
  * **This is the one door from author source into a tree, and it sanitises.** Stray engine
- * sentinels (U+E000–U+E005) come out first, so a reserved-range character an author typed
- * cannot survive to be rewritten into a brace by the mandatory {@link safetyRestore} — the
+ * sentinels (U+E000–U+E005) outside spans come out first, so a reserved-range character an author
+ * typed cannot survive to be rewritten into a brace by the mandatory {@link safetyRestore} — the
  * invariant `neutralize` documents ("only `neutralize()` may introduce a sentinel"). It lives
  * here rather than at each caller because there were three callers and two of them (`parse()`
  * and `analyze(str)`) forgot it, so `render(parse(src))` diverged from `render(src)` on that
@@ -60,7 +61,7 @@ const PLURAL_PREFIX = 'plural ';
  * which must point at the bytes the author actually wrote.
  */
 export function parseTemplate(src: string): ParsedAst {
-  const { body, setDefs, defDefs } = extractDirectives(stripComments(stripSentinels(src)));
+  const { body, setDefs, defDefs } = extractDirectives(projectSource(src).text);
   return { astVersion: AST_VERSION, source: src, setDefs, defDefs, nodes: parseSequence(body) };
 }
 
@@ -121,25 +122,6 @@ export function extractDirectives(text: string): {
   );
 
   return { body: stripped.replace(/\n{3,}/gu, '\n\n'), setDefs, defDefs, occurrences };
-}
-
-/**
- * Remove `/# … #/` block comments (non-greedy, spans newlines): each `/#` to the first `#/` after it,
- * what `/\/#[\s\S]*?#\//g` removed — without retrying that lazy run from every `/#` once no `#/` is
- * left, which read to the end of the text from each of them.
- */
-export function stripComments(text: string): string {
-  let out = '';
-  let from = 0;
-  for (;;) {
-    const open = text.indexOf('/#', from);
-    if (open === -1) break;
-    const close = text.indexOf('#/', open + 2);
-    if (close === -1) break;
-    out += text.slice(from, open);
-    from = close + 2;
-  }
-  return from === 0 ? text : out + text.slice(from);
 }
 
 /**

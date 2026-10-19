@@ -1120,5 +1120,86 @@
     "expect": {
       "output": "Copy dir\\.env and a\\b\\.cache now"
     }
+  },
+  {
+    "id": "verbatim/postprocess-does-not-see-the-content",
+    "note": "The cosmetic post-process does not see a span: the macro parameters keep their spacing (\"D: \\x,1, S\" without the span), and the text around it is post-processed as usual (ADR 0001, the GSA case).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see /!D:\\lists\\kw.txt,1,S!/ now",
+    "expect": {
+      "output": "See D:\\lists\\kw.txt,1,S now"
+    }
+  },
+  {
+    "id": "verbatim/raw-render-keeps-the-content",
+    "note": "The span is decoded with postProcess:false too (rule 7).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x /!a  ,b!/",
+    "postProcess": false,
+    "expect": {
+      "output": "x a  ,b"
+    }
+  },
+  {
+    "id": "verbatim/word-space-before-a-span",
+    "note": "A token is not whitespace and not a closer, so the space after a sentence end is inserted before a span as before a word (rule 8).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "Hello./!x!/",
+    "expect": {
+      "output": "Hello. x"
+    }
+  },
+  {
+    "id": "verbatim/capitalizer-leaves-a-span-alone",
+    "note": "A token is not a letter: a span at the start of the text, after a sentence end, at a line start and after a block tag stays as written (rule 8). Guards an engine that decodes before the capitalizer.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!npm!/ install it. /!npm!/ again.\n/!npm!/ ok <p>/!npm!/ x</p>",
+    "expect": {
+      "output": "npm install it. npm again.\nnpm ok <p>npm x</p>"
+    }
+  },
+  {
+    "id": "verbatim/punctuation-inside-is-not-a-sentence-end",
+    "note": "A dot inside a span is not seen, so the word after the span is not capitalized and gets no space.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /!x.!/next",
+    "expect": {
+      "output": "A x.next"
+    }
+  },
+  {
+    "id": "verbatim/edge-whitespace-survives",
+    "note": "The final trim does not remove a span, so its own edge whitespace survives (rule 8). Guards an engine that decodes before the trim.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!  x  !/",
+    "expect": {
+      "output": "  x  "
+    }
+  },
+  {
+    "id": "verbatim/edge-whitespace-outside-is-trimmed",
+    "note": "Negative of the case above: whitespace around a span is the author's and is trimmed as usual.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "  /!x!/  ",
+    "expect": {
+      "output": "x"
+    }
+  },
+  {
+    "id": "verbatim/token-inside-a-url",
+    "note": "The URL shield swallows a token that touches it; the token rides inside the shielded value and is decoded after the restore, so a URL can carry literal braces (rule 8).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see https://x.io//!{id}!/ now",
+    "expect": {
+      "output": "See https://x.io/{id} now"
+    }
   }
 ]

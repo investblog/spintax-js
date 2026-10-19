@@ -252,9 +252,12 @@ final class GoldenCorpusTest extends TestCase
         $setVars = $extracted['set']; // names already lowercased
 
         // Stage 4c: merge — runtime context overlays local #set (runtime wins), keys lowercased.
+        //             Values lose the span range first, as Renderer::process_template_inner() does
+        //             (ADR 0001 rule 4); an engine before #92 has no such step.
+        $verbatim = method_exists(Parser::class, 'decode_verbatim');
         $runtime = [];
         foreach ($context as $k => $v) {
-            $runtime[strtolower((string) $k)] = $v;
+            $runtime[strtolower((string) $k)] = $verbatim ? Parser::strip_span_range($v) : $v;
         }
         $vars = array_replace($setVars, $runtime);
 
@@ -300,7 +303,10 @@ final class GoldenCorpusTest extends TestCase
             $text = $parser->post_process($text, $locale); // the locale since #94 (Turkic capital İ); an older plugin ignores it
         }
         // Stage 11: wp_kses_post (:334) — a WP sink concern (§2.2), deliberately NOT applied.
-        return $text;
+        // The `/! … !/` spans come back at the end of the OUTERMOST render only, as
+        // Renderer::finish_verbatim() does: an include body stays encoded into its parent's
+        // post-process (ADR 0001 rule 7).
+        return ($verbatim && $stack === []) ? Parser::decode_verbatim($text) : $text;
     }
 
     /**

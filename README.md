@@ -77,6 +77,7 @@ The files are in [`skills/`](./skills/).
 - `%var%` — variable reference · `#set %v% = value` — local macro · `#def %v% = value` — local value, picked once per render
 - `{?VAR?then|else}` — conditional · `{plural <count>: one|few|many}` — plural agreement
 - `#include "slug-or-id"` — embed another template · `/# … #/` — comments
+- `/! … !/` — verbatim: kept exactly as written, e.g. a markdown link `/![Docs](https://spintax.net)!/` or a GSA macro
 
 Full authoring reference lives in the parent project's `docs/gtw-syntax-reference.md`.
 

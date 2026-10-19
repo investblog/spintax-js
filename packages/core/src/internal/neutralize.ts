@@ -17,9 +17,10 @@
  * direct reference the same way (0.7.0). Shielding it would be a family-wide contract change.
  *
  * RESERVED RANGE: U+E000–U+E005 are engine sentinels. `parseTemplate` strips them
- * from author markup (template source + #include results) via {@link stripSentinels}
- * — every door from author source into a tree, so `parse()`/`analyze()`/`render()`
- * agree — and the restore rewrites them in output, so a RAW (non-neutralized) context
+ * from author markup (template source + #include results) outside `/! … !/` spans, in
+ * its one scan of the source (`projectSource`) — every door from author source into a
+ * tree, so `parse()`/`analyze()`/`render()` agree. Inside a span they are content, and
+ * come back after the restore. The restore rewrites them in output, so a RAW (non-neutralized) context
  * value carrying these code points will be altered — hosts should neutralize/strip
  * such data.
  */
@@ -48,10 +49,4 @@ export function neutralize(value: string): string {
 /** Mandatory final stage: restore shielded structural chars to literal glyphs. */
 export function safetyRestore(text: string): string {
   return text.replace(RESTORE_RE, (ch) => RESTORE.get(ch) ?? ch);
-}
-
-/** Remove stray sentinels from author markup (template / #include) so only
- *  neutralize() can introduce them — otherwise safetyRestore would rewrite them. */
-export function stripSentinels(text: string): string {
-  return text.replace(RESTORE_RE, '');
 }

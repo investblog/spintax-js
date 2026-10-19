@@ -172,5 +172,61 @@
     "expect": {
       "output": "A\nINCLUDED\nB"
     }
+  },
+  {
+    "id": "verbatim/include-line-inside-is-text",
+    "note": "An #include line inside a span is text: the resolver is never asked (rule 3).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!\n#include \"x\"\n!/",
+    "postProcess": false,
+    "includes": {
+      "x": "B"
+    },
+    "expect": {
+      "output": "\n#include \"x\"\n"
+    }
+  },
+  {
+    "id": "verbatim/span-in-a-body-and-in-the-parent",
+    "note": "Every door from author source carries spans: the template and each #include body (rule 4).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "out /!{y}!/\n#include \"frag\"",
+    "postProcess": false,
+    "includes": {
+      "frag": "IN /![x]!/"
+    },
+    "expect": {
+      "output": "out {y}\nIN [x]"
+    }
+  },
+  {
+    "id": "verbatim/include-ref-is-decoded",
+    "note": "An #include ref that contains a span reaches the resolver decoded (rule 6): the host is asked for \"{x}\". Without the span the enumeration runs first and the host is asked for \"x\".",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#include \"/!{x}!/\"",
+    "postProcess": false,
+    "includes": {
+      "{x}": "OK",
+      "x": "NO"
+    },
+    "expect": {
+      "output": "OK"
+    }
+  },
+  {
+    "id": "verbatim/body-span-is-decoded-once-at-the-end",
+    "note": "A span in an #include body is decoded with the whole document, after its post-process \u2014 not when the body is rendered, or the parent's post-process would edit it (\"D: \\x,1, S\").",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "See:\n#include \"f\"",
+    "includes": {
+      "f": "/!D:\\x,1,S!/"
+    },
+    "expect": {
+      "output": "See:\nD:\\x,1,S"
+    }
   }
 ]

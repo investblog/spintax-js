@@ -11,7 +11,8 @@
  * (the plugin's validator never resolves includes).
  */
 import type { Diagnostic, ValidateOptions } from '../index';
-import { DIRECTIVE_RE, extractDirectives, stripComments } from './parser';
+import { DIRECTIVE_RE, extractDirectives } from './parser';
+import { decodeVerbatim, projectSource } from './verbatim';
 import { DEFAULT_PLURAL_ARITY, findPluralBlocks, normalizeBaseLang, pluralArity } from './plurals';
 
 const KNOWN_CONFIG_KEYS = new Set(['minsize', 'maxsize', 'sep', 'lastsep']);
@@ -26,7 +27,9 @@ const INCLUDE_RE = /^[ \t]*#include[ \t\n\r\f\x0B]+"([^"]+)"[ \t\n\r\f\x0B]*$/gm
  */
 export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  const text = stripComments(src);
+  // The parser's projection: comments removed, spans encoded, so nothing inside a span is seen.
+  const projection = projectSource(src);
+  const text = projection.text;
   const idx = buildLineIndex(text);
 
   checkBrackets(text, diagnostics);
@@ -38,7 +41,97 @@ export function validateTemplate(src: string, opts: ValidateOptions = {}): Diagn
     checkIncludeTargets(text, idx, opts.knownIncludes, diagnostics);
   }
 
-  return diagnostics;
+  const srcIdx = text === src ? idx : buildLineIndex(src);
+  const remap: Remap = { text, idx, src, srcIdx, toSource: projection.toSource, toSourceEnd: projection.toSourceEnd };
+  const placed = text === src ? diagnostics : diagnostics.map((d) => toSourcePositions(d, remap));
+  if (projection.unclosed !== -1) {
+    // Not silent, as an unclosed comment is: what follows parses as spintax, and a markdown link
+    // there quietly becomes a permutation of one (ADR 0001 rule 9). Once: no later opener closes.
+    placed.push(warn('verbatim.unclosed', "Unclosed '/!' — the text after it is parsed as spintax.", span(srcIdx, projection.unclosed, 2)));
+  }
+  return placed;
+}
+
+/**
+ * Move a diagnostic placed in the projection back onto the author's source, through the scan's
+ * offset map (ADR 0001 rule 9) — after a comment or a span the projection's lines and columns are
+ * not the source's. Bracket columns count code points, the other checks UTF-16 units; each keeps
+ * its own model.
+ */
+function toSourcePositions(d: Diagnostic, r: Remap): Diagnostic {
+  const codePoints = d.code.startsWith('bracket.');
+  const move = (line: number, column: number): { line: number; column: number } => {
+    const offset = r.toSource(lineColToOffset(r, line, column, codePoints));
+    return lineColAt(r, offset, codePoints);
+  };
+  const start = move(d.line, d.column);
+  // A message or a data value quoting the projection would quote a token; quote the author's text.
+  const data = d.data === undefined ? undefined : Object.fromEntries(
+    Object.entries(d.data).map(([key, value]) => [key, typeof value === 'string' ? decodeVerbatim(value) : value]),
+  );
+  const moved: Diagnostic = { ...d, message: decodeVerbatim(d.message), line: start.line, column: start.column, ...(data === undefined ? {} : { data }) };
+  if (d.endLine !== undefined && d.endColumn !== undefined) {
+    // An end is exclusive and maps with a left bias, or a range ending just before removed text
+    // (a comment, an empty span) would stretch over it.
+    const end = lineColAt(r, r.toSourceEnd(lineColToOffset(r, d.endLine, d.endColumn, codePoints)), codePoints);
+    return { ...moved, endLine: end.line, endColumn: end.column };
+  }
+  return moved;
+}
+
+/**
+ * What moving positions needs, built once per validate() call. The astral prefixes are built on first
+ * use: a column counted in code points is then a subtraction, not a walk from the line start — a
+ * walk per diagnostic made a template of unmatched brackets after a comment quadratic.
+ */
+interface Remap {
+  readonly text: string;
+  readonly idx: LineIndex;
+  readonly src: string;
+  readonly srcIdx: LineIndex;
+  readonly toSource: (offset: number) => number;
+  readonly toSourceEnd: (offset: number) => number;
+  textAstral?: Uint32Array;
+  srcAstral?: Uint32Array;
+}
+
+/** prefix[i] = surrogate pairs that start before offset i. */
+function astralPrefix(text: string): Uint32Array {
+  const prefix = new Uint32Array(text.length + 1);
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text.charCodeAt(i);
+    const pair = c >= 0xd800 && c <= 0xdbff && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00;
+    prefix[i + 1] = prefix[i]! + (pair ? 1 : 0);
+  }
+  return prefix;
+}
+
+/** Code points in [from, to). */
+function codePointsBetween(prefix: Uint32Array, from: number, to: number): number {
+  return to - from - (prefix[to]! - prefix[from]!);
+}
+
+function lineColToOffset(r: Remap, line: number, column: number, codePoints: boolean): number {
+  const start = r.idx.starts[Math.min(Math.max(line, 1), r.idx.starts.length) - 1] ?? 0;
+  if (!codePoints) return Math.min(start + column - 1, r.text.length);
+  const prefix = (r.textAstral ??= astralPrefix(r.text));
+  // The first offset with column - 1 code points before it on the line: a monotone search.
+  let lo = start;
+  let hi = Math.min(start + 2 * (column - 1), r.text.length);
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (codePointsBetween(prefix, start, mid) < column - 1) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function lineColAt(r: Remap, offset: number, codePoints: boolean): { line: number; column: number } {
+  const pos = offsetToLineCol(r.srcIdx, offset);
+  if (!codePoints) return pos;
+  const start = r.srcIdx.starts[pos.line - 1] ?? 0;
+  const prefix = (r.srcAstral ??= astralPrefix(r.src));
+  return { line: pos.line, column: codePointsBetween(prefix, start, Math.min(offset, r.src.length)) + 1 };
 }
 
 /** Position (+ optional end and structured data) attached to a Diagnostic. */
@@ -764,11 +857,13 @@ function checkIncludeTargets(text: string, idx: LineIndex, known: readonly strin
   const set = new Set(known);
   INCLUDE_RE.lastIndex = 0;
   for (const m of text.matchAll(INCLUDE_RE)) {
-    const ref = m[1] ?? '';
+    const raw = m[1] ?? '';
+    // The host is asked for the decoded ref (ADR 0001 rule 6), so that is what it must know.
+    const ref = decodeVerbatim(raw);
     if (!set.has(ref)) {
       const refOffset = (m.index ?? 0) + m[0].indexOf('"') + 1; // inside the quotes
       out.push(err('include.unknown-target', `#include target '${ref}' does not match any known template.`,
-        { ...span(idx, refOffset, ref.length), data: { target: ref } }));
+        { ...span(idx, refOffset, raw.length), data: { target: ref } }));
     }
   }
 }

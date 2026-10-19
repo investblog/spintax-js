@@ -176,6 +176,7 @@ cannot see what a bracket does to a value it never puts there.
 | `variable.circular-reference` | error | a cycle among definitions (A→B→A), either directive |
 | `variable.undefined` | **warning** | a `%var%`/conditional ref not defined locally or globally — may be runtime; does NOT invalidate |
 | `include.unknown-target` | error | `#include` slug not in `knownIncludes` (only when supplied) |
+| `verbatim.unclosed` | **warning** | a `/!` with no `!/` after it (#92, ADR 0001): the text after it parses as spintax. Once per template, at the first such opener |
 
 **Not a verdict:** circular `#include` is a render-time `maxDepth` guard, never a `validate()`
 error (the plugin's validator does not resolve includes).

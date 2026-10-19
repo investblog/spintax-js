@@ -30,8 +30,12 @@
  * 4 — `raw` is kept on more constructs: one holding a `{?…}` conditional, and a permutation with a
  * reference anywhere in its `<config>` (#80). The shape is 3's, but an `Ast` cached by version 3
  * lacks `raw` exactly where the new rule needs it, and would render `[{?f?a|b|x}|c]` with a raw `|`.
+ *
+ * 5 — `/! … !/` verbatim spans (#92, ADR 0001) are encoded into the text as tokens at parse time.
+ * The shape is 4's, but an `Ast` parsed by version 4 carries no tokens, and would spin `/!{a|b}!/`
+ * instead of emitting it.
  */
-export const AST_VERSION = 4;
+export const AST_VERSION = 5;
 
 /** Opaque public handle (re-exported as `Ast` from the package index). */
 export interface Ast {

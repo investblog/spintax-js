@@ -17,7 +17,7 @@
  * `{?NAME?` prefix without requiring the brace to close, so an unclosed
  * `{?foo?…` yields a phantom `foo` ref. Acceptable for an extraction API.
  */
-import { stripComments } from './parser';
+import { decodeVerbatim, projectSource } from './verbatim';
 
 export interface ExtractResult {
   refs: string[];
@@ -38,11 +38,12 @@ const VARIABLE_RE = /%(\w+)%/gu;
 const CONDITIONAL_REF_RE = /\{\?!?([A-Za-z_]\w*)\?/gu;
 
 export function extractFromSource(src: string): ExtractResult {
-  const text = stripComments(src);
+  const text = projectSource(src).text;
 
   const sets = collect(text, SET_DEF_RE, true);
   const defs = collect(text, DEF_DEF_RE, true);
-  const includes = collect(text, INCLUDE_RE, false);
+  // A span in a ref is reported decoded (ADR 0001 rule 6): the host never sees a token.
+  const includes = [...new Set(collect(text, INCLUDE_RE, false).map(decodeVerbatim))];
 
   // Drop each `#set`/`#def … =` LHS (keep the value) so a definition target is not a ref. Missing
   // the `#def` half here would report every definition name as a phantom reference.

@@ -250,6 +250,7 @@ the full surface. Enumerated here so the port has a checklist, not prose.
 | Conditional | `{?VAR?then\|else}`, `{?!VAR?…}` | syntax + truthiness (§3.1) |
 | Plural | `{plural <count>: one\|few\|many}` | syntax + bucket math (§3.1); prefix is literal `{plural ` **with trailing space** + mandatory `:` (no colon ⇒ left as literal text); brace-depth-aware scan; rejects nested brackets in form slots; empty/non-numeric count ⇒ `''` |
 | Block comment | `/#...#/` | syntax (stripped) |
+| Verbatim span | `/!...!/` | syntax (emitted as written: not parsed, not post-processed); one scanner with comments, whichever opener comes first; unclosed ⇒ text + `verbatim.unclosed` warning (`docs/decisions/0001-verbatim-span.md`, #92) |
 | Include | `#include "slug-or-id"` | syntax + circular guard; **resolver is host-injected** (§4.1) |
 
 ### 4.1 `#include` resolution is host-injected

@@ -118,5 +118,147 @@
       "defs": [],
       "includes": []
     }
+  },
+  {
+    "id": "verbatim/kept-as-written",
+    "note": "A /! \u2026 !/ span is emitted exactly as written: braces, brackets, a reference and a hash inside are text (#92, ADR 0001). Guards an engine without the construct, which spins the content.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /!{b|c} [d] %e% #f!/ g",
+    "postProcess": false,
+    "expect": {
+      "output": "a {b|c} [d] %e% #f g"
+    }
+  },
+  {
+    "id": "verbatim/span-keeps-comment-delimiters",
+    "note": "One scanner for both block constructs: inside a span, /# and #/ are content and come back (ADR 0001 rule 1). Guards an engine that strips comments before it looks for spans.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x /!/# y #/!/ z",
+    "postProcess": false,
+    "expect": {
+      "output": "x /# y #/ z"
+    }
+  },
+  {
+    "id": "verbatim/comment-removes-a-span-opener",
+    "note": "Negative of the case above: whichever opener comes first wins, so a /! inside a comment is removed with it and the !/ after the comment is plain text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x /# a /! b #/ c !/ d",
+    "postProcess": false,
+    "expect": {
+      "output": "x  c !/ d"
+    }
+  },
+  {
+    "id": "verbatim/span-opener-first-wins",
+    "note": "The span opens first, so the /# inside it is content and the #/ after it is plain text. Guards an engine that runs the comment pass first (it would remove \"/# b !/ c #/\").",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/! a /# b !/ c #/",
+    "postProcess": false,
+    "expect": {
+      "output": " a /# b  c #/"
+    }
+  },
+  {
+    "id": "verbatim/unclosed-span-then-comment",
+    "note": "An opener with no closer is two characters of text and the scan goes on after it \u2014 the reading of the alternation /\\/#[\\s\\S]*?#\\/|\\/![\\s\\S]*?!\\//g. So a comment after an unclosed /! is still removed. Guards a scanner that stops at the first unclosed opener (stripComments did, which was equivalent while there was one construct).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /! b /# x #/ c",
+    "postProcess": false,
+    "expect": {
+      "output": "a /! b  c"
+    }
+  },
+  {
+    "id": "verbatim/unclosed-comment-then-span",
+    "note": "The same rule the other way: a span after an unclosed /# is still a span.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /# b /! {x} !/ c",
+    "postProcess": false,
+    "expect": {
+      "output": "a /# b  {x}  c"
+    }
+  },
+  {
+    "id": "verbatim/slash-bang-slash-is-not-a-span",
+    "note": "The closer is searched from the END of the opener, so /!/ does not close itself: /!/x!/ is the span \"/x\". Guards an engine that searches from the opener's slash.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!/x!/",
+    "postProcess": false,
+    "expect": {
+      "output": "/x"
+    }
+  },
+  {
+    "id": "verbatim/lone-slash-bang-slash-is-text",
+    "note": "Negative of the case above: a /!/ with no later !/ is plain text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a /!/ b",
+    "postProcess": false,
+    "expect": {
+      "output": "a /!/ b"
+    }
+  },
+  {
+    "id": "verbatim/empty-span-removed",
+    "note": "An empty span /!!/ is removed, like an empty comment, and leaves nothing behind.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a/!!/b",
+    "postProcess": false,
+    "expect": {
+      "output": "ab"
+    }
+  },
+  {
+    "id": "verbatim/empty-span-does-not-block-the-capitalizer",
+    "note": "Because an empty span leaves no token, the first letter after it is still the first letter of the text. Guards an engine that keeps an empty token in place.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!!/hello",
+    "expect": {
+      "output": "Hello"
+    }
+  },
+  {
+    "id": "verbatim/adjacent-spans",
+    "note": "Two spans that touch are two spans: the first closer ends the first one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!{a}!//![b]!/",
+    "postProcess": false,
+    "expect": {
+      "output": "{a}[b]"
+    }
+  },
+  {
+    "id": "verbatim/no-nesting",
+    "note": "Spans do not nest: the first !/ closes, the inner /! is content and the trailing !/ is plain text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/! a /! b !/ c !/",
+    "postProcess": false,
+    "expect": {
+      "output": " a /! b  c !/"
+    }
+  },
+  {
+    "id": "verbatim/stray-closer-is-text",
+    "note": "Negative guard: a !/ with no opener before it is plain text and the markup around it renders as usual.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a !/ b {c}",
+    "postProcess": false,
+    "expect": {
+      "output": "a !/ b c"
+    }
   }
 ]

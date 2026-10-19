@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
-import { parseTemplate, splitTopLevel, stripComments } from '../src/internal/parser';
+import { parseTemplate, splitTopLevel } from '../src/internal/parser';
+import { projectSource } from '../src/internal/verbatim';
 import { AST_VERSION, type Node } from '../src/internal/ast';
 
 function nodes(src: string): Node[] {
@@ -332,16 +333,18 @@ describe('parseTemplate — a tag-shaped config is scanned for its closing tag, 
   });
 });
 
-describe('stripComments', () => {
+describe('projectSource — comments', () => {
+  const strip = (src: string): string => projectSource(src).text;
+
   test('removes /# ... #/ across the run', () => {
-    expect(stripComments('a/# note #/b')).toBe('ab');
-    expect(stripComments('x/# multi\nline #/y')).toBe('xy');
+    expect(strip('a/# note #/b')).toBe('ab');
+    expect(strip('x/# multi\nline #/y')).toBe('xy');
   });
 
   test('a comment closes at the first #/ after its own /#, and an unclosed one stays text', () => {
-    expect(stripComments('a/#/b')).toBe('a/#/b');
-    expect(stripComments('a/#/#/b')).toBe('ab');
-    expect(stripComments('a/# x #/ b /# y')).toBe('a b /# y');
+    expect(strip('a/#/b')).toBe('a/#/b');
+    expect(strip('a/#/#/b')).toBe('ab');
+    expect(strip('a/# x #/ b /# y')).toBe('a b /# y');
   });
 });
 
@@ -366,6 +369,9 @@ describe('parser — no scan restarts from every opener', () => {
 
   test('comments that never close, and a directive value with a long whitespace run inside', () => {
     within(() => parseTemplate('/#a'.repeat(N / 3)));
+    within(() => parseTemplate('/!a'.repeat(N / 3)));
+    within(() => parseTemplate('/#a/!b'.repeat(N / 6)));
+    within(() => parseTemplate(`${'/!a!/'.repeat(N / 10)}${'/#'.repeat(N / 4)}`));
     within(() => parseTemplate(`#set %a% = x${' '.repeat(N)}y\n%a%`));
   });
 

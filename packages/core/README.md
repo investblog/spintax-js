@@ -19,7 +19,7 @@ parse, render, validate, extract, analyze, and neutralize spintax templates.
   [`spintax-core`](https://pypi.org/project/spintax-core/) (Python), an Object Pascal engine,
   [`Spintax.Core`](https://www.nuget.org/packages/Spintax.Core/) (.NET), and
   the [Spintax WordPress plugin](https://wordpress.org/plugins/spintax/) are all held to the same
-  behavior contract by a **shared golden corpus of 424 fixtures** — deterministic verdicts, plural
+  behavior contract by a **shared golden corpus of 486 fixtures** — deterministic verdicts, plural
   buckets, conditionals, `#set`/`#def` semantics and post-processing agree everywhere, so a
   template is an asset you can move between runtimes, not a lock-in.
 - **MIT** licensed.
@@ -88,6 +88,7 @@ dedupe in the host and cap the retries: a template may simply not have N combina
 | Plural | `{plural %n%: one\|few\|many}` | grammatical agreement by locale — 2 forms (en), 3 (ru/uk/be, sr/hr/bs), 6 (ar: zero\|one\|two\|few\|many\|other) |
 | Include | `#include "slug-or-id"` | embed another template (host-resolved) |
 | Comment | `/# … #/` | stripped before rendering |
+| Verbatim | `/! … !/` | emitted exactly as written — no spintax inside, no post-process: `/![Docs](https://spintax.net)!/`, `/!#file[D:\kw.txt,1,S]!/`. The first `!/` closes it; an unclosed `/!` is plain text and a `verbatim.unclosed` warning |
 
 ## API
 

@@ -79,11 +79,16 @@ Object Pascal), code points (Python) or UTF-16 (JS, .NET) produce the same token
    source finds the next `/#` or `/!`; whichever comes first opens and runs to the first matching closer
    (`#/` or `!/`), searched from the end of the opener — so `/!/` is not a span (`/!/x!/` is the span
    `/x`). A comment may contain `/!` (removed with it); a span may contain `/#` and `#/` (kept). No
-   nesting. An unclosed `/!` is literal text from there on, as an unclosed `/#` is. An empty span `/!!/`
+   nesting. An unclosed `/!` is literal text from there on, as an unclosed `/#` is: the opener is two
+   characters of text and the scan goes on after it, so a comment after an unclosed `/!` is still removed
+   and a span after an unclosed `/#` is still a span — the reading of the alternation
+   `/\/#[\s\S]*?#\/|\/![\s\S]*?!\//g` (clarified while pinning the fixtures). An empty span `/!!/`
    is removed, like an empty comment — it leaves no token behind to block the capitalizer or the trim.
 2. **Sanitising happens outside spans only.** The scanner runs before `stripSentinels`; the reserved
    ranges — the neutralize sentinels U+E000–U+E005 and the span range U+F0000–U+F1FFF — are stripped from
-   author text outside spans, so an author cannot forge a token; inside a span they are content, encoded
+   author text outside spans, so an author cannot forge a token (the sentinel half applies to the engines
+   that have `neutralize()`; the PHP engines have no sentinels, so a U+E000 in their template stays an
+   ordinary character, as before — `verbatim/sentinel-outside-is-stripped` is tagged `ts`, `py`); inside a span they are content, encoded
    like any other code point, and come back byte for byte.
 3. **Then directives, then the tree.** Tokens are in place before `extractDirectives`. A span is a single
    token for every line-based rule, line terminators included (`\r\n`, `\r`, `\n`, U+2028, U+2029 are

@@ -5,11 +5,13 @@
  * lets the deterministic parity fixtures assert exact output.
  *
  * Order: strip stray sentinels → build vars, roll #def, tree-walk (+ #include) →
- * cosmetic post-process (if on) → mandatory neutralize safety-restore (always).
+ * cosmetic post-process (if on) → mandatory neutralize safety-restore (always) → decode the
+ * `/! … !/` spans (always).
  */
 import { MAX_EXPANSION_CHARS, renderAst, type PluralIssue, type RenderCtx } from './render';
 import { postProcess } from './postprocess';
 import { safetyRestore } from './neutralize';
+import { decodeVerbatim, stripSpanRange } from './verbatim';
 import { parseTemplate } from './parser';
 import { isParsedAst, type Ast, type ParsedAst } from './ast';
 import { AstVersionError } from './errors';
@@ -29,7 +31,7 @@ export interface PipelineOptions {
 
 export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions = {}): string {
   const ctx: RenderCtx = {
-    runtimeContext: opts.context ?? {},
+    runtimeContext: runtimeValues(opts.context),
     rng,
     locale: opts.locale ?? '',
     resolver: opts.includeResolver,
@@ -47,8 +49,22 @@ export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions 
   // Cosmetic post-process defaults ON (§0.1); false skips it. It runs on the still-
   // shielded form (neutralize sentinels are inert here).
   if (opts.postProcess !== false) out = postProcess(out, ctx.locale);
-  // Mandatory neutralize safety-restore (§6) — ALWAYS runs, even with postProcess:false.
-  return safetyRestore(out);
+  // Mandatory neutralize safety-restore (§6) — ALWAYS runs, even with postProcess:false. Then the
+  // `/! … !/` spans come back, last of all, so neither stage saw their content (ADR 0001 rule 7).
+  return decodeVerbatim(safetyRestore(out));
+}
+
+/**
+ * The runtime context as the render sees it: the span range stripped from every value, so data
+ * cannot carry a ready-made token past the template's sanitising (ADR 0001 rule 4). A value keeps
+ * the neutralize sentinels — those are how a host shields it.
+ */
+function runtimeValues(context: Record<string, string> | undefined): Record<string, string> {
+  if (context === undefined) return {};
+  const entries = Object.entries(context);
+  if (entries.every(([, value]) => stripSpanRange(value) === value)) return context;
+  // fromEntries defines own properties, so a key such as `__proto__` stays an ordinary name.
+  return Object.fromEntries(entries.map(([key, value]) => [key, stripSpanRange(value)]));
 }
 
 /** Resolve a `string | Ast` input to a parsed AST (parses a string fresh). */

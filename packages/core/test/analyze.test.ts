@@ -58,7 +58,14 @@ describe('analyze', () => {
       plural: 0,
       set: 0,
       include: 0,
+      verbatim: 0,
     });
     expect(a.diagnostics).toEqual([]);
+  });
+
+  test('counts /! … !/ spans, the empty one included, and none inside a comment (ADR 0001 rule 10)', () => {
+    expect(analyze('/!a!/ /!!/ /# /!b!/ #/ /!{c|d}!/').constructs).toMatchObject({ verbatim: 3, enumeration: 0 });
+    expect(analyze(parse('/!x!/')).constructs.verbatim).toBe(1);
+    expect(analyze('a /! b').constructs.verbatim).toBe(0);
   });
 });

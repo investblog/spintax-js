@@ -2165,5 +2165,230 @@
     "expect": {
       "output": "חתולים ו Evolution"
     }
+  },
+  {
+    "id": "verbatim/pipe-inside-is-not-a-separator",
+    "note": "A | inside a span is not a separator: {a|/!x|y!/} has two options, a and x|y (rule 3). Guards an engine that splits before it encodes.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{a|/!x|y!/}",
+    "postProcess": false,
+    "rng": "last",
+    "expect": {
+      "output": "x|y"
+    }
+  },
+  {
+    "id": "verbatim/directive-lines-inside-are-text",
+    "note": "A #set or #def line inside a span is text, even on a line of its own; the reference after the span stays undefined (rule 3). Guards an engine that extracts directives before it encodes spans.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!\n#set %x% = A\n#def %y% = B\n!/%x%%y%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n#set %x% = A\n#def %y% = B\n%x%%y%"
+    }
+  },
+  {
+    "id": "verbatim/reference-inside-is-text",
+    "note": "A %var% inside a span is not a reference, even when the context defines it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "%x% /!%x%!/",
+    "postProcess": false,
+    "context": {
+      "x": "A"
+    },
+    "expect": {
+      "output": "A %x%"
+    }
+  },
+  {
+    "id": "verbatim/span-as-a-set-value",
+    "note": "A span in a #set value travels as one token: the macro re-expands it at each reference, still unparsed.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = /!{a|b}!/\n%x% and %x%",
+    "postProcess": false,
+    "expect": {
+      "output": "\n{a|b} and {a|b}"
+    }
+  },
+  {
+    "id": "verbatim/span-across-a-set-line",
+    "note": "A span is one token for every line-based rule, line terminators included: the #set line ends after the span, and its value is two lines (rule 3). Guards an engine that ends the directive at the first line break.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = /!a\nb!/\n(%x%)",
+    "postProcess": false,
+    "expect": {
+      "output": "\n(a\nb)"
+    }
+  },
+  {
+    "id": "verbatim/crlf-inside-a-set-value",
+    "note": "The same with CRLF: the \\r inside the span is content, the \\r ending the directive line is not (render/set-crlf-value-carries-no-cr).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = /!a\r\nb!/\r\n(%x%)",
+    "postProcess": false,
+    "expect": {
+      "output": "\n(a\r\nb)"
+    }
+  },
+  {
+    "id": "verbatim/line-terminators-inside-are-content",
+    "note": "CRLF, CR and U+2028 inside a span come back byte for byte.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!a\r\nb\rc\u2028d!/",
+    "postProcess": false,
+    "expect": {
+      "output": "a\r\nb\rc\u2028d"
+    }
+  },
+  {
+    "id": "verbatim/sentinel-inside-is-content",
+    "note": "The neutralize sentinels U+E000\u2013U+E005 are stripped from author text OUTSIDE spans only; inside, they are content and are not rewritten into braces, because decoding runs after the safety-restore (rules 2 and 7). Guards an engine that sanitises before it scans, or decodes before the restore.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!\ue000x\ue001!/",
+    "postProcess": false,
+    "expect": {
+      "output": "\ue000x\ue001"
+    }
+  },
+  {
+    "id": "verbatim/token-shaped-content-decodes-once",
+    "note": "A span whose content is itself a well-formed token (the reserved code points are content inside a span) decodes ONCE, to those code points, and stays so: decoding is one pass that never rescans its output (rule 7). Guards a decoder that loops until nothing changes (it would render \"A\").",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "/!\udb80\udc00\udb84\udc00\udb84\udc41\udb80\udc01!/",
+    "postProcess": false,
+    "expect": {
+      "output": "\udb80\udc00\udb84\udc00\udb84\udc41\udb80\udc01"
+    }
+  },
+  {
+    "id": "verbatim/forged-token-in-the-template-is-stripped",
+    "note": "Outside a span, the span range U+F0000\u2013U+F1FFF is stripped from author text, so an author cannot type a ready-made token (rule 2): a whole token and a stray digit both vanish. Guards an engine that decodes whatever token reaches it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x\udb80\udc00\udb84\udc00\udb84\udc7b\udb84\udc00\udb84\udc61\udb84\udc00\udb84\udc7d\udb80\udc01y\udb84\udc05z",
+    "postProcess": false,
+    "expect": {
+      "output": "xyz"
+    }
+  },
+  {
+    "id": "verbatim/forged-token-in-a-value-is-stripped",
+    "note": "A runtime context value is stripped of the span range when it enters the render, so data cannot carry a token past the template's sanitising (rule 4): the value renders as the post-processed text around it. Guards an engine that strips the template only.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "%v%",
+    "context": {
+      "v": "x\udb80\udc00\udb84\udc00\udb84\udc7b\udb84\udc00\udb84\udc61\udb84\udc00\udb84\udc7d\udb80\udc01y"
+    },
+    "expect": {
+      "output": "Xy"
+    }
+  },
+  {
+    "id": "verbatim/context-value-cannot-open-a-span",
+    "note": "Negative guard for rule 4: in a runtime value /! is two characters \u2014 a value is re-parsed without the scanner, so its braces still spin. Data must not decide what the post-process may skip; a host that wants a value literal calls neutralize().",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "%v%",
+    "postProcess": false,
+    "context": {
+      "v": "/!{a}!/"
+    },
+    "expect": {
+      "output": "/!a!/"
+    }
+  },
+  {
+    "id": "verbatim/spliced-value-carries-the-token",
+    "note": "A #set value spliced into a construct (#78) is re-read as raw text, and the token rides along: x|y stays one option. Guards an engine whose splice re-scans the original source.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %L% = a|/!b|c!/\n{%L%}",
+    "postProcess": false,
+    "rng": "last",
+    "expect": {
+      "output": "\nb|c"
+    }
+  },
+  {
+    "id": "verbatim/plural-count-slot",
+    "note": "A span in a control slot is opaque text, nothing more (rule 5): {plural /!2!/: \u2026} has a non-numeric count, which erases the construct as any non-numeric count does. No engine special-cases a slot.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{plural /!2!/: one|many}",
+    "postProcess": false,
+    "expect": {
+      "output": ""
+    }
+  },
+  {
+    "id": "verbatim/conditional-name-slot",
+    "note": "A span is no conditional name, so {?/!flag!/?a|b} falls back to an enumeration of \"?flag?a\" and \"b\" \u2014 the span decoded where it stands (rule 5).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{?/!flag!/?a|b}",
+    "postProcess": false,
+    "rng": "first",
+    "expect": {
+      "output": "?flag?a"
+    }
+  },
+  {
+    "id": "verbatim/set-name-slot",
+    "note": "A span is no directive name: #set %/!x!/% = A is a text line, and %x% stays undefined (rule 5).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %/!x!/% = A\n%x%",
+    "postProcess": false,
+    "expect": {
+      "output": "#set %x% = A\n%x%"
+    }
+  },
+  {
+    "id": "verbatim/separator-slot-is-unpadded",
+    "note": "A separator that is a span is not all letters, so it is emitted as written, unpadded \u2014 the way to force an exact separator (rule 5). Without the span, \"and\" is padded to \" and \".",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "[<lastsep=\"/!and!/\">a|b] [<lastsep=\"and\">a|b]",
+    "postProcess": false,
+    "rng": "last",
+    "expect": {
+      "output": "aandb a and b"
+    }
+  },
+  {
+    "id": "verbatim/paragraph-separator-inside-a-set-value",
+    "note": "U+2029 ends a line for the directive grammar, but inside a span it is content: the #set line still ends after the span, and the value keeps it.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = /!a\u2029b!/\n(%x%)",
+    "postProcess": false,
+    "expect": {
+      "output": "\n(a\u2029b)"
+    }
+  },
+  {
+    "id": "verbatim/sentinel-outside-is-stripped",
+    "note": "The other half of rule 2: OUTSIDE a span the neutralize sentinels are stripped from author text, so only neutralize() can introduce one. Asserted by the engines that have neutralize(); the PHP engines have no sentinels, so a U+E000 in their template is an ordinary character.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x\ue000y /!\ue000!/",
+    "postProcess": false,
+    "engines": [
+      "ts",
+      "py"
+    ],
+    "expect": {
+      "output": "xy \ue000"
+    }
   }
 ]

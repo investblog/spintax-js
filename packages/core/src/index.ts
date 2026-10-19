@@ -9,6 +9,7 @@
 import { parseTemplate } from './internal/parser';
 import { validateTemplate } from './internal/validator';
 import { extractFromSource } from './internal/extract';
+import { projectSource } from './internal/verbatim';
 import { renderWith } from './internal/pipeline';
 import { neutralize as neutralizeValue } from './internal/neutralize';
 import { makeRng } from './internal/rng';
@@ -213,6 +214,8 @@ function countConstructs(ast: ParsedAst, includeCount: number): Record<string, n
   });
   counts.set = Object.keys(ast.setDefs).length;
   counts.include = includeCount;
+  // `/! … !/` spans are text in the tree; the scan counts them, the empty one included.
+  counts.verbatim = projectSource(ast.source).spans;
   return counts;
 }
 

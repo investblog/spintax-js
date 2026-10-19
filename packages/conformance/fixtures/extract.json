@@ -250,5 +250,48 @@
       "defs": [],
       "includes": []
     }
+  },
+  {
+    "id": "extract/verbatim-hides-everything",
+    "note": "Directives, an #include and a reference inside a span contribute nothing; the live reference after it is collected (rule 9).",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "/!\n#set %a% = 1\n#def %b% = 2\n#include \"c\"\n%d%\n!/\n%e%",
+    "expect": {
+      "refs": [
+        "e"
+      ],
+      "sets": [],
+      "defs": [],
+      "includes": []
+    }
+  },
+  {
+    "id": "extract/verbatim-in-a-set-value",
+    "note": "A span in a #set value: the name is collected, the reference inside the span is not.",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#set %a% = /!%b%!/\n%a%",
+    "expect": {
+      "refs": [
+        "a"
+      ],
+      "sets": [
+        "a"
+      ]
+    }
+  },
+  {
+    "id": "extract/verbatim-include-ref-is-decoded",
+    "note": "extract() reports an #include ref decoded \u2014 the host never sees a token (rule 6).",
+    "kind": "deterministic",
+    "op": "extract",
+    "template": "#include \"/!{x}!/\"",
+    "expect": {
+      "refs": [],
+      "includes": [
+        "{x}"
+      ]
+    }
   }
 ]

@@ -3,6 +3,35 @@
 All notable changes to `@spintax/core` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.14.0 — 2026-10-19
+
+**Breaking (syntax surface): a verbatim span, `/! … !/` (#92).** A minor on 0.x, as every syntax change
+here. No stored output changes: the delimiters occur 0 times in 3 560 stored documents of the family's
+products, and a render, validate and extract differential over them shows 0 changes.
+
+### Added
+
+- **`/! … !/` keeps its content exactly as written** — no spintax inside, no post-process
+  (`docs/decisions/0001-verbatim-span.md`). Markdown links (`/![Docs](https://spintax.net)!/`), foreign
+  macros (`/!#file[D:\kw.txt,1,S]!/`), BBCode and prose about spintax itself (`/!{Hello|Hi}!/`) now
+  survive a render. One scanner with `/# … #/` comments: whichever opener comes first wins; the first `!/`
+  closes a span; `/!!/` is removed; an unclosed `/!` is plain text. A span works in a `#set`/`#def` value
+  (across lines, too), in an `#include` body and in an `#include` ref (the resolver gets it decoded).
+  Around a span the post-process works as usual; the span itself is neither capitalized nor trimmed.
+- **`verbatim.unclosed` warning** for a `/!` with no closer — its text then parses as spintax. A warning:
+  the verdict does not change.
+- `analyze().constructs.verbatim` counts spans.
+
+### Changed
+
+- **`AST_VERSION` 5.** An `Ast` from an earlier version is refused with `AstVersionError`; it would spin a
+  span instead of emitting it.
+- **Reserved range.** U+F0000–U+F1FFF (Supplementary Private Use Area-A, where spans are encoded during a
+  render) is stripped from template text outside spans and from every runtime `context` value. The
+  neutralize sentinels U+E000–U+E005 inside a span are content and come back unchanged.
+- Validator positions after a comment or a span point at the author's source (they were shifted by the
+  removed comment text). Positions are not parity-gated.
+
 ## 0.13.0 — 2026-10-19
 
 A minor: the post-process moves rendered text for a token that starts with a dot, for a bare `//`

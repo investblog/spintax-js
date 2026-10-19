@@ -35,6 +35,7 @@ import { parseSequence, parseTemplate, phpTrim, recognizeConditional } from './p
 import { normalizeBaseLang, pluralArity, pluralFor } from './plurals';
 import type { Rng } from './rng';
 import { lowerBound, rereadSpans, type RereadSpan } from './text-index';
+import { budgetLength, decodeVerbatim } from './verbatim';
 
 const MAX_VARIABLE_DEPTH = 50;
 /**
@@ -42,7 +43,8 @@ const MAX_VARIABLE_DEPTH = 50;
  *
  * Deliberately far above any real document — the point is to end an explosion, not to
  * ration ordinary output. Charged per substitution and checked before the next one, so
- * the bomb dies at the budget rather than after allocating past it.
+ * the bomb dies at the budget rather than after allocating past it. A `/! … !/` token is charged
+ * as its content, not its encoding ({@link budgetLength}, ADR 0001 rule 7a).
  */
 export const MAX_EXPANSION_CHARS = 1024 * 1024;
 // ASCII whitespace only, spelled out — no dialect's `\s` is this set. This comment used to
@@ -136,7 +138,9 @@ export function renderAst(ast: ParsedAst, ctx: RenderCtx): string {
  */
 function resolveIncludes(text: string, ctx: RenderCtx): string {
   INCLUDE_LINE_RE.lastIndex = 0;
-  return text.replace(INCLUDE_LINE_RE, (_m, ref: string): string => {
+  return text.replace(INCLUDE_LINE_RE, (_m, raw: string): string => {
+    // A span in the ref reaches the host decoded (ADR 0001 rule 6): the host never sees a token.
+    const ref = decodeVerbatim(raw);
     if (ctx.includeStack.includes(ref) || ctx.includeStack.length >= ctx.maxDepth) return '';
     let included: string | null;
     try {
@@ -446,7 +450,7 @@ function resolveVariable(name: string, opts: RenderInternalOptions): Fragment {
   // (spliceConstruct) could hand this function references its fixpoint had cut off: 2^k of
   // them, each to a 64 KB value, expanded here for nothing (found in review).
   if (opts.budget.left <= 0) return `%${name}%`;
-  opts.budget.left -= value.length;
+  opts.budget.left -= budgetLength(value);
   // At the cap, stop expanding (lenient: partial output, never throws — unlike the
   // plugin which throws→'' on runaway; §9.2 render never throws on content).
   if (opts.depth >= MAX_VARIABLE_DEPTH || !/[{[%]/u.test(value)) return value;
@@ -488,7 +492,7 @@ function expandVarsFixpoint(
       if (value === undefined) return m;
       // Same purse as resolveVariable: a plural slot is not a separate allowance.
       if (opts.budget.left <= 0) return m;
-      opts.budget.left -= value.length;
+      opts.budget.left -= budgetLength(value);
       changed = true;
       return value;
     });

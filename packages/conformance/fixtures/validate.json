@@ -1128,5 +1128,112 @@
         }
       ]
     }
+  },
+  {
+    "id": "validate/verbatim-hides-brackets",
+    "note": "Broken markup inside a span raises nothing: the validator scans the same projection as the parser (rule 9).",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "/!{a [b!/",
+    "expect": {
+      "verdict": "valid",
+      "diagnosticCount": {
+        "bracket.unclosed": 0
+      }
+    }
+  },
+  {
+    "id": "validate/verbatim-hides-references",
+    "note": "A %var% inside a span is not reported.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "/!%x%!/",
+    "expect": {
+      "verdict": "valid",
+      "diagnosticCount": {
+        "variable.undefined": 0
+      }
+    }
+  },
+  {
+    "id": "validate/verbatim-unclosed-warns",
+    "note": "An unclosed /! is a warning, verbatim.unclosed \u2014 not silent like an unclosed comment, because its content then parses as spintax (rule 9). A warning does not change the verdict. Reported once, at the first unclosed opener: no later opener can close either.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "a /! note /! more",
+    "expect": {
+      "verdict": "valid",
+      "diagnostics": [
+        {
+          "code": "verbatim.unclosed",
+          "severity": "warning"
+        }
+      ],
+      "diagnosticCount": {
+        "verbatim.unclosed": 1
+      }
+    }
+  },
+  {
+    "id": "validate/verbatim-unclosed-content-still-parses",
+    "note": "What the warning is for: after an unclosed /! the rest is spintax, so a bracket there is diagnosed too.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "/![a",
+    "expect": {
+      "verdict": "invalid",
+      "diagnostics": [
+        {
+          "code": "bracket.unclosed",
+          "severity": "error"
+        },
+        {
+          "code": "verbatim.unclosed",
+          "severity": "warning"
+        }
+      ]
+    }
+  },
+  {
+    "id": "validate/verbatim-slash-bang-slash-alone-warns",
+    "note": "/!/ does not close itself, so with no later !/ it is an unclosed opener.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "a /!/ b",
+    "expect": {
+      "verdict": "valid",
+      "diagnosticCount": {
+        "verbatim.unclosed": 1
+      }
+    }
+  },
+  {
+    "id": "validate/verbatim-closed-and-stray-closer-are-silent",
+    "note": "Negative guard: an empty span and a stray !/ raise nothing; neither does a /! inside a closed comment.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "/!!/ x !/ /# /! #/",
+    "expect": {
+      "verdict": "valid",
+      "diagnosticCount": {
+        "verbatim.unclosed": 0
+      }
+    }
+  },
+  {
+    "id": "validate/verbatim-include-ref-matches-decoded",
+    "note": "knownIncludes is matched against the decoded ref \u2014 the one the resolver is asked for (rule 6). Guards a validator that compares the encoded ref and calls a known target unknown.",
+    "kind": "deterministic",
+    "op": "validate",
+    "template": "#include \"/!{x}!/\"",
+    "knownIncludes": [
+      "{x}"
+    ],
+    "expect": {
+      "verdict": "valid",
+      "diagnosticCount": {
+        "include.unknown-target": 0
+      }
+    }
   }
 ]
