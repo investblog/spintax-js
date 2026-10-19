@@ -3,6 +3,15 @@
 All notable changes to `@spintax/mcp` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.4 — 2026-10-19
+
+Depends on `@spintax/core` **^0.14.0** (spintax-js#92). Templates gain a verbatim span; the tool list,
+arguments and caps are unchanged:
+
+- **`/! … !/` is kept exactly as written** by `render_spintax` — no spintax inside, no post-process:
+  `/![Docs](https://spintax.net)!/` renders the markdown link, `/!{Hello|Hi}!/` the braces.
+- **`validate_spintax` warns `verbatim.unclosed`** for a `/!` with no `!/`; it sees nothing inside a span.
+
 ## 0.4.3 — 2026-10-19
 
 Depends on `@spintax/core` **^0.13.0** (spintax-js#91, #94). `render_spintax` output moves in three

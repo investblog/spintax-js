@@ -3,6 +3,15 @@
 Versioned independently of `@spintax/core`. Releases are tagged `n8n-node-vX.Y.Z` and published
 with npm provenance via OIDC (`RELEASING.md`).
 
+## 0.3.7
+
+Bundles `@spintax/core` **0.14.0** (spintax-js#92). Templates gain a verbatim span:
+
+- **`/! … !/` is kept exactly as written** by Render and Render Many — no spintax inside, no
+  post-process. A foreign placeholder or a markdown link can now be marked in the template itself;
+  Protect / Restore still works for fragments the template does not mark.
+- **Validate warns `verbatim.unclosed`** for a `/!` with no `!/`, and sees nothing inside a span.
+
 ## 0.3.6
 
 Bundles `@spintax/core` **0.13.0** (spintax-js#91, #94). Render and Render Many move in three places;
