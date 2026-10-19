@@ -40,7 +40,7 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 | `op` | `render` \| `validate` \| `extract` \| `neutralize` |
 | `template` | the spintax source |
 | `context` | optional variable map (string→string, T1) |
-| `locale` | optional plural-bucket locale (§3.1) |
+| `locale` | optional render locale (§3.1): plural buckets, conjunction separators (#90), Turkic capital İ (#94) |
 | `knownIncludes` | optional; `validate`/`analyze` only — enables "unknown #include target" verdicts |
 | `seed` | PRNG seed for `kind:rng` cases (engine-private; never a cross-engine equality basis) |
 | `postProcess` | optional bool, **default `true`** (mirrors `render()`); set `false` to assert raw pre-cosmetic output. render/analyze only |

@@ -8,6 +8,7 @@
  * safety-restore (§6) is separate (M2e) and always runs.
  */
 import { isUcpSpace, UCP_SPACE, UCP_WORD } from './charclass';
+import { normalizeBaseLang } from './plurals';
 
 // Single-token abbreviations (case-insensitive) that would otherwise look like a
 // sentence end. Multi-dot forms (т.д.) are handled by the 5a regex.
@@ -77,7 +78,12 @@ const DOMAIN_PART = `(?:${LABEL}\\.)+${TLD}`;
  * otherwise let a URI match run through the delimiters of a placeholder minted after it.
  */
 const URI_BODY = `[^\\x00${WS}<>"')\\]]`;
-const URI_RE = new RegExp(`(?:(?:https?|ftp):\\/\\/|(?:mailto|tel):)${URI_BODY}+`, 'giu');
+/**
+ * A `//` scheme is a URI even with no body: prose that names the protocol — `(https://)` — got a space
+ * after its colon from the punctuation pass, `(https: //)`. `mailto:`/`tel:` still need one, or a
+ * sentence-initial `Tel: 555` would be shielded from the capitalizer as a bare `tel`.
+ */
+const URI_RE = new RegExp(`(?:(?:https?|ftp):\\/\\/${URI_BODY}*|(?:mailto|tel):${URI_BODY}+)`, 'giu');
 // Which placeholder prefix a match gets. Kept distinct (URL vs URI) even though one pass mints
 // both: the prefixes are what the other engines' fixtures and #52's restore regex speak.
 const MAILTEL_PREFIX_RE = /^(?:mailto|tel):/iu;
@@ -215,6 +221,18 @@ const LEAD = `(?:<[^>]+>|[${SENTENCE_OPENERS}]|${S})*`;
 const QUOTES = `"'«»‹›“”‘’`;
 const CLOSER = `[)\\]]|[${QUOTES}]+(?=${S}|$|<|\\/?>|[.,;:!?…)\\]—–])`;
 
+/**
+ * A token that BEGINS with a dot — `.NET`, `.gitignore`, `.env.local`, `.xlsx`, `.5` — shielded, so the
+ * punctuation passes do not take its dot for a sentence end: `and .NET` was `and. NET`, `the .apk file`
+ * was `the. Apk file` (#91). A token starts after the text start, whitespace, an opening bracket, a quote,
+ * a tag or a path separator (`src/.env`, `dir\.env`) — an explicit set, not "no letter before": `See...and more` must keep
+ * its ellipsis. The tail
+ * takes dots (`.tar.gz`) and releases trailing punctuation (`.NET.`). Runs after EMAIL and before DOM,
+ * or `env.local` in `.env.local` is shielded as a domain first and the leading dot is left bare.
+ * The cost: a sentence typed with the space on the wrong side, `end .Next`, is no longer repaired.
+ */
+const DOT_TOKEN_RE = new RegExp(`(?<=^|${S}|[(\\[{>/\\\\${QUOTES}])\\.[\\p{L}\\p{N}][\\p{L}\\p{N}_.\\-]*`, 'gu');
+
 // Spacing + capitalization. PHP's `\s` and `\d` here are UCP: `\d` is any decimal digit (\p{Nd}).
 //
 // A match may start only where a whitespace run starts (`(?<!${S})`). Same matches — every start
@@ -237,6 +255,13 @@ const SPACE_AFTER_OPENER_RE = new RegExp(`([${SENTENCE_OPENERS}])${S}+`, 'gu');
 const CAP_FIRST_RE = new RegExp(`^(${LEAD})(\\p{Ll})`, 'u');
 
 const up = (ch: string): string => ch.toUpperCase();
+/**
+ * Turkish and Azerbaijani pair dotted `i` with `İ` and dotless `ı` with `I`, so `istanbul` opens a
+ * sentence as `İstanbul` (#94). An explicit mapping, not `toLocaleUpperCase('tr')`: that depends on the
+ * host's ICU data, and the engines have to agree. `İ` is one UTF-16 unit, so the lead index still holds.
+ */
+const upTurkic = (ch: string): string => (ch === 'i' ? 'İ' : ch.toUpperCase());
+const TURKIC_LANGS = new Set(['tr', 'az']);
 
 /**
  * The capitalizers after a sentence end, a block tag and a line break — the plugin's
@@ -316,6 +341,7 @@ function capitalizeAfter(
   lower: RegExp,
   next: (text: string, from: number) => { leadStart: number; resume: number } | null,
   context: { leads: LeadIndex | null },
+  upper: (ch: string) => string,
 ): string {
   // The passes only change the case of letters, and no upper-case mapping is shorter than its letter, so a
   // text of the same length has every `<`, `>`, opener and space where the index saw them: one index serves
@@ -334,7 +360,7 @@ function capitalizeAfter(
     if (cp === undefined) continue;
     const ch = String.fromCodePoint(cp);
     if (!lower.test(ch)) continue;
-    out += text.slice(emitted, at) + up(ch);
+    out += text.slice(emitted, at) + upper(ch);
     emitted = at + ch.length;
     from = emitted;
   }
@@ -375,7 +401,7 @@ const afterLineBreak = (text: string, from: number): { leadStart: number; resume
 // The shield's placeholder prefixes, in one place: RESTORE_RE below is built from this
 // list, so a new shield pass cannot mint a key shape the single-pass restore fails to
 // recognise. Keep the two in step by construction, not by memory.
-const SHIELD_PREFIXES = ['URL', 'URI', 'EMAIL', 'DOM', 'NUM', 'ABBR'] as const;
+const SHIELD_PREFIXES = ['URL', 'URI', 'EMAIL', 'DOTTOK', 'DOM', 'NUM', 'ABBR'] as const;
 type ShieldPrefix = (typeof SHIELD_PREFIXES)[number];
 const RESTORE_RE = new RegExp(`\\x00(?:${SHIELD_PREFIXES.join('|')})_\\d+\\x00`, 'gu');
 
@@ -434,8 +460,8 @@ function restore(text: string, input: string, placeholders: Map<string, string>)
  * Every key is `\x00NAME\x00`, so an occurrence of one is a stretch between two `\x00`s whose content
  * is that NAME — a "gap". Replacing it removes both delimiters and puts a value there, and that can
  * never form a new occurrence: no value holds a `\x00` (see {@link restore}), and no whole value fits
- * inside a key name either — a URL keeps its `://`, an email its `@`, a domain, decimal or abbreviation
- * its `.`, and a URI cut back to its scheme (`tel:.` stores `tel`) is no substring of `URL_7` or
+ * inside a key name either — a URL keeps its `://`, an email its `@`, a dot token, domain, decimal or
+ * abbreviation its `.`, and a URI cut back to its scheme (`tel:.` stores `tel`) is no substring of `URL_7` or
  * `EMAIL_7`. So the only occurrences the loop can ever meet are gaps of the original text, and the
  * only effect one replacement has on another is taking a shared delimiter from a neighbour. The loop
  * takes the keys in insertion order and each `split` scans left to right, so visiting candidate gaps
@@ -472,7 +498,9 @@ function restoreAsTheLoopDoes(text: string, placeholders: Map<string, string>): 
   return out;
 }
 
-export function postProcess(input: string): string {
+/** `locale` is the render's: only its base language is read, by the capitalizer (#94). */
+export function postProcess(input: string, locale = ''): string {
+  const upper = TURKIC_LANGS.has(normalizeBaseLang(locale)) ? upTurkic : up;
   const placeholders = new Map<string, string>();
   let counter = 0;
 
@@ -497,6 +525,7 @@ export function postProcess(input: string): string {
     storeWithTrailingPunct(m, MAILTEL_PREFIX_RE.test(m) ? 'URI' : 'URL'),
   );
   text = shieldEmails(text, (m) => store(m, 'EMAIL'));
+  text = text.replace(DOT_TOKEN_RE, (m) => storeWithTrailingPunct(m, 'DOTTOK'));
   text = shieldDomains(text, (m) => store(m, 'DOM'));
   text = text.replace(DECIMAL_RE, (m) => store(m, 'NUM'));
   text = text.replace(MULTI_ABBR_RE, (m) => store(m, 'ABBR'));
@@ -514,14 +543,14 @@ export function postProcess(input: string): string {
   text = text.replace(SPACE_AFTER_OPENER_RE, '$1');
 
   // 8: capitalize the first letter (skipping leading HTML tags and sentence openers).
-  text = text.replace(CAP_FIRST_RE, (_m, lead: string, ch: string) => lead + up(ch));
+  text = text.replace(CAP_FIRST_RE, (_m, lead: string, ch: string) => lead + upper(ch));
   // 9: capitalize after sentence punctuation (through HTML tags).
   const leadContext: { leads: LeadIndex | null } = { leads: null };
-  text = capitalizeAfter(text, LOWER_RE, afterSentenceEnd, leadContext);
+  text = capitalizeAfter(text, LOWER_RE, afterSentenceEnd, leadContext, upper);
   // 10: capitalize after block-level HTML tags.
-  text = capitalizeAfter(text, LOWER_RE, afterBlockTag(), leadContext);
+  text = capitalizeAfter(text, LOWER_RE, afterBlockTag(), leadContext, upper);
   // 11: capitalize after line breaks.
-  text = capitalizeAfter(text, LOWER_RE, afterLineBreak, leadContext);
+  text = capitalizeAfter(text, LOWER_RE, afterLineBreak, leadContext, upper);
 
   // 12: restore placeholders, then trim.
   return restore(text, input, placeholders).trim();

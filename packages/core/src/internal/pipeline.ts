@@ -46,7 +46,7 @@ export function renderWith(input: string | Ast, rng: Rng, opts: PipelineOptions 
   let out = renderAst(ast, ctx);
   // Cosmetic post-process defaults ON (§0.1); false skips it. It runs on the still-
   // shielded form (neutralize sentinels are inert here).
-  if (opts.postProcess !== false) out = postProcess(out);
+  if (opts.postProcess !== false) out = postProcess(out, ctx.locale);
   // Mandatory neutralize safety-restore (§6) — ALWAYS runs, even with postProcess:false.
   return safetyRestore(out);
 }

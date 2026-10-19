@@ -282,7 +282,7 @@ final class GoldenCorpusTest extends TestCase
         //          don't require WP template lookups, so this stage is skipped.
         // Stage 10: post_process (:331) — the parity target, unless postProcess:false.
         if ($postProcess) {
-            $text = $parser->post_process($text);
+            $text = $parser->post_process($text, $locale); // the locale since #94 (Turkic capital İ); an older plugin ignores it
         }
         // Stage 11: wp_kses_post (:334) — a WP sink concern (§2.2), deliberately NOT applied.
         return $text;

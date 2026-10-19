@@ -939,5 +939,186 @@
     "expect": {
       "output": "He asked \"why? \"example.com now"
     }
+  },
+  {
+    "id": "postprocess/turkish-dotted-i-capitalizes-to-dotted-capital",
+    "note": "Turkish pairs dotted i with İ and dotless ı with I (#94), so a sentence opening on i gets İ — at the start, after a sentence end, after a line break and after a block tag. An explicit mapping: toLocaleUpperCase depends on the host ICU data. Guards an engine that upper-cases without the locale ('Istanbul', a misspelling in Turkish).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "istanbul büyük bir şehir. iyi günler.\niş yeri <p>için</p>",
+    "locale": "tr",
+    "postProcess": true,
+    "expect": {
+      "output": "İstanbul büyük bir şehir. İyi günler.\nİş yeri <p>İçin</p>"
+    }
+  },
+  {
+    "id": "postprocess/azerbaijani-dotted-i-and-region-subtag",
+    "note": "Azerbaijani has the same pair, and the locale is read by its base language, as the plural table reads it: az-AZ counts. Guards an engine that compares the whole tag.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "iş yeri. indi gəl.",
+    "locale": "az-AZ",
+    "postProcess": true,
+    "expect": {
+      "output": "İş yeri. İndi gəl."
+    }
+  },
+  {
+    "id": "postprocess/turkish-dotless-i-capitalizes-to-plain-capital",
+    "note": "The other half of the pair: dotless ı is upper-cased to plain I under tr, as in every language. Guards an engine that maps every i-like letter to İ.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "ılık bir gün. ılık.",
+    "locale": "tr",
+    "postProcess": true,
+    "expect": {
+      "output": "Ilık bir gün. Ilık."
+    }
+  },
+  {
+    "id": "postprocess/dotted-capital-only-under-turkic-locales",
+    "note": "Negative guard for #94: outside tr/az a sentence-initial i becomes I, as before. Guards an engine that applies the Turkish mapping regardless of the locale.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "it works. in fact.\nit does.",
+    "locale": "en",
+    "postProcess": true,
+    "expect": {
+      "output": "It works. In fact.\nIt does."
+    }
+  },
+  {
+    "id": "postprocess/dot-token-is-not-a-sentence-end",
+    "note": "A token that BEGINS with a dot — .NET, a dotfile, a file extension — is shielded, so its dot is not pulled onto the word before and the token is not capitalized as a new sentence (#91: 'and. NET', 'the. Apk file'). The tail takes dots (.env.local, .tar.gz). Guards an engine that only stops removing the space before the dot ('and . NET') or forgets the capitalizer ('.Gitignore').",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "object Pascal and .NET implementations. add it to .gitignore, copy .env.local and the .tar.gz file. save as .xlsx or .txt",
+    "postProcess": true,
+    "expect": {
+      "output": "Object Pascal and .NET implementations. Add it to .gitignore, copy .env.local and the .tar.gz file. Save as .xlsx or .txt"
+    }
+  },
+  {
+    "id": "postprocess/dot-token-after-openers-and-before-punctuation",
+    "note": "A dot token starts after whitespace, the text start, an opening bracket, a quote or a tag, and releases trailing punctuation, which is spaced as usual. Guards an engine that only accepts whitespace before the dot ('(. NET)', '<li>. Apk') or keeps the sentence dot inside the token.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "(.NET) and «.NET» and \".env\"; <li>.apk file</li> we ship .NET. next .NET? yes .NET, then",
+    "postProcess": true,
+    "expect": {
+      "output": "(.NET) and «.NET» and \".env\"; <li>.apk file</li> We ship .NET. Next .NET? Yes .NET, then"
+    }
+  },
+  {
+    "id": "postprocess/dot-token-at-text-and-line-start",
+    "note": "A dot token that opens the text or a line is not capitalized: it is not a letter. Guards an engine whose lead skips a shielded value.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": ".gitignore first\n.env file",
+    "postProcess": true,
+    "expect": {
+      "output": ".gitignore first\n.env file"
+    }
+  },
+  {
+    "id": "postprocess/dot-token-before-a-digit",
+    "note": ".5 starts a token too: the space before it stays ('Costs.5' before #91). Guards an engine that treats a digit after the dot only as a decimal.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "costs .5 now",
+    "postProcess": true,
+    "expect": {
+      "output": "Costs .5 now"
+    }
+  },
+  {
+    "id": "postprocess/dot-token-negatives",
+    "note": "Negative guard for #91: a dot after a word, a spaced sentence dot, a decimal, a one-case TLD and an ellipsis glued to a word are unchanged. The accepted cost is pinned last: 'end .Next' — the space typed on the wrong side of a sentence dot — is no longer repaired.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "word . next. end.Next and ASP.NET, pi 3.5. see...and more. end .Next",
+    "postProcess": true,
+    "expect": {
+      "output": "Word. Next. End. Next and ASP.NET, pi 3.5. See... And more. End .Next"
+    }
+  },
+  {
+    "id": "postprocess/bare-scheme-is-a-uri",
+    "note": "A // scheme with no host is shielded as a URL: prose that names the protocol got a space after its colon ('(https: //)'). Guards an engine that requires a URL body after the //.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a secure protocol (https://) and ftp:// too. visit http://",
+    "postProcess": true,
+    "expect": {
+      "output": "A secure protocol (https://) and ftp:// too. Visit http://"
+    }
+  },
+  {
+    "id": "postprocess/bare-mailto-and-tel-are-not-uris",
+    "note": "Negative guard: mailto: and tel: still need a body, so a sentence that opens on one is capitalized and spaced as before. Guards an engine that relaxes the body for every scheme.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "tel: 555. mailto: me",
+    "postProcess": true,
+    "expect": {
+      "output": "Tel: 555. Mailto: me"
+    }
+  },
+  {
+    "id": "postprocess/dot-token-after-a-path-slash",
+    "note": "A path slash starts a dot token too: src/.env and path/.next are paths, not a sentence end before 'Env'/'Next'. The slash is named in the explicit predecessor set; the set is still not 'any non-word character' (see dot-token-negatives: 'see...and').",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "copy src/.env and path/.next now",
+    "postProcess": true,
+    "expect": {
+      "output": "Copy src/.env and path/.next now"
+    }
+  },
+  {
+    "id": "postprocess/dot-token-after-unicode-whitespace",
+    "note": "The whitespace before a dot token is the UCP class every pass of this stage uses (PHP \\s under /u): NEL and NBSP count. Guards a port whose lookbehind uses a native ASCII or ECMAScript \\s.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "x\u0085.net and y\u00a0.NET here",
+    "postProcess": true,
+    "expect": {
+      "output": "X\u0085.net and y\u00a0.NET here"
+    }
+  },
+  {
+    "id": "postprocess/bare-scheme-is-caseless",
+    "note": "The scheme is caseless, as for a URL with a body: HTTPS:// and Ftp:// are shielded whole. Guards an engine that drops the i flag from the URI pattern ('HTTPS: //').",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a (HTTPS://) link and Ftp:// here",
+    "postProcess": true,
+    "expect": {
+      "output": "A (HTTPS://) link and Ftp:// here"
+    }
+  },
+  {
+    "id": "postprocess/turkic-locale-case-and-underscore",
+    "note": "The locale is normalised as the plural table normalises it: case-folded, split on - or _. Guards an engine that compares the raw tag.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "istanbul. iyi.",
+    "locale": "TR_tr",
+    "postProcess": true,
+    "expect": {
+      "output": "İstanbul. İyi."
+    }
+  },
+  {
+    "id": "postprocess/dot-token-after-a-backslash",
+    "note": "A Windows path separator starts a dot token as / does: dir\\.env and a\\b\\.cache are paths. Guards an engine that names only the forward slash.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "copy dir\\.env and a\\b\\.cache now",
+    "postProcess": true,
+    "expect": {
+      "output": "Copy dir\\.env and a\\b\\.cache now"
+    }
   }
 ]

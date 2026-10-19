@@ -31,7 +31,7 @@
         },
         "locale": {
           "type": "string",
-          "description": "Plural-bucket locale (§3.1). SAME vocabulary the engine accepts. Omit ⇒ default 2-form."
+          "description": "Render locale (§3.1). SAME vocabulary the engine accepts; its base language picks the plural buckets, the conjunction separators (#90) and the Turkic capital İ (#94). Omit ⇒ default 2-form, no language rules."
         },
         "knownIncludes": {
           "type": "array",
