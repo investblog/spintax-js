@@ -45,6 +45,8 @@ function pipelineOpts(c: Case): PipelineOptions {
   if (context !== undefined) opts.context = context;
   if (c.locale !== undefined) opts.locale = c.locale;
   if (c.postProcess !== undefined) opts.postProcess = c.postProcess;
+  const includes = c.includes;
+  if (includes !== undefined) opts.includeResolver = (ref) => (Object.hasOwn(includes, ref) ? includes[ref]! : null);
   return opts;
 }
 

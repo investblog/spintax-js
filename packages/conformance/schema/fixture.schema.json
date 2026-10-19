@@ -38,6 +38,11 @@
           "items": { "type": "string" },
           "description": "validate/analyze only → ValidateOptions.knownIncludes. Enables 'unknown #include target' verdicts."
         },
+        "includes": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "render only: ref → raw body of an `#include \"ref\"`. The harness builds a synchronous resolver from it (an absent ref resolves to null, i.e. the host knows no such template). Each body is a template of its own, rendered with a child scope (runtime context, not the parent's #set) in the case's locale. How a body meets the post-process is engine-specific (the WP plugin post-processes each body as its own document; see the corpus README, Known divergences), so fixtures avoid the shapes where that shows; cycles are not in the corpus (ADR 0001, §4.1)."
+        },
         "neutralizeContext": {
           "type": "array",
           "items": { "type": "string" },
@@ -92,6 +97,11 @@
         {
           "if": { "properties": { "op": { "const": "validate" } }, "required": ["op"] },
           "then": { "properties": { "expect": { "$ref": "#/$defs/expectValidate" } } }
+        },
+        {
+          "$comment": "includes is a render-only harness directive.",
+          "if": { "required": ["includes"] },
+          "then": { "properties": { "op": { "const": "render" } } }
         },
         {
           "$comment": "neutralizeContext is a render-only harness directive.",

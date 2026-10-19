@@ -44,6 +44,7 @@ Every case is one object. `kind` is **the discriminator** that decides the asser
 | `knownIncludes` | optional; `validate`/`analyze` only — enables "unknown #include target" verdicts |
 | `seed` | PRNG seed for `kind:rng` cases (engine-private; never a cross-engine equality basis) |
 | `postProcess` | optional bool, **default `true`** (mirrors `render()`); set `false` to assert raw pre-cosmetic output. render/analyze only |
+| `includes` | optional map ref→body; render only — the harness builds a synchronous resolver from it (an absent ref is `null`). A body renders with a child scope (runtime context, not the parent's `#set`) in the case's locale. How a body meets the post-process differs in the WP plugin (Known divergences), so fixtures avoid those shapes; cycles are not in the corpus. Added 2026-10-19 (ADR 0001): the TS and both PHP runners implement it; the py, win and dotnet runners must, through their trackers, before they are green on `render-include.json` |
 | `neutralizeContext` | optional string[]; render only — harness `neutralize()`s these context keys before rendering (tests the neutralize→render round-trip; asserts the final literal output, mechanism-independent) |
 | `rng` | injected selection strategy, **orthogonal to `seed`** (see below) |
 | `engines` | optional `("ts"\|"php"\|"py")[]`; absent = **all engines**. An explicit list marks a deliberate divergence — e.g. `["ts","py"]` for behaviour the PHP plugin does not provide. A runner skips cases whose `engines` omit its own id |
@@ -224,6 +225,18 @@ does. An implementer needs to know they exist; nobody needs to be nudged into fi
 a subset, and no fixture pins an order. A consumer that wants a stable order should sort by
 position itself. Making it contract would mean changing the PHP two-list API for a property nobody
 has asked for.
+
+**The WP plugin renders an `#include` body as a document of its own.** Its `resolve_nested` calls
+`Renderer::render()` for the child, which runs the post-process and the final trim on the body
+before it joins the parent; `@spintax/core` and `spintax/core` join the raw body and post-process the
+document once. Measured 2026-10-19 with the `includes` fixtures: the outputs agree except at a body's
+edges — a body `  x  y  ` joins as ` X y ` here and `X y` in the plugin, and a body that opens with a
+`#set` line keeps that line's newline here (`A⏎⏎Kid`) and loses it in the plugin (`A⏎Kid`). No stored
+template uses `#include` (0 lines in 3 560 documents), so the two shapes are left out of the corpus
+rather than pinned to one side; closing it means either engine changing how an include body is
+post-processed — in the plugin, on a cached, per-template render path. Two more plugin specifics the
+corpus cannot express: a child renders in its OWN template's locale (`_spintax_locale`, else the site's),
+not the parent's, and cycles are detected by post ID rather than by the ref string.
 
 **A conditional that expansion introduces INTO a plural form list renders differently.** Both PHP
 engines resolve it; `@spintax/core` and `spintax-core` do not. `#set %x% = {?flag?a|b|c}` used as

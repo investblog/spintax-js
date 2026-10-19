@@ -268,6 +268,11 @@ sync map-backed resolver. Nested includes surface new refs, so the prefetch loop
 until no new refs appear (bounded by `maxDepth`). The engine deliberately does NOT go async;
 batching/prefetch is a host (Worker) concern (§9.3).
 
+A ref may come from a variable — `#include "%slug%"` renders the include named by the value
+(`include/ref-from-a-value`). `extract().includes` reads the source, so it reports the literal
+`%slug%`: a host that prefetches must resolve such a ref against its own context first, or the
+render finds the ref missing and empties the line.
+
 ### 4.2 minsize/maxsize defaults (parity)
 
 Port exactly (plugin key design decision): only `maxsize` set → `minsize = 1` (not total);
@@ -394,6 +399,17 @@ parse-once-reuse contract on that edge (`render(parse(src))` ≠ `render(src)`, 
 `parseSequence` is deliberately NOT sanitised: it re-parses a variable's *value*, where
 sentinels a host neutralized are legitimate and must reach the restore. `ParsedAst.source`
 keeps the original, unsanitised text — diagnostics point at what the author wrote.
+
+**What `neutralize()` does not stop (ADR 0002, #93).** It shields a value against *starting* a
+construct — `{ } [ ] % #` are inert — not against *completing* one the template itself started.
+`#include` is resolved over the rendered text (§4.1), so a template that writes `#%v% "ref"` at a line
+start hands the keyword to the value: `v = "include"`, or `#inc%v%` with `v = "lude"`, or the same
+through a `#set` macro, makes that line an include. The letters cannot be shielded, and tracking which
+characters of a line came from a value would cost a mark through every pass that reads values, in every
+engine — for a template shape that does not occur in the stored content (0 `#include` lines in 3 560
+documents, measured 2026-10-19). So it is a stated limit, pinned by the `include/value-completes-*`
+fixtures: **a template must not compose the `#include` keyword from a variable.** A `#set`/`#def` line
+is decided from the source and cannot be completed this way.
 
 ---
 

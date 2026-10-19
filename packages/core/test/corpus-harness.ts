@@ -49,6 +49,7 @@ export interface Case {
   locale?: string;
   knownIncludes?: string[];
   neutralizeContext?: string[];
+  includes?: Record<string, string>;
   seed?: number | string;
   postProcess?: boolean;
   rng?: RngStrategy;

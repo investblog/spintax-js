@@ -1,0 +1,176 @@
+[
+  {
+    "id": "include/resolves-a-line",
+    "note": "A line that is exactly #include \"ref\" is replaced by the rendered body the host returns for ref.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "intro\n#include \"card\"\noutro",
+    "includes": {
+      "card": "the card"
+    },
+    "expect": {
+      "output": "Intro\nThe card\nOutro"
+    }
+  },
+  {
+    "id": "include/unknown-ref-renders-nothing",
+    "note": "A ref the host does not know resolves to nothing; the line is emptied.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a\n#include \"nope\"\nb",
+    "includes": {
+      "card": "x"
+    },
+    "expect": {
+      "output": "A\n\nB"
+    }
+  },
+  {
+    "id": "include/mid-line-is-not-a-directive",
+    "note": "Line-anchored: #include with other text on its line is text.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "see #include \"card\" here",
+    "includes": {
+      "card": "the card"
+    },
+    "expect": {
+      "output": "See #include \"card\" here"
+    }
+  },
+  {
+    "id": "include/child-does-not-see-parent-set",
+    "note": "The body renders with a child scope: the parent #set is not visible, so the reference stays literal.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = parent\nbody\n#include \"c\"",
+    "includes": {
+      "c": "value %x%"
+    },
+    "expect": {
+      "output": "Body\nValue %x%"
+    }
+  },
+  {
+    "id": "include/child-sees-runtime-context",
+    "note": "The child scope inherits the runtime context.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a\n#include \"c\"",
+    "context": {
+      "who": "Ann"
+    },
+    "includes": {
+      "c": "hi %who%"
+    },
+    "expect": {
+      "output": "A\nHi Ann"
+    }
+  },
+  {
+    "id": "include/carried-by-a-set-value",
+    "note": "The documented #set-carried include (validate/include-in-set-value-is-valid): the reference expands to an include line, which resolves. ADR 0002.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %x% = #include \"c\"\nbefore\n%x%\nafter",
+    "includes": {
+      "c": "INCLUDED"
+    },
+    "expect": {
+      "output": "Before\nINCLUDED\nAfter"
+    }
+  },
+  {
+    "id": "include/enumeration-picks-an-include-line",
+    "note": "An include line an enumeration chose resolves like any other, and only the chosen one: the enumeration draws first (1 → the second option), then the chosen body draws (0 → x). An engine that resolved both include lines before the choice would spend the first draw inside a body and render Q.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "{\n#include \"a\"\n|\n#include \"b\"\n}",
+    "includes": {
+      "a": "{p|q}",
+      "b": "{x|y}"
+    },
+    "rng": {
+      "sequence": [
+        1,
+        0
+      ]
+    },
+    "expect": {
+      "output": "X"
+    }
+  },
+  {
+    "id": "include/value-completes-the-keyword",
+    "note": "ADR 0002 (#93), pinned limit: a value can complete an #include line the template started with #%v%. neutralize() shields a value against STARTING a construct, not against completing one.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a\n#%v% \"foo\"\nb",
+    "context": {
+      "v": "include"
+    },
+    "neutralizeContext": [
+      "v"
+    ],
+    "includes": {
+      "foo": "INCLUDED"
+    },
+    "expect": {
+      "output": "A\nINCLUDED\nB"
+    }
+  },
+  {
+    "id": "include/value-completes-part-of-the-keyword",
+    "note": "ADR 0002 (#93), pinned limit: part of the keyword from a value completes it too.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a\n#inc%v% \"foo\"\nb",
+    "context": {
+      "v": "lude"
+    },
+    "neutralizeContext": [
+      "v"
+    ],
+    "includes": {
+      "foo": "INCLUDED"
+    },
+    "expect": {
+      "output": "A\nINCLUDED\nB"
+    }
+  },
+  {
+    "id": "include/value-completes-the-keyword-through-a-set",
+    "note": "ADR 0002 (#93), pinned limit: transitively, through a #set macro over a runtime value.",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "#set %outer% = %v%\na\n#%outer% \"foo\"\nb",
+    "context": {
+      "v": "include"
+    },
+    "neutralizeContext": [
+      "v"
+    ],
+    "includes": {
+      "foo": "INCLUDED"
+    },
+    "expect": {
+      "output": "A\nINCLUDED\nB"
+    }
+  },
+  {
+    "id": "include/ref-from-a-value",
+    "note": "ADR 0002: the ref may come from a value and stays allowed. extract().includes reports the literal %slug%, so a host that prefetches includes must resolve such refs itself (spec §4.1).",
+    "kind": "deterministic",
+    "op": "render",
+    "template": "a\n#include \"%slug%\"\nb",
+    "context": {
+      "slug": "foo"
+    },
+    "includes": {
+      "foo": "INCLUDED"
+    },
+    "expect": {
+      "output": "A\nINCLUDED\nB"
+    }
+  }
+]

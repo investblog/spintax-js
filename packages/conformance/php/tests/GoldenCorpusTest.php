@@ -201,7 +201,8 @@ final class GoldenCorpusTest extends TestCase
             $c['context'] ?? [],
             $c['locale'] ?? '',
             $this->rng($strategy),
-            $c['postProcess'] ?? true
+            $c['postProcess'] ?? true,
+            $c['includes'] ?? null
         );
 
         if (!$isRng) {
@@ -236,7 +237,7 @@ final class GoldenCorpusTest extends TestCase
      *
      * @param array<string,string> $context
      */
-    private function renderPipeline(string $template, array $context, string $locale, callable $rng, bool $postProcess): string
+    private function renderPipeline(string $template, array $context, string $locale, callable $rng, bool $postProcess, ?array $includes = null, array $stack = []): string
     {
         $parser = new Parser($rng);
         $conditionals = new Conditionals();
@@ -278,8 +279,22 @@ final class GoldenCorpusTest extends TestCase
         $text = $parser->resolve_enumerations($text);
         // Stage 8: permutations (:316)
         $text = $parser->resolve_permutations($text, $locale); // the locale since #90 (proclitic separators); an older plugin ignores it
-        // Stage 9: #include / [spintax] (:328) — host-injected; the corpus render cases
-        //          don't require WP template lookups, so this stage is skipped.
+        // Stage 9: #include (:328) — host-injected, from the fixture's `includes` map. Reproduces
+        //          Renderer::resolve_nested(): the child renders as a template of its own through
+        //          `render()`, with a child scope (runtime context, not this template's #set) and its
+        //          OWN post-process (the plugin's render() always runs Stage 10), and an unknown slug
+        //          resolves to ''. Two things it does NOT reproduce, because a fixture cannot express
+        //          them: the child's own `_spintax_locale` (here it inherits the case's locale) and the
+        //          plugin's cycle check by post ID (here a repeated ref stops the recursion — only a
+        //          guard against a runaway harness; the corpus has no cycles). `[spintax]` needs WP.
+        if ($includes !== null) {
+            $text = $parser->resolve_includes(
+                $text,
+                fn(string $ref): string => (!array_key_exists($ref, $includes) || in_array($ref, $stack, true))
+                    ? ''
+                    : $this->renderPipeline($includes[$ref], $context, $locale, $rng, true, $includes, [...$stack, $ref])
+            );
+        }
         // Stage 10: post_process (:331) — the parity target, unless postProcess:false.
         if ($postProcess) {
             $text = $parser->post_process($text, $locale); // the locale since #94 (Turkic capital İ); an older plugin ignores it
